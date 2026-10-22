@@ -12,6 +12,10 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -22,6 +26,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
+    private val serviceScope = CoroutineScope(Dispatchers.Main)
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore: ViewModelStore get() = store
@@ -36,12 +41,14 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
+        // Ditambahkan FLAG_HARDWARE_ACCELERATED agar animasi GPU berjalan 60/120fps tanpa patah-patah
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -55,13 +62,24 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             setContent {
                 PochiIslandBot(
                     onExpandChange = { expanded ->
-                        params.flags = if (expanded) {
-                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        } else {
-                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        serviceScope.launch {
+                            if (expanded) {
+                                // Buka fokus keyboard setelah frame pertama mulai membesar
+                                params.flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                                        WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+                                windowManager.updateViewLayout(this@apply, params)
+                            } else {
+                                // Tunggu animasi mengecil hampir selesai agar tidak patah-patah
+                                delay(220)
+                                params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                                        WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+                                windowManager.updateViewLayout(this@apply, params)
+                            }
                         }
-                        windowManager.updateViewLayout(this, params)
+                    },
+                    onPowerOffService = {
+                        stopSelf()
                     }
                 )
             }

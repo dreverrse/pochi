@@ -37,13 +37,13 @@ class MainActivity : ComponentActivity() {
                 PochiMascot(state = BotState.IDLE, size = 72.dp)
 
                 Text(
-                    text = "Pochi",
+                    text = "Pochi 2.0",
                     color = Color.White,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Notch Companion & AI Bot Assistant",
+                    text = "Smooth Multifunction Dynamic Island Hub",
                     color = Color.Gray,
                     fontSize = 13.sp
                 )
@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
                             startActivity(intent)
                         } else {
                             startService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            Toast.makeText(this@MainActivity, "Pochi Island Aktif!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Pochi Island 2.0 Aktif!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),

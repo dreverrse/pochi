@@ -22,9 +22,9 @@ import kotlinx.coroutines.delay
 
 enum class BotState(val accentColor: Color, val statusLabel: String) {
     IDLE(Color(0xFF8E8E93), "Pochi siap"),
-    WAITING(Color(0xFFFF9F0A), "Menunggu kamu..."),
-    WORKING(Color(0xFF0A84FF), "Pochi sedang mikir..."),
-    DONE(Color(0xFF30D158), "Selesai!"),
+    WAITING(Color(0xFFFF9F0A), "Menunggu perintah..."),
+    WORKING(Color(0xFF0A84FF), "Pochi memproses..."),
+    DONE(Color(0xFF30D158), "Berhasil!"),
     ANNOYED(Color(0xFFFF453A), "Jangan dicolek terus!")
 }
 
@@ -37,8 +37,8 @@ fun PochiMascot(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "breathing")
     val breathScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
+        initialValue = 0.96f,
+        targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
             animation = tween(1400, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -47,9 +47,9 @@ fun PochiMascot(
     )
 
     val jumpOffset by animateFloatAsState(
-        targetValue = if (state == BotState.DONE) -6f else 0f,
+        targetValue = if (state == BotState.DONE) -5f else 0f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioHighBouncy,
+            dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
         ),
         label = "jump"
@@ -63,6 +63,7 @@ fun PochiMascot(
             BotState.DONE -> Color(0xFF30D158)
             BotState.ANNOYED -> Color(0xFFFF453A)
         },
+        animationSpec = tween(250),
         label = "bodyColor"
     )
 
@@ -71,7 +72,7 @@ fun PochiMascot(
         while (true) {
             delay((2500..4500).random().toLong())
             isBlinking = true
-            delay(140)
+            delay(130)
             isBlinking = false
         }
     }
