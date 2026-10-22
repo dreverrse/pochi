@@ -39,6 +39,8 @@ dependencies {
     implementation("androidx.compose.foundation:foundation:1.6.8")
     implementation("androidx.activity:activity-compose:1.9.0")
 
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
+
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.2")
     implementation("androidx.savedstate:savedstate-ktx:1.2.1")
