@@ -19,7 +19,6 @@ object ApprovalManager {
     private val _lastDecision = MutableStateFlow<String?>(null)
     val lastDecision: StateFlow<String?> = _lastDecision
 
-    // Sinyal global untuk menutup kapsul saat layar luar diketuk
     private val _dismissSignal = MutableStateFlow(0L)
     val dismissSignal: StateFlow<Long> = _dismissSignal
 

@@ -22,12 +22,12 @@ import kotlinx.coroutines.delay
 @Composable
 fun PochiApprovalCard(
     request: ApprovalRequest,
+    isDark: Boolean = false,
     onDeny: () -> Unit
 ) {
     val context = LocalContext.current
     var remainingSeconds by remember(request.id) { mutableIntStateOf(request.expiresInSeconds) }
     var isTapGuardActive by remember(request.id) { mutableStateOf(true) }
-    var showRawCommand by remember(request.id) { mutableStateOf(false) }
 
     LaunchedEffect(request.id) {
         isTapGuardActive = true
@@ -43,93 +43,101 @@ fun PochiApprovalCard(
         ApprovalManager.confirmDeny("Kedaluwarsa (120 dtk habis)")
     }
 
+    val cardBg = if (isDark) Color(0xFF18181B) else Color.White
+    val borderCol = if (isDark) Color(0xFF27272A) else Color(0xFFE5E7EB)
+    val titleCol = if (isDark) Color.White else Color(0xFF111827)
+
+    // UI - Approval Card Sesuai Gambar Referensi
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1A1510))
-            .border(1.dp, Color(0xFFFF9F0A).copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(cardBg)
+            .border(1.dp, borderCol, RoundedCornerShape(20.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "⚡ Pochi Butuh Persetujuan",
-                color = Color(0xFFFF9F0A),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "${remainingSeconds}s",
-                color = if (remainingSeconds <= 15) Color(0xFFFF453A) else Color.Gray,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            PochiMascot(state = BotState.APPROVAL, emoteOverride = PochiEmote.SURPRISED, size = 38.dp)
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Pochi Butuh Persetujuan",
+                        color = Color(0xFFD97706),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${remainingSeconds}s",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = request.friendlyTitle,
+                    color = titleCol,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
 
-        Text(
-            text = request.friendlyTitle,
-            color = Color.White,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-
+        // Kotak Terminal Gelap (Command Block)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF0A0A0C))
-                .clickable { showRawCommand = !showRawCommand }
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .background(Color(0xFF18181B))
+                .padding(horizontal = 12.dp, vertical = 9.dp)
         ) {
-            if (!showRawCommand) {
-                Text(
-                    text = "🔒 Ketuk untuk lihat perintah asli",
-                    color = Color.Gray,
-                    fontSize = 11.sp
-                )
-            } else {
-                Text(
-                    text = request.rawCommand,
-                    color = Color(0xFF30D158),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+            Text(
+                text = request.rawCommand,
+                color = Color(0xFFE5E7EB),
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace
+            )
         }
 
+        // Baris Tombol Deny (Abu-abu Muda) & Allow (Kuning Emas Biometrik)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF2C2C2E))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isDark) Color(0xFF27272A) else Color(0xFFE5E7EB))
                     .clickable(enabled = !isTapGuardActive) { onDeny() }
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "Deny",
-                    color = if (isTapGuardActive) Color.DarkGray else Color(0xFFFF453A),
+                    color = if (isTapGuardActive) Color.Gray else titleCol,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Bold
                 )
             }
 
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
+                    .weight(1.3f)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (isTapGuardActive) Color(0xFFFF9F0A).copy(alpha = 0.3f)
-                        else Color(0xFFFF9F0A)
+                        if (isTapGuardActive) Color(0xFFF59E0B).copy(alpha = 0.4f)
+                        else Color(0xFFFBBF24)
                     )
                     .clickable(enabled = !isTapGuardActive) {
                         val intent = Intent(context, BiometricGateActivity::class.java).apply {
@@ -137,12 +145,12 @@ fun PochiApprovalCard(
                         }
                         context.startActivity(intent)
                     }
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "🔒 Allow",
-                    color = Color.Black,
+                    text = "🔒 Allow (Biometrik)",
+                    color = Color(0xFF111827),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )

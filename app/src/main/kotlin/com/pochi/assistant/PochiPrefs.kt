@@ -11,6 +11,7 @@ object PochiPrefs {
     private const val KEY_CITY = "pochi_weather_city"
     private const val KEY_OFFSET_X = "pochi_offset_x"
     private const val KEY_OFFSET_Y = "pochi_offset_y"
+    private const val KEY_DARK_MODE = "pochi_dark_mode"
 
     private val _offsetXFlow = MutableStateFlow(0)
     val offsetXFlow: StateFlow<Int> = _offsetXFlow
@@ -18,10 +19,22 @@ object PochiPrefs {
     private val _offsetYFlow = MutableStateFlow(4)
     val offsetYFlow: StateFlow<Int> = _offsetYFlow
 
+    private val _darkModeFlow = MutableStateFlow(false)
+    val darkModeFlow: StateFlow<Boolean> = _darkModeFlow
+
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         _offsetXFlow.value = prefs.getInt(KEY_OFFSET_X, 0)
         _offsetYFlow.value = prefs.getInt(KEY_OFFSET_Y, 4)
+        _darkModeFlow.value = prefs.getBoolean(KEY_DARK_MODE, false)
+    }
+
+    fun setDarkMode(context: Context, isDark: Boolean) {
+        _darkModeFlow.value = isDark
+        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DARK_MODE, isDark)
+            .apply()
     }
 
     fun saveOffsets(context: Context, xDp: Int, yDp: Int) {

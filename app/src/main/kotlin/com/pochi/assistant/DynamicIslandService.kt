@@ -47,7 +47,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
         val density = resources.displayMetrics.density
-        val collapsedWidthPx = (160 * density).toInt()
+        val collapsedWidthPx = (180 * density).toInt()
 
         val collapsedFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -72,7 +72,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             x = (PochiPrefs.offsetXFlow.value * density).toInt()
             y = (PochiPrefs.offsetYFlow.value * density).toInt()
 
-            // Izinkan menembus ke dalam area lubang kamera depan (Display Cutout / Notch)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -88,7 +87,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             setViewTreeViewModelStoreOwner(this@DynamicIslandService)
             setViewTreeSavedStateRegistryOwner(this@DynamicIslandService)
 
-            // Tangkap ketukan di luar kapsul (ACTION_OUTSIDE) untuk menutup otomatis
             setOnTouchListener { _, event ->
                 if (event.action == MotionEvent.ACTION_OUTSIDE && isIslandExpanded) {
                     ApprovalManager.triggerOutsideDismiss()
@@ -126,7 +124,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
         windowManager.addView(composeView, params)
 
-        // Pantau perubahan slider posisi X & Y secara real-time dari aplikasi utama
         serviceScope.launch {
             combine(PochiPrefs.offsetXFlow, PochiPrefs.offsetYFlow) { xDp, yDp ->
                 Pair(xDp, yDp)
