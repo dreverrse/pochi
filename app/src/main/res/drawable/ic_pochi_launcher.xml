@@ -4,22 +4,18 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Background Squircle Silver/White -->
     <path
         android:fillColor="#F4F5F7"
         android:pathData="M24,8 L84,8 C92.8,8 100,15.2 100,24 L100,84 C100,92.8 92.8,100 84,100 L24,100 C15.2,100 8,92.8 8,84 L8,24 C8,15.2 15.2,8 24,8 Z" />
-    <!-- Pochi Cat Head -->
     <path
         android:fillColor="#FFFFFF"
         android:strokeColor="#111827"
         android:strokeWidth="3.5"
         android:strokeLineJoin="round"
         android:pathData="M26,48 L28,24 L44,36 L64,36 L80,24 L82,48 C85,68 76,82 54,82 C32,82 23,68 26,48 Z" />
-    <!-- Left Eye -->
     <path
         android:fillColor="#111827"
         android:pathData="M42,52 a4.5,6.5 0 1,0 0.1,0 z" />
-    <!-- Right Eye -->
     <path
         android:fillColor="#111827"
         android:pathData="M66,52 a4.5,6.5 0 1,0 0.1,0 z" />

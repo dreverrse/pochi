@@ -9,7 +9,6 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.view.KeyEvent
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,9 +67,7 @@ fun PochiIslandBot(
     var selectedModel by remember { mutableStateOf("Flash") }
 
     var prompt by remember { mutableStateOf("") }
-    var botReply by remember { mutableStateOf("Halo!
-Aku Pochi.
-Ada yang bisa kubantu? ✨") }
+    var botReply by remember { mutableStateOf("Halo!\nAku Pochi.\nAda yang bisa kubantu? ✨") }
     var pokeCount by remember { mutableIntStateOf(0) }
 
     var isTorchOn by remember { mutableStateOf(false) }
@@ -132,7 +129,6 @@ Ada yang bisa kubantu? ✨") }
         if (expanded) 30.dp else 50.dp
     }
 
-    // Palet Warna Sesuai Style Guide Gambar (Tema Putih + Silver & Mode Gelap)
     val panelBg = if (!isExpanded) Color(0xFF09090B) else if (isDarkMode) Color(0xFF121215) else Color(0xFFFAFBFC)
     val surfaceBg = if (isDarkMode) Color(0xFF1E1E24) else Color(0xFFFFFFFF)
     val borderCol = if (!isExpanded) Color(0xFF27272A) else if (isDarkMode) Color(0xFF2E2E36) else Color(0xFFE5E7EB)
@@ -173,7 +169,6 @@ Ada yang bisa kubantu? ✨") }
         }
     }
 
-    // Latar luar penangkap ketukan untuk menutup otomatis
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -208,7 +203,6 @@ Ada yang bisa kubantu? ✨") }
                 )
         ) {
             if (!isExpanded) {
-                // ================= UI - MINI ISLAND (COLLAPSED) SESUAI GAMBAR =================
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -236,14 +230,9 @@ Ada yang bisa kubantu? ✨") }
                         )
                     }
 
-                    // Indikator Status Kanan Sesuai 6 State di Gambar
                     when (botState) {
-                        BotState.WORKING -> {
-                            ThreeBlueDotsMini()
-                        }
-                        BotState.APPROVAL -> {
-                            Text("🔒", fontSize = 12.sp)
-                        }
+                        BotState.WORKING -> ThreeBlueDotsMini()
+                        BotState.APPROVAL -> Text("🔒", fontSize = 12.sp)
                         else -> {
                             Box(
                                 modifier = Modifier
@@ -255,7 +244,6 @@ Ada yang bisa kubantu? ✨") }
                     }
                 }
             } else {
-                // ================= UI - EXPANDED (MAIN PANEL PUTIH + SILVER) =================
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -304,7 +292,7 @@ Ada yang bisa kubantu? ✨") }
                         }
                     }
 
-                    // 2. Baris 6 Ikon Tab (Chat AI, Kontrol, Musik, Cuaca, Notes, Ide)
+                    // 2. Baris 6 Ikon Tab
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -350,7 +338,7 @@ Ada yang bisa kubantu? ✨") }
                         }
                     }
 
-                    // 3. Kartu Approval (Jika sedang aktif)
+                    // 3. Kartu Approval
                     activeApproval?.let { request ->
                         PochiApprovalCard(
                             request = request,
@@ -364,10 +352,8 @@ Ada yang bisa kubantu? ✨") }
 
                     // 4. Konten Utama Berdasarkan Tab
                     when (currentTab) {
-                        // ---------------- TAB 1: CHAT AI (SESUAI PANEL KIRI TENGAH GAMBAR) ----------------
                         PochiTab.CHAT -> {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                // Karakter Kucing Pochi Besar di Kiri + Balon Putih di Kanan
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -403,7 +389,6 @@ Ada yang bisa kubantu? ✨") }
                                         }
                                     )
 
-                                    // Balon Bicara Putih dengan Sudut Membulat
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
@@ -424,7 +409,6 @@ Ada yang bisa kubantu? ✨") }
                                     }
                                 }
 
-                                // Kolom Input Putih "✨ Tanya Pochi sesuatu..." + Tombol Kirim Biru
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -477,7 +461,6 @@ Ada yang bisa kubantu? ✨") }
                                     }
                                 }
 
-                                // Baris Pill Bawah: [Flash] [Pro]  ...  [📎] [🎤] [🎛️]
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -512,7 +495,6 @@ Ada yang bisa kubantu? ✨") }
                                     }
 
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        // Tombol Lampiran / Catatan ke Chat
                                         RoundBottomAction(surfaceBg, borderCol, "📎") {
                                             val saved = PochiPrefs.getNotes(context)
                                             if (saved.isNotBlank()) {
@@ -521,7 +503,6 @@ Ada yang bisa kubantu? ✨") }
                                                 botReply = "Belum ada teks di tab Notes untuk dilampirkan."
                                             }
                                         }
-                                        // Tombol Suara / Voice Input Sistem
                                         RoundBottomAction(surfaceBg, borderCol, "🎤") {
                                             try {
                                                 val intent = Intent(RecognizerIntent.ACTION_WEB_SEARCH).apply {
@@ -532,7 +513,6 @@ Ada yang bisa kubantu? ✨") }
                                                 botReply = "Ketuk kolom teks lalu gunakan ikon mikrofon di keyboard HP-mu ya!"
                                             }
                                         }
-                                        // Tombol Acak 36 Ekspresi Pochi
                                         RoundBottomAction(surfaceBg, borderCol, "🎭") {
                                             val next = PochiEmote.entries.random()
                                             customEmote = next
@@ -543,15 +523,12 @@ Ada yang bisa kubantu? ✨") }
                             }
                         }
 
-                        // ---------------- TAB 2: KONTROL 2x3 (SESUAI PANEL KANAN TENGAH GAMBAR) ----------------
                         PochiTab.TOOLS -> {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // Baris 1: Senter (Switch) & Kamera
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    // Kartu Senter dengan Switch
                                     Row(
                                         modifier = Modifier
                                             .weight(1f)
@@ -595,7 +572,6 @@ Ada yang bisa kubantu? ✨") }
                                         }
                                     }
 
-                                    // Kartu Kamera
                                     ControlArrowCard(
                                         modifier = Modifier.weight(1f),
                                         surfaceBg = surfaceBg,
@@ -619,7 +595,6 @@ Ada yang bisa kubantu? ✨") }
                                     }
                                 }
 
-                                // Baris 2: Wi-Fi & Bluetooth
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -659,7 +634,6 @@ Ada yang bisa kubantu? ✨") }
                                     }
                                 }
 
-                                // Baris 3: Mode Gelap (Switch) & Matikan Pochi
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -703,7 +677,6 @@ Ada yang bisa kubantu? ✨") }
                             }
                         }
 
-                        // ---------------- TAB 3: MUSIK ----------------
                         PochiTab.MUSIC -> {
                             Column(
                                 modifier = Modifier
@@ -770,7 +743,6 @@ Ada yang bisa kubantu? ✨") }
                             }
                         }
 
-                        // ---------------- TAB 4: CUACA ----------------
                         PochiTab.WEATHER -> {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(
@@ -809,7 +781,7 @@ Ada yang bisa kubantu? ✨") }
                                             .clickable {
                                                 botState = BotState.WORKING
                                                 coroutineScope.launch {
-                                                    val result = fetchLiveWeather(cityInput.ifBlank { "Semarang" })
+                                                    val result = fetchLiveWeather(cityInput.ifBlank { "Jakarta" })
                                                     liveWeatherText = result
                                                     botReply = "Cuaca $cityInput: $result"
                                                     botState = BotState.DONE
@@ -848,7 +820,6 @@ Ada yang bisa kubantu? ✨") }
                             }
                         }
 
-                        // ---------------- TAB 5: NOTES ----------------
                         PochiTab.NOTES -> {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(
@@ -917,7 +888,6 @@ Ada yang bisa kubantu? ✨") }
                             }
                         }
 
-                        // ---------------- TAB 6: IDE ----------------
                         PochiTab.IDEAS -> {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

@@ -21,43 +21,43 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
-// 36 Ekspresi Lengkap Pochi Sesuai Desain Gambar
+// 36 Ekspresi Lengkap Pochi (1 - 36)
 enum class PochiEmote(val number: Int, val title: String) {
     NORMAL(1, "Normal"),
     HAPPY(2, "Happy"),
     LAUGHING(3, "Laughing"),
     SMILING(4, "Smiling"),
     WINK_LEFT(5, "Wink"),
-    WINK_OPEN(6, "Wink Open"),
-    EXCITED(7, "Excited"),
-    LOVE(8, "Love"),
-    BLUSH(9, "Blush"),
-    CUTE(10, "Cute"),
-    SURPRISED(11, "Surprised"),
-    SHOCK(12, "Shock"),
-    WORRIED(13, "Worried"),
-    CONFUSED(14, "Confused"),
-    THINKING(15, "Thinking"),
-    HMM(16, "Hmm"),
-    SUSPICIOUS(17, "Suspicious"),
-    ANGRY(18, "Angry"),
-    ANNOYED(19, "Annoyed"),
-    TIRED(20, "Tired"),
-    SLEEPY(21, "Sleepy"),
-    CALM(22, "Calm"),
-    HAPPY_TEARS(23, "Happy Tears"),
-    CRYING(24, "Crying"),
-    SCARED(25, "Scared"),
-    EMBARRASSED(26, "Embarrassed"),
-    OK(27, "OK"),
-    NO(28, "No"),
-    BYE(29, "Bye"),
-    HI(30, "Hi"),
-    GOOD_NIGHT(31, "Good Night"),
-    GOOD_MORNING(32, "Good Morning"),
-    WORKING(33, "Working"),
-    SUCCESS(34, "Success"),
-    ERROR(35, "Error"),
+    EXCITED(6, "Excited"),
+    LOVE(7, "Love"),
+    BLUSH(8, "Blush"),
+    CUTE(9, "Cute"),
+    SURPRISED(10, "Surprised"),
+    SHOCK(11, "Shock"),
+    CONFUSED(12, "Confused"),
+    THINKING(13, "Thinking"),
+    HMM(14, "Hmm"),
+    SUSPICIOUS(15, "Suspicious"),
+    ANGRY(16, "Angry"),
+    ANNOYED(17, "Annoyed"),
+    TIRED(18, "Tired"),
+    SLEEPY(19, "Sleepy"),
+    CALM(20, "Calm"),
+    HAPPY_TEARS(21, "Happy Tears"),
+    CRYING(22, "Crying"),
+    SCARED(23, "Scared"),
+    EMBARRASSED(24, "Embarrassed"),
+    OK(25, "OK"),
+    NO(26, "No"),
+    BYE(27, "Bye"),
+    HI(28, "Hi"),
+    GOOD_NIGHT(29, "Good Night"),
+    GOOD_MORNING(30, "Good Morning"),
+    WORKING(31, "Working"),
+    SUCCESS(32, "Success"),
+    ERROR(33, "Error"),
+    LOADING(34, "Loading"),
+    FOCUS(35, "Focus"),
     PET_POKE(36, "Pet / Poke")
 }
 
@@ -122,31 +122,24 @@ fun PochiMascot(
         val strokeW = (w * 0.055f).coerceAtLeast(2.2f)
 
         scale(scaleX = breathScale, scaleY = 1f / breathScale) {
-            // 1. Gambar Kepala Kucing Putih Pochi (Minimalis 2D dengan Telinga Kucing)
             val catPath = Path().apply {
-                // Mulai dari dahi tengah kiri
                 moveTo(w * 0.36f, h * 0.28f)
-                // Telinga Kiri
                 lineTo(w * 0.20f, h * 0.12f)
                 quadraticBezierTo(w * 0.16f, h * 0.10f, w * 0.16f, h * 0.17f)
                 lineTo(w * 0.14f, h * 0.44f)
-                // Pipi Kiri ke Dagu Bawah
                 cubicTo(
                     w * 0.10f, h * 0.74f,
                     w * 0.22f, h * 0.88f,
                     w * 0.50f, h * 0.88f
                 )
-                // Dagu Bawah ke Pipi Kanan
                 cubicTo(
                     w * 0.78f, h * 0.88f,
                     w * 0.90f, h * 0.74f,
                     w * 0.86f, h * 0.44f
                 )
-                // Telinga Kanan
                 lineTo(w * 0.84f, h * 0.17f)
                 quadraticBezierTo(w * 0.84f, h * 0.10f, w * 0.80f, h * 0.12f)
                 lineTo(w * 0.64f, h * 0.28f)
-                // Garis Dahi Atas
                 quadraticBezierTo(w * 0.50f, h * 0.26f, w * 0.36f, h * 0.28f)
                 close()
             }
@@ -158,7 +151,6 @@ fun PochiMascot(
                 style = Stroke(width = strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
 
-            // 2. Gambar Mata, Mulut & Ornamen Emote Sesuai Nomor Emote (1 - 36)
             val leftX = w * 0.35f
             val rightX = w * 0.65f
             val eyeY = h * 0.54f
@@ -287,11 +279,9 @@ private fun DrawScope.drawPochiExpression(
             drawSmallSmile(w * 0.5f, mouthY, w, lineColor, strokeW)
             if (emote == PochiEmote.CUTE) drawBlushCheeks(leftX, rightX, eyeY, w)
             if (emote == PochiEmote.SUCCESS) {
-                // Bintang hijau sukses di kanan atas
                 drawCircle(Color(0xFF30D158), radius = w * 0.07f, center = Offset(w * 0.86f, h * 0.24f))
             }
             if (emote == PochiEmote.GOOD_MORNING) {
-                // Matahari oranye kecil di kanan atas
                 drawCircle(Color(0xFFFF9F0A), radius = w * 0.08f, center = Offset(w * 0.85f, h * 0.22f))
             }
         }
@@ -307,7 +297,7 @@ private fun DrawScope.drawPochiExpression(
                 size = Size(w * 0.14f, w * 0.11f)
             )
         }
-        PochiEmote.WINK_LEFT, PochiEmote.WINK_OPEN, PochiEmote.OK -> {
+        PochiEmote.WINK_LEFT, PochiEmote.OK -> {
             drawOvalEye(leftX, eyeY, w, lineColor)
             drawChevronEye(rightX, eyeY, w, false, lineColor, strokeW)
             drawSmallSmile(w * 0.5f, mouthY, w, lineColor, strokeW)
@@ -329,7 +319,7 @@ private fun DrawScope.drawPochiExpression(
             drawSleepyArcEye(rightX, eyeY, w, lineColor, strokeW)
             drawBlushCheeks(leftX, rightX, eyeY, w)
         }
-        PochiEmote.SURPRISED, PochiEmote.SHOCK, PochiEmote.WORRIED, PochiEmote.SCARED -> {
+        PochiEmote.SURPRISED, PochiEmote.SHOCK, PochiEmote.SCARED -> {
             drawOvalEye(leftX, eyeY, w, lineColor, 0.9f)
             drawOvalEye(rightX, eyeY, w, lineColor, 0.9f)
             drawCircle(lineColor, radius = w * 0.032f, center = Offset(w * 0.5f, mouthY + w * 0.02f))
@@ -349,7 +339,6 @@ private fun DrawScope.drawPochiExpression(
             drawClosedLineEye(w * 0.5f, mouthY + w * 0.03f, w * 0.45f, lineColor, strokeW * 0.8f)
         }
         PochiEmote.ANGRY, PochiEmote.FOCUS, PochiEmote.ERROR -> {
-            // Alis menukik tajam + mata fokus
             drawLine(lineColor, Offset(leftX - w * 0.06f, eyeY - w * 0.08f), Offset(leftX + w * 0.06f, eyeY - w * 0.03f), strokeW, StrokeCap.Round)
             drawLine(lineColor, Offset(rightX + w * 0.06f, eyeY - w * 0.08f), Offset(rightX - w * 0.06f, eyeY - w * 0.03f), strokeW, StrokeCap.Round)
             drawOvalEye(leftX, eyeY + w * 0.02f, w, lineColor, 0.85f)
@@ -374,20 +363,18 @@ private fun DrawScope.drawPochiExpression(
                 drawOvalEye(leftX, eyeY, w, lineColor)
                 drawOvalEye(rightX, eyeY, w, lineColor)
             }
-            // Air mata biru
             val tearColor = Color(0xFF38BDF8)
             drawCircle(tearColor, radius = w * 0.04f, center = Offset(leftX - w * 0.06f, eyeY + w * 0.09f))
             drawCircle(tearColor, radius = w * 0.04f, center = Offset(rightX + w * 0.06f, eyeY + w * 0.09f))
         }
         PochiEmote.NO -> {
-            // Mata X X
             val r = w * 0.05f
             drawLine(lineColor, Offset(leftX - r, eyeY - r), Offset(leftX + r, eyeY + r), strokeW, StrokeCap.Round)
             drawLine(lineColor, Offset(leftX + r, eyeY - r), Offset(leftX - r, eyeY + r), strokeW, StrokeCap.Round)
             drawLine(lineColor, Offset(rightX - r, eyeY - r), Offset(rightX + r, eyeY + r), strokeW, StrokeCap.Round)
             drawLine(lineColor, Offset(rightX + r, eyeY - r), Offset(rightX - r, eyeY + r), strokeW, StrokeCap.Round)
         }
-        PochiEmote.WORKING -> {
+        PochiEmote.WORKING, PochiEmote.LOADING -> {
             drawOvalEye(leftX, eyeY, w, lineColor)
             drawOvalEye(rightX, eyeY, w, lineColor)
             drawThreeTopDots(w, h, Color(0xFF0A84FF))

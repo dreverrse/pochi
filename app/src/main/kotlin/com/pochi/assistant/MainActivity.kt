@@ -48,7 +48,6 @@ class MainActivity : ComponentActivity() {
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Karakter Kucing Pochi Interaktif di Aplikasi Utama
                 PochiMascot(
                     state = BotState.IDLE,
                     emoteOverride = previewEmote,
@@ -59,7 +58,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "Pochi 5.0",
+                    text = "Pochi 5.1",
                     color = Color(0xFF111827),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
@@ -91,7 +90,6 @@ class MainActivity : ComponentActivity() {
                     )
                 )
 
-                // Tombol Aksi Utama
                 Button(
                     onClick = {
                         if (!Settings.canDrawOverlays(this@MainActivity)) {
@@ -108,7 +106,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             stopService(Intent(this@MainActivity, DynamicIslandService::class.java))
                             startService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            Toast.makeText(this@MainActivity, "Pochi Island 5.0 Aktif!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Pochi Island 5.1 Aktif!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -148,7 +146,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Panel Kalibrasi Posisi Lubang Kamera
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -191,7 +188,6 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // Galeri 36 Emote Pochi Sesuai Gambar
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

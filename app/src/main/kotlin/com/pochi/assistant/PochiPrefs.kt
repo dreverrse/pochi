@@ -80,6 +80,6 @@ object PochiPrefs {
 
     fun getCity(context: Context): String {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_CITY, "Semarang") ?: "Semarang"
+            .getString(KEY_CITY, "Jakarta") ?: "Jakarta"
     }
 }

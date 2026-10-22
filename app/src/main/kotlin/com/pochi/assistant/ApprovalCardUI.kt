@@ -47,7 +47,6 @@ fun PochiApprovalCard(
     val borderCol = if (isDark) Color(0xFF27272A) else Color(0xFFE5E7EB)
     val titleCol = if (isDark) Color.White else Color(0xFF111827)
 
-    // UI - Approval Card Sesuai Gambar Referensi
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -93,7 +92,6 @@ fun PochiApprovalCard(
             }
         }
 
-        // Kotak Terminal Gelap (Command Block)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -109,7 +107,6 @@ fun PochiApprovalCard(
             )
         }
 
-        // Baris Tombol Deny (Abu-abu Muda) & Allow (Kuning Emas Biometrik)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
