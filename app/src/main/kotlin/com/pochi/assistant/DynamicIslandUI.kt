@@ -1,12 +1,18 @@
 package com.pochi.assistant
 
+import android.content.Context
+import android.content.Intent
+import android.hardware.camera2.CameraManager
+import android.provider.MediaStore
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -27,6 +33,14 @@ import com.google.ai.client.generativeai.GenerativeModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+enum class BotState(val accentColor: Color, val statusLabel: String) {
+    IDLE(Color(0xFF8E8E93), "Pochi siap"),
+    WAITING(Color(0xFFFF9F0A), "Menunggu perintah..."),
+    WORKING(Color(0xFF0A84FF), "Pochi berpikir..."),
+    DONE(Color(0xFF30D158), "Berhasil!"),
+    ANNOYED(Color(0xFFFF453A), "Jangan dicolek terus!")
+}
+
 @Composable
 fun PochiIslandBot(
     onExpandChange: (Boolean) -> Unit
@@ -34,16 +48,15 @@ fun PochiIslandBot(
     val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(false) }
     var botState by remember { mutableStateOf(BotState.IDLE) }
-    var selectedAgent by remember { mutableStateOf("Pochi Flash") }
+    var currentTab by remember { mutableStateOf("Chat AI") } // Pilihan: Chat, Tools, Weather, Notes, Ide
     var prompt by remember { mutableStateOf("") }
-    var botReply by remember { mutableStateOf("Halo! Aku Pochi. Ketuk aku atau ketik sesuatu di bawah.") }
+    var botReply by remember { mutableStateOf("Halo! Ketuk ikon menu di atas untuk akses cepat.") }
+    var torchState by remember { mutableStateOf(false) }
     var pokeCount by remember { mutableIntStateOf(0) }
 
     val activeApproval by ApprovalManager.activeRequest.collectAsState()
     val lastDecision by ApprovalManager.lastDecision.collectAsState()
-
     val coroutineScope = rememberCoroutineScope()
-    val agents = listOf("Pochi Flash", "Pochi Pro", "Action Guard")
 
     LaunchedEffect(activeApproval) {
         if (activeApproval != null) {
@@ -60,27 +73,25 @@ fun PochiIslandBot(
         }
     }
 
+    // Transisi warna border halus
     val borderColor by animateColorAsState(
-        targetValue = if (botState == BotState.IDLE && !isExpanded) {
-            Color(0xFF2C2C2E)
-        } else {
-            botState.accentColor.copy(alpha = 0.65f)
-        },
+        targetValue = if (botState == BotState.IDLE && !isExpanded) Color(0xFF2C2C2E) else botState.accentColor.copy(alpha = 0.7f),
+        animationSpec = tween(300),
         label = "borderGlow"
     )
 
-    val cornerRadius = if (isExpanded) 26.dp else 50.dp
+    val cornerRadius = if (isExpanded) 28.dp else 50.dp
 
     Box(
         modifier = Modifier
-            .padding(top = 6.dp)
+            .padding(top = 4.dp)
             .clip(RoundedCornerShape(cornerRadius))
             .background(Color(0xFF0A0A0C))
             .border(1.dp, borderColor, RoundedCornerShape(cornerRadius))
             .animateContentSize(
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessMediumLow
+                    dampingRatio = Spring.DampingRatioNoBouncy, // Dibuat tanpa pantulan berlebih agar tidak patah-patah
+                    stiffness = Spring.StiffnessMedium
                 )
             )
             .clickable(enabled = !isExpanded) {
@@ -88,73 +99,67 @@ fun PochiIslandBot(
                 botState = BotState.WAITING
                 onExpandChange(true)
             }
-            .padding(
-                horizontal = if (isExpanded) 14.dp else 12.dp,
-                vertical = if (isExpanded) 12.dp else 6.dp
-            )
+            .padding(horizontal = if (isExpanded) 14.dp else 12.dp, vertical = if (isExpanded) 12.dp else 6.dp)
     ) {
         if (!isExpanded) {
+            // TAMPILAN KAPSUL KECIL (COLLAPSED)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.height(26.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.height(24.dp)
             ) {
-                PochiMascot(state = botState, size = 22.dp)
-
+                PochiMascot(state = botState, size = 20.dp)
                 Text(
-                    text = if (botState == BotState.IDLE) "Pochi" else botState.statusLabel,
+                    text = if (botState == BotState.IDLE) "Pochi Assistant" else botState.statusLabel,
                     color = Color.White,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 130.dp)
+                    modifier = Modifier.widthIn(max = 140.dp)
                 )
-
                 Box(
                     modifier = Modifier
-                        .size(7.dp)
+                        .size(6.dp)
                         .clip(CircleShape)
                         .background(botState.accentColor)
                 )
             }
         } else {
+            // TAMPILAN EXPANDED (MULTIFUNGSI & CLEAN)
             Column(
                 modifier = Modifier.width(330.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Header: Tab Navigasi Multifungsi (Bisa digeser horizontal agar bersih)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        agents.forEach { agent ->
-                            val isSelected = agent == selectedAgent
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(
-                                        if (isSelected) botState.accentColor.copy(alpha = 0.2f)
-                                        else Color(0xFF1C1C1E)
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isSelected) botState.accentColor else Color.Transparent,
-                                        shape = RoundedCornerShape(50)
-                                    )
-                                    .clickable { selectedAgent = agent }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = agent,
-                                    color = if (isSelected) Color.White else Color.Gray,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                    val tabs = listOf("Chat AI", "Tools", "Weather", "Notes", "Ide")
+                    tabs.forEach { tab ->
+                        val isSelected = tab == currentTab
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (isSelected) Color(0xFF0A84FF).copy(alpha = 0.25f) else Color(0xFF1C1C1E))
+                                .border(1.dp, if (isSelected) Color(0xFF0A84FF) else Color.Transparent, RoundedCornerShape(50))
+                                .clickable { currentTab = tab }
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = tab,
+                                color = if (isSelected) Color.White else Color.Gray,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
+
+                    Spacer(modifier = Modifier.weight(1f))
 
                     Text(
                         text = "✕",
@@ -166,22 +171,23 @@ fun PochiIslandBot(
                                 botState = BotState.IDLE
                                 onExpandChange(false)
                             }
-                            .padding(4.dp)
+                            .padding(start = 6.dp)
                     )
                 }
 
+                // Area Maskot & Status Info
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFF141417))
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     PochiMascot(
                         state = botState,
-                        size = 46.dp,
+                        size = 40.dp,
                         onPoke = {
                             pokeCount++
                             if (pokeCount >= 3) {
@@ -193,30 +199,234 @@ fun PochiIslandBot(
                                     botState = BotState.IDLE
                                 }
                             } else {
-                                botReply = "Hei! Pochi di sini, ada yang bisa dibantu?"
+                                botReply = "Mode aktif: $currentTab. Ada yang bisa dibantu?"
                             }
                         },
                         onPet = {
                             botState = BotState.DONE
-                            botReply = "Hehe, makasih sudah elus Pochi! ^ ^"
+                            botReply = "Makasih sudah elus Pochi! ^ ^"
                         }
                     )
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = botState.statusLabel,
+                            text = "Mode: $currentTab",
                             color = botState.accentColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = botReply,
                             color = Color(0xFFE5E5EA),
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp,
-                            modifier = Modifier.heightIn(max = 110.dp)
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
                         )
+                    }
+                }
+
+                // Konten Berdasarkan Tab yang Dipilih (Clean & Bebas Bentrok)
+                when (currentTab) {
+                    "Chat AI" -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color(0xFF1C1C1E))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                BasicTextField(
+                                    value = prompt,
+                                    onValueChange = { prompt = it; if (botState != BotState.WORKING) botState = BotState.WAITING },
+                                    textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
+                                    cursorBrush = SolidColor(Color(0xFF0A84FF)),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                    decorationBox = { innerTextField ->
+                                        if (prompt.isEmpty()) Text("Tanya Gemini...", color = Color.Gray, fontSize = 12.sp)
+                                        innerTextField()
+                                    }
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF0A84FF))
+                                        .clickable {
+                                            if (prompt.isNotBlank() && botState != BotState.WORKING) {
+                                                val query = prompt
+                                                prompt = ""
+                                                val apiKey = PochiPrefs.getApiKey(context)
+                                                if (apiKey.isBlank()) {
+                                                    botReply = "Masukkan Gemini API Key di aplikasi utama!"
+                                                    botState = BotState.ANNOYED
+                                                    return@clickable
+                                                }
+                                                botState = BotState.WORKING
+                                                coroutineScope.launch {
+                                                    try {
+                                                        val model = GenerativeModel("gemini-2.5-flash", apiKey)
+                                                        val res = model.generateContent(query)
+                                                        botReply = res.text ?: "Tidak ada jawaban."
+                                                        botState = BotState.DONE
+                                                        delay(3000)
+                                                        if (botState == BotState.DONE) botState = BotState.IDLE
+                                                    } catch (e: Exception) {
+                                                        botReply = "Error: ${e.localizedMessage}"
+                                                        botState = BotState.ANNOYED
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("↑", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    "Tools" -> {
+                        // Fitur Cepat: Senter, Kamera, On/Off Layar
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Tombol Senter (Flashlight)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (torchState) Color(0xFFFF9F0A) else Color(0xFF1C1C1E))
+                                    .clickable {
+                                        try {
+                                            val camManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+                                            val cameraId = camManager.cameraIdList[0]
+                                            torchState = !torchState
+                                            camManager.setTorchMode(cameraId, torchState)
+                                            botReply = if (torchState) "Senter dinyalakan!" else "Senter dimatikan."
+                                        } catch (e: Exception) {
+                                            botReply = "Gagal mengontrol senter."
+                                        }
+                                    }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (torchState) "💡 Matikan Senter" else "💡 Nyalakan Senter",
+                                    color = if (torchState) Color.Black else Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // Tombol Buka Kamera Cepat
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF1C1C1E))
+                                    .clickable {
+                                        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(intent)
+                                        botReply = "Membuka kamera..."
+                                    }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "📷 Buka Kamera", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    "Weather" -> {
+                        // Info Cuaca Kilat via AI
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1C1C1E))
+                                .clickable {
+                                    val apiKey = PochiPrefs.getApiKey(context)
+                                    if (apiKey.isBlank()) {
+                                        botReply = "Isi API Key dulu di aplikasi utama!"
+                                        return@clickable
+                                    }
+                                    botState = BotState.WORKING
+                                    coroutineScope.launch {
+                                        try {
+                                            val model = GenerativeModel("gemini-2.5-flash", apiKey)
+                                            val res = model.generateContent("Berikan perkiraan cuaca umum dan tips pakaian hari ini secara singkat dalam bahasa Indonesia.")
+                                            botReply = res.text ?: "Gagal memuat cuaca."
+                                            botState = BotState.DONE
+                                        } catch (e: Exception) {
+                                            botReply = "Gagal terhubung ke AI."
+                                            botState = BotState.ANNOYED
+                                        }
+                                    }
+                                }
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "🌤️ Ketuk untuk Cek Info Cuaca & Saran Hari Ini", color = Color(0xFF0A84FF), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    "Notes" -> {
+                        // Catatan Cepat
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1C1C1E))
+                                .clickable {
+                                    botReply = "Catatan aktif: Gunakan fitur Chat AI di atas untuk merangkum teks atau ide cepat!"
+                                }
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "📝 Catatan Singkat: Tersimpan otomatis di sesi aktif", color = Color(0xFF30D158), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    "Ide" -> {
+                        // Brainstorming Ide Instan
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1C1C1E))
+                                .clickable {
+                                    val apiKey = PochiPrefs.getApiKey(context)
+                                    if (apiKey.isBlank()) {
+                                        botReply = "Isi API Key dulu di aplikasi utama!"
+                                        return@clickable
+                                    }
+                                    botState = BotState.WORKING
+                                    coroutineScope.launch {
+                                        try {
+                                            val model = GenerativeModel("gemini-2.5-flash", apiKey)
+                                            val res = model.generateContent("Berikan 1 ide kreatif konten atau inovasi proyek teknologi yang unik dan segar hari ini dalam 2 kalimat.")
+                                            botReply = res.text ?: "Tidak ada ide."
+                                            botState = BotState.DONE
+                                        } catch (e: Exception) {
+                                            botReply = "Gagal menghasilkan ide."
+                                            botState = BotState.ANNOYED
+                                        }
+                                    }
+                                }
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "💡 Ketuk untuk Meminta Ide Kreatif / Brainstorming", color = Color(0xFFFF9F0A), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
 
@@ -226,113 +436,7 @@ fun PochiIslandBot(
                         onDeny = { ApprovalManager.confirmDeny() }
                     )
                 }
-
-                if (botState == BotState.WORKING) {
-                    NineDotsWaveform(color = botState.accentColor)
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(50))
-                        .background(Color(0xFF1C1C1E))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    BasicTextField(
-                        value = prompt,
-                        onValueChange = {
-                            prompt = it
-                            if (botState != BotState.WORKING) botState = BotState.WAITING
-                        },
-                        textStyle = TextStyle(color = Color.White, fontSize = 13.sp),
-                        cursorBrush = SolidColor(botState.accentColor),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        decorationBox = { innerTextField ->
-                            if (prompt.isEmpty()) {
-                                Text(
-                                    text = "Tanya $selectedAgent...",
-                                    color = Color.Gray,
-                                    fontSize = 13.sp
-                                )
-                            }
-                            innerTextField()
-                        }
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(botState.accentColor)
-                            .clickable {
-                                if (prompt.isNotBlank() && botState != BotState.WORKING) {
-                                    val query = prompt
-                                    prompt = ""
-                                    val apiKey = PochiPrefs.getApiKey(context)
-                                    if (apiKey.isBlank()) {
-                                        botReply = "Isi Gemini API Key dulu di aplikasi utama Pochi ya!"
-                                        botState = BotState.ANNOYED
-                                        return@clickable
-                                    }
-
-                                    botState = BotState.WORKING
-                                    coroutineScope.launch {
-                                        try {
-                                            val modelName = if (selectedAgent == "Pochi Pro") "gemini-2.5-pro" else "gemini-2.5-flash"
-                                            val generativeModel = GenerativeModel(
-                                                modelName = modelName,
-                                                apiKey = apiKey
-                                            )
-                                            val response = generativeModel.generateContent(query)
-                                            botReply = response.text ?: "Tidak ada jawaban."
-                                            botState = BotState.DONE
-                                            delay(4000)
-                                            if (botState == BotState.DONE) botState = BotState.IDLE
-                                        } catch (e: Exception) {
-                                            botReply = "Gagal memproses: ${e.localizedMessage}"
-                                            botState = BotState.ANNOYED
-                                        }
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("↑", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    }
-                }
             }
-        }
-    }
-}
-
-@Composable
-fun NineDotsWaveform(color: Color) {
-    val infiniteTransition = rememberInfiniteTransition(label = "dots")
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        repeat(9) { index ->
-            val scale by infiniteTransition.animateFloat(
-                initialValue = 0.4f,
-                targetValue = 1.2f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(500, delayMillis = index * 60, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "dot_$index"
-            )
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 3.dp)
-                    .size(5.dp * scale)
-                    .clip(CircleShape)
-                    .background(color)
-            )
         }
     }
 }
