@@ -20,14 +20,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
-enum class BotState(val accentColor: Color, val statusLabel: String) {
-    IDLE(Color(0xFF8E8E93), "Pochi siap"),
-    WAITING(Color(0xFFFF9F0A), "Menunggu kamu..."),
-    WORKING(Color(0xFF0A84FF), "Pochi sedang mikir..."),
-    DONE(Color(0xFF30D158), "Selesai!"),
-    ANNOYED(Color(0xFFFF453A), "Jangan dicolek terus!")
-}
-
 @Composable
 fun PochiMascot(
     state: BotState,
