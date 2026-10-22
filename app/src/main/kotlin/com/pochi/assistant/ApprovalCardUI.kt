@@ -1,7 +1,6 @@
 package com.pochi.assistant
 
 import android.content.Intent
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,9 +49,8 @@ fun PochiApprovalCard(
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF1A1510))
             .border(1.dp, Color(0xFFFF9F0A).copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-            .animateContentSize()
             .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -76,7 +74,7 @@ fun PochiApprovalCard(
         Text(
             text = request.friendlyTitle,
             color = Color.White,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium
         )
 
@@ -86,11 +84,11 @@ fun PochiApprovalCard(
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF0A0A0C))
                 .clickable { showRawCommand = !showRawCommand }
-                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
         ) {
             if (!showRawCommand) {
                 Text(
-                    text = "🔒 Ketuk untuk melihat perintah asli (Command/Path)",
+                    text = "🔒 Ketuk untuk lihat perintah asli",
                     color = Color.Gray,
                     fontSize = 11.sp
                 )
@@ -111,16 +109,16 @@ fun PochiApprovalCard(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Color(0xFF2C2C2E))
                     .clickable(enabled = !isTapGuardActive) { onDeny() }
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "Deny",
                     color = if (isTapGuardActive) Color.DarkGray else Color(0xFFFF453A),
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -128,7 +126,7 @@ fun PochiApprovalCard(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(
                         if (isTapGuardActive) Color(0xFFFF9F0A).copy(alpha = 0.3f)
                         else Color(0xFFFF9F0A)
@@ -139,13 +137,13 @@ fun PochiApprovalCard(
                         }
                         context.startActivity(intent)
                     }
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "🔒 Allow",
                     color = Color.Black,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
             }

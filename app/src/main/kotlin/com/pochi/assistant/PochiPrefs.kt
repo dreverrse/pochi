@@ -1,12 +1,38 @@
 package com.pochi.assistant
 
 import android.content.Context
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 object PochiPrefs {
     private const val PREF_NAME = "pochi_settings"
     private const val KEY_API = "gemini_api_key"
     private const val KEY_NOTES = "pochi_saved_notes"
     private const val KEY_CITY = "pochi_weather_city"
+    private const val KEY_OFFSET_X = "pochi_offset_x"
+    private const val KEY_OFFSET_Y = "pochi_offset_y"
+
+    private val _offsetXFlow = MutableStateFlow(0)
+    val offsetXFlow: StateFlow<Int> = _offsetXFlow
+
+    private val _offsetYFlow = MutableStateFlow(4)
+    val offsetYFlow: StateFlow<Int> = _offsetYFlow
+
+    fun init(context: Context) {
+        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        _offsetXFlow.value = prefs.getInt(KEY_OFFSET_X, 0)
+        _offsetYFlow.value = prefs.getInt(KEY_OFFSET_Y, 4)
+    }
+
+    fun saveOffsets(context: Context, xDp: Int, yDp: Int) {
+        _offsetXFlow.value = xDp
+        _offsetYFlow.value = yDp
+        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(KEY_OFFSET_X, xDp)
+            .putInt(KEY_OFFSET_Y, yDp)
+            .apply()
+    }
 
     fun saveApiKey(context: Context, apiKey: String) {
         context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -41,6 +67,6 @@ object PochiPrefs {
 
     fun getCity(context: Context): String {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_CITY, "Jakarta") ?: "Jakarta"
+            .getString(KEY_CITY, "Semarang") ?: "Semarang"
     }
 }

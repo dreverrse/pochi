@@ -14,7 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -40,19 +40,10 @@ fun PochiMascot(
         initialValue = 0.96f,
         targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
+            animation = tween(1500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "breathScale"
-    )
-
-    val jumpOffset by animateFloatAsState(
-        targetValue = if (state == BotState.DONE) -5f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "jump"
     )
 
     val bodyColor by animateColorAsState(
@@ -63,14 +54,14 @@ fun PochiMascot(
             BotState.DONE -> Color(0xFF30D158)
             BotState.ANNOYED -> Color(0xFFFF453A)
         },
-        animationSpec = tween(250),
+        animationSpec = tween(200),
         label = "bodyColor"
     )
 
     var isBlinking by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay((2500..4500).random().toLong())
+            delay((2800..4500).random().toLong())
             isBlinking = true
             delay(130)
             isBlinking = false
@@ -80,11 +71,6 @@ fun PochiMascot(
     Canvas(
         modifier = Modifier
             .size(size)
-            .graphicsLayer {
-                scaleX = breathScale
-                scaleY = 1f / breathScale
-                translationY = jumpOffset
-            }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { onPoke() },
@@ -95,83 +81,85 @@ fun PochiMascot(
         val w = this.size.width
         val h = this.size.height
 
-        drawRoundRect(
-            color = bodyColor,
-            size = Size(w, h),
-            cornerRadius = CornerRadius(w * 0.36f, h * 0.36f)
-        )
+        scale(scaleX = breathScale, scaleY = 1f / breathScale) {
+            drawRoundRect(
+                color = bodyColor,
+                size = Size(w, h),
+                cornerRadius = CornerRadius(w * 0.36f, h * 0.36f)
+            )
 
-        val eyeColor = Color(0xFF1C1C1E)
-        val leftEyeX = w * 0.33f
-        val rightEyeX = w * 0.67f
-        val eyeY = if (state == BotState.WORKING) h * 0.38f else h * 0.45f
+            val eyeColor = Color(0xFF1C1C1E)
+            val leftEyeX = w * 0.33f
+            val rightEyeX = w * 0.67f
+            val eyeY = if (state == BotState.WORKING) h * 0.38f else h * 0.45f
 
-        when {
-            state == BotState.ANNOYED -> {
-                val stroke = Stroke(width = w * 0.07f, cap = StrokeCap.Round)
-                val path = Path().apply {
-                    moveTo(leftEyeX - 6f, eyeY - 5f)
-                    lineTo(leftEyeX + 4f, eyeY)
-                    lineTo(leftEyeX - 6f, eyeY + 5f)
+            when {
+                state == BotState.ANNOYED -> {
+                    val stroke = Stroke(width = w * 0.07f, cap = StrokeCap.Round)
+                    val path = Path().apply {
+                        moveTo(leftEyeX - 6f, eyeY - 5f)
+                        lineTo(leftEyeX + 4f, eyeY)
+                        lineTo(leftEyeX - 6f, eyeY + 5f)
 
-                    moveTo(rightEyeX + 6f, eyeY - 5f)
-                    lineTo(rightEyeX - 4f, eyeY)
-                    lineTo(rightEyeX + 6f, eyeY + 5f)
+                        moveTo(rightEyeX + 6f, eyeY - 5f)
+                        lineTo(rightEyeX - 4f, eyeY)
+                        lineTo(rightEyeX + 6f, eyeY + 5f)
+                    }
+                    drawPath(path, color = eyeColor, style = stroke)
                 }
-                drawPath(path, color = eyeColor, style = stroke)
-            }
-            state == BotState.DONE -> {
-                val stroke = Stroke(width = w * 0.07f, cap = StrokeCap.Round)
-                drawArc(
-                    color = eyeColor,
-                    startAngle = 180f,
-                    sweepAngle = 180f,
-                    useCenter = false,
-                    topLeft = Offset(leftEyeX - 6f, eyeY - 4f),
-                    size = Size(12f, 10f),
-                    style = stroke
-                )
-                drawArc(
-                    color = eyeColor,
-                    startAngle = 180f,
-                    sweepAngle = 180f,
-                    useCenter = false,
-                    topLeft = Offset(rightEyeX - 6f, eyeY - 4f),
-                    size = Size(12f, 10f),
-                    style = stroke
-                )
-            }
-            isBlinking -> {
-                drawLine(
-                    color = eyeColor,
-                    start = Offset(leftEyeX - 5f, eyeY),
-                    end = Offset(leftEyeX + 5f, eyeY),
-                    strokeWidth = w * 0.06f,
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    color = eyeColor,
-                    start = Offset(rightEyeX - 5f, eyeY),
-                    end = Offset(rightEyeX + 5f, eyeY),
-                    strokeWidth = w * 0.06f,
-                    cap = StrokeCap.Round
-                )
-            }
-            else -> {
-                val eyeRadius = w * 0.085f
-                drawCircle(color = eyeColor, radius = eyeRadius, center = Offset(leftEyeX, eyeY))
-                drawCircle(color = eyeColor, radius = eyeRadius, center = Offset(rightEyeX, eyeY))
+                state == BotState.DONE -> {
+                    val stroke = Stroke(width = w * 0.07f, cap = StrokeCap.Round)
+                    drawArc(
+                        color = eyeColor,
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        topLeft = Offset(leftEyeX - 6f, eyeY - 4f),
+                        size = Size(12f, 10f),
+                        style = stroke
+                    )
+                    drawArc(
+                        color = eyeColor,
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        topLeft = Offset(rightEyeX - 6f, eyeY - 4f),
+                        size = Size(12f, 10f),
+                        style = stroke
+                    )
+                }
+                isBlinking -> {
+                    drawLine(
+                        color = eyeColor,
+                        start = Offset(leftEyeX - 5f, eyeY),
+                        end = Offset(leftEyeX + 5f, eyeY),
+                        strokeWidth = w * 0.06f,
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        color = eyeColor,
+                        start = Offset(rightEyeX - 5f, eyeY),
+                        end = Offset(rightEyeX + 5f, eyeY),
+                        strokeWidth = w * 0.06f,
+                        cap = StrokeCap.Round
+                    )
+                }
+                else -> {
+                    val eyeRadius = w * 0.085f
+                    drawCircle(color = eyeColor, radius = eyeRadius, center = Offset(leftEyeX, eyeY))
+                    drawCircle(color = eyeColor, radius = eyeRadius, center = Offset(rightEyeX, eyeY))
 
-                drawCircle(
-                    color = Color.White,
-                    radius = eyeRadius * 0.35f,
-                    center = Offset(leftEyeX + 2f, eyeY - 2f)
-                )
-                drawCircle(
-                    color = Color.White,
-                    radius = eyeRadius * 0.35f,
-                    center = Offset(rightEyeX + 2f, eyeY - 2f)
-                )
+                    drawCircle(
+                        color = Color.White,
+                        radius = eyeRadius * 0.35f,
+                        center = Offset(leftEyeX + 2f, eyeY - 2f)
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = eyeRadius * 0.35f,
+                        center = Offset(rightEyeX + 2f, eyeY - 2f)
+                    )
+                }
             }
         }
     }
