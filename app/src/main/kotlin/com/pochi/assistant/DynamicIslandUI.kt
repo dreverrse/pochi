@@ -120,7 +120,7 @@ fun PochiIslandBot(
             }
         } else {
             Column(
-                modifier = Modifier.widthIn(max = 330.dp).fillMaxWidth(),
+                modifier = Modifier.width(330.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
