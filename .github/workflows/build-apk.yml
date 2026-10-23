@@ -24,20 +24,10 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Extract version
-        id: version
-        run: |
-          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n1)
-          echo "version=$VERSION_NAME" >> $GITHUB_OUTPUT
-
-      - name: Build Pochi APK
+      - name: Build Pochi Debug APK
         run: |
           set -o pipefail
           gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
-
-      - name: Rename APK
-        run: |
-          cp app/build/outputs/apk/debug/app-debug.apk "Pochi-${{ steps.version.outputs.version }}.apk"
 
       - name: Write build errors to summary
         if: failure()
@@ -57,18 +47,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Pochi-Android-APK
-          path: Pochi-${{ steps.version.outputs.version }}.apk
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Pochi v${{ steps.version.outputs.version }}
-          body: |
-            Pochi Android APK build ${{ steps.version.outputs.version }}
-            Commit: ${{ github.sha }}
-          files: Pochi-${{ steps.version.outputs.version }}.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: app/build/outputs/apk/debug/app-debug.apk
