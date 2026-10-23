@@ -33,11 +33,11 @@ jobs:
       - name: Build Pochi APK
         run: |
           set -o pipefail
-          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Rename APK
         run: |
-          cp app/build/outputs/apk/release/app-release.apk "Pochi-${{ steps.version.outputs.version }}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "Pochi-${{ steps.version.outputs.version }}.apk"
 
       - name: Write build errors to summary
         if: failure()
