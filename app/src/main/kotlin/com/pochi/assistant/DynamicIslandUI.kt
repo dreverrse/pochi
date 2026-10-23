@@ -205,7 +205,7 @@ fun PochiIslandBot(
             botReply = decision
             val approved = decision.startsWith("Diizinkan")
             botState = if (approved) BotState.DONE else BotState.IDLE
-            customEmote = if (approved) PochiEmote.SUCCESS else PochiEmote.SAD
+            customEmote = if (approved) PochiEmote.SUCCESS else PochiEmote.NO
         }
     }
 
@@ -241,7 +241,7 @@ fun PochiIslandBot(
                 PochiEmote.WORKING,
                 PochiEmote.HMM,
                 PochiEmote.LOADING,
-                PochiEmote.IDEA
+                PochiEmote.FOCUS
             )
             var idx = 0
             while (botState == BotState.WORKING) {
@@ -281,7 +281,7 @@ fun PochiIslandBot(
                 botReply = replyText
                 val moodEmote = PochiMood.inferEmoteFromText(trimmed, replyText)
                 customEmote = moodEmote
-                botState = if (moodEmote in setOf(PochiEmote.ANGRY, PochiEmote.CRYING, PochiEmote.SAD)) {
+                botState = if (moodEmote in setOf(PochiEmote.ANGRY, PochiEmote.CRYING, PochiEmote.ANNOYED)) {
                     BotState.ANNOYED
                 } else {
                     BotState.DONE
@@ -306,7 +306,7 @@ fun PochiIslandBot(
         if (apiKey.isBlank()) {
             botReply = "Untuk ngobrol bebas, isi kunci ${currentProvider.label} di aplikasi Pochi dulu ya. (Perintah seperti 'timer 5 menit', '45rb * 3', 'catat ...', 'buka wa' tetap bisa langsung dipakai!)"
             botState = BotState.ANNOYED
-            customEmote = PochiEmote.SAD
+            customEmote = PochiEmote.CONFUSED
             return
         }
 
@@ -347,7 +347,7 @@ fun PochiIslandBot(
                 }
                 customEmote = chosenEmote
                 botState = when (chosenEmote) {
-                    PochiEmote.ANGRY, PochiEmote.CRYING, PochiEmote.SAD,
+                    PochiEmote.ANGRY, PochiEmote.CRYING, PochiEmote.ANNOYED,
                     PochiEmote.SUSPICIOUS, PochiEmote.SCARED, PochiEmote.ERROR -> BotState.ANNOYED
                     else -> BotState.DONE
                 }
@@ -358,7 +358,7 @@ fun PochiIslandBot(
                 }
             } catch (e: Exception) {
                 botReply = "Aduh, koneksiku lagi gangguan nih: ${e.localizedMessage?.take(100)}"
-                customEmote = PochiEmote.DIZZY
+                customEmote = PochiEmote.ERROR
                 botState = BotState.ANNOYED
             }
         }
@@ -585,10 +585,10 @@ fun PochiIslandBot(
                                         bump()
                                         currentTab = tab
                                         customEmote = when (tab) {
-                                            PochiTab.MUSIC -> PochiEmote.SINGING
+                                            PochiTab.MUSIC -> PochiEmote.EXCITED
                                             PochiTab.NOTES -> PochiEmote.FOCUS
-                                            PochiTab.WEATHER -> PochiEmote.CURIOUS
-                                            PochiTab.CONTROLS -> PochiEmote.COOL
+                                            PochiTab.WEATHER -> PochiEmote.HMM
+                                            PochiTab.CONTROLS -> PochiEmote.WINK_LEFT
                                             PochiTab.CHAT -> null
                                         }
                                     }
@@ -720,7 +720,7 @@ fun PochiIslandBot(
                                                     customEmote in setOf(
                                                         PochiEmote.ANGRY,
                                                         PochiEmote.CRYING,
-                                                        PochiEmote.SAD,
+                                                        PochiEmote.ANNOYED,
                                                         PochiEmote.SCARED
                                                     )
                                                 pokeCount = 0
