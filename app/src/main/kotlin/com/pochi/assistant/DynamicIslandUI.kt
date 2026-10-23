@@ -110,6 +110,7 @@ fun PochiIslandBot(
     val screenAwarenessEnabled by PochiPrefs.screenAwarenessFlow.collectAsState()
     val screenApp by PochiSignals.screenApp.collectAsState()
     val screenText by PochiSignals.screenText.collectAsState()
+    val notifications by PochiSignals.notifications.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(screenApp) {
@@ -198,8 +199,12 @@ fun PochiIslandBot(
         bump()
         coroutineScope.launch {
             try {
-                val response = AiClient.ask(currentProvider, apiKey, model, queryText)
-                botReply = response
+                val rawResponse = AiClient.ask(currentProvider, apiKey, model, queryText)
+                val (cleanReply, action) = PochiAgent.extract(rawResponse)
+                botReply = cleanReply
+                if (action != null) {
+                    ApprovalManager.requestAction(context, action)
+                }
                 customEmote = PochiEmote.SUCCESS
                 botState = BotState.DONE
                 delay(2800)
@@ -371,10 +376,64 @@ fun PochiIslandBot(
                                 tint = textPrimary,
                                 modifier = Modifier.size(15.dp)
                             )
-                        }
-                    }
+                                        }
+                                    }
 
-                    Row(
+                                    if (notifications.isNotEmpty()) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(surfaceBg)
+                                                .border(1.dp, borderCol, RoundedCornerShape(16.dp))
+                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "\uD83D\uDD14 ${notifications.size} notifikasi",
+                                                    color = textPrimary,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = notifications.first().let { "${it.app}: ${it.title}" },
+                                                    color = textSecondary,
+                                                    fontSize = 10.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            Text(
+                                                text = "Ringkas",
+                                                color = primaryBlue,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(50))
+                                                    .background(primaryBlue.copy(alpha = 0.14f))
+                                                    .clickable {
+                                                        val summary = notifications.take(8)
+                                                            .joinToString("; ") { "${it.app} - ${it.title}: ${it.text.take(80)}" }
+                                                        askAi("Ringkas notifikasi berikut jadi poin singkat: $summary")
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                            )
+                                            Text(
+                                                text = "\u00D7",
+                                                color = textSecondary,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier
+                                                    .clickable { PochiSignals.clearNotifications() }
+                                                    .padding(horizontal = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically

@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "Pochi 5.3.0",
+                    text = "Pochi 5.4.0",
                     color = Color(0xFF111827),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             stopService(Intent(this@MainActivity, DynamicIslandService::class.java))
                             startForegroundService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            Toast.makeText(this@MainActivity, "Pochi Island 5.3.0 Aktif!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Pochi Island 5.4.0 Aktif!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -313,6 +313,43 @@ class MainActivity : ComponentActivity() {
                         fontSize = 11.sp,
                         lineHeight = 15.sp
                     )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(18.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "🔔 Akses Notifikasi",
+                        color = Color(0xFF111827),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Izinkan Pochi membaca notifikasi agar bisa meringkas dan menjalankan aksi otomatis (dengan persetujuan).",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Aktifkan 'Pochi' di daftar akses notifikasi",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Buka Setelan Akses Notifikasi", color = Color(0xFF0A84FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 Column(
