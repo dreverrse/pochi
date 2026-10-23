@@ -24,10 +24,21 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build Pochi Debug APK
+      - name: Ensure release keystore
+        run: |
+          if [ ! -f pochi-release.jks ]; then
+            keytool -genkeypair -keystore pochi-release.jks -alias pochi -keyalg RSA -keysize 2048 -validity 10000 -storepass pochi-release -keypass pochi-release -dname "CN=Pochi, O=Pochi, C=ID"
+            git config user.name "Pochi CI"
+            git config user.email "pochi@users.noreply.github.com"
+            git add pochi-release.jks
+            git commit -m "chore: add release keystore [skip ci]"
+            git push
+          fi
+
+      - name: Build Pochi Release APK
         run: |
           set -o pipefail
-          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Write build errors to summary
         if: failure()
@@ -49,4 +60,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Pochi-Android-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Pochi v${{ steps.version.outputs.version }}
+          body: |
+            Pochi Android APK build ${{ steps.version.outputs.version }}
+            Commit: ${{ github.sha }}
+          files: app/build/outputs/apk/release/app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

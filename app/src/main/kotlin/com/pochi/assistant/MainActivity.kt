@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "Pochi 5.5.0",
+                    text = "Pochi 5.6.0",
                     color = Color(0xFF111827),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
@@ -186,7 +186,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             stopService(Intent(this@MainActivity, DynamicIslandService::class.java))
                             startForegroundService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            Toast.makeText(this@MainActivity, "Pochi Island 5.5.0 Aktif!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Pochi Island 5.6.0 Aktif!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),

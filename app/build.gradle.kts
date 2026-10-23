@@ -11,8 +11,8 @@ android {
         applicationId = "com.pochi.assistant"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "5.5.0"
+        versionCode = 11
+        versionName = "5.6.0"
     }
 
     buildFeatures {
@@ -21,6 +21,24 @@ android {
 
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
+    }
+
+    signingConfigs {
+        if (rootProject.file("pochi-release.jks").exists()) {
+            create("release") {
+                storeFile = rootProject.file("pochi-release.jks")
+                storePassword = "pochi-release"
+                keyAlias = "pochi"
+                keyPassword = "pochi-release"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
+        }
     }
 
     compileOptions {
