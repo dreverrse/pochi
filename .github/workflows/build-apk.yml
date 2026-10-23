@@ -25,7 +25,23 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build Pochi Debug APK
-        run: gradle assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Write build errors to summary
+        if: failure()
+        run: |
+          {
+            echo "### Build failure"
+            echo '```'
+            grep -nE "(^e: |error:|FAILURE:|What went wrong|Android resource linking failed|Unresolved reference|Caused by:)" build.log | head -100 || true
+            echo '```'
+            echo "### Last 120 lines"
+            echo '```'
+            tail -120 build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Pochi APK
         uses: actions/upload-artifact@v4
