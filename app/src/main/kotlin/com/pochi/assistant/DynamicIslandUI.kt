@@ -265,7 +265,7 @@ fun PochiIslandBot(
     ) { expanded -> if (expanded) 0f else 1f }
 
     val panelBg by animateColorAsState(
-        targetValue = if (!isExpanded) Color(0xFF09090B)
+        targetValue = if (!isExpanded) Color.Transparent
         else if (isDarkMode) Color(0xFF121215)
         else Color(0xFFFAFBFC),
         animationSpec = tween(180),
@@ -274,7 +274,7 @@ fun PochiIslandBot(
 
     val surfaceBg = if (isDarkMode) Color(0xFF1E1E24) else Color(0xFFFFFFFF)
     val borderCol by animateColorAsState(
-        targetValue = if (!isExpanded) Color(0xFF27272A)
+        targetValue = if (!isExpanded) Color.Transparent
         else if (isDarkMode) Color(0xFF2E2E36) else Color(0xFFE5E7EB),
         animationSpec = tween(220),
         label = "borderCol"
@@ -287,18 +287,21 @@ fun PochiIslandBot(
 
     if (isHidden) {
         val peekOffset = remember(peekMode, peekSide) {
-            Animatable(if (peekMode) if (peekSide == "left") -6f else 6f else 0f)
+            Animatable(if (peekMode) if (peekSide == "left") -12f else 12f else 0f)
         }
         LaunchedEffect(peekMode, peekSide) {
             if (peekMode) {
-                peekOffset.animateTo(
-                    targetValue = if (peekSide == "left") -10f else 10f,
-                    animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f)
-                )
-                peekOffset.animateTo(
-                    targetValue = if (peekSide == "left") -6f else 6f,
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 300f)
-                )
+                while (true) {
+                    peekOffset.animateTo(
+                        targetValue = if (peekSide == "left") -18f else 18f,
+                        animationSpec = spring(dampingRatio = 0.5f, stiffness = 380f)
+                    )
+                    peekOffset.animateTo(
+                        targetValue = if (peekSide == "left") -12f else 12f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 260f)
+                    )
+                    delay(4500)
+                }
             } else {
                 peekOffset.snapTo(0f)
             }
@@ -316,14 +319,14 @@ fun PochiIslandBot(
                 modifier = Modifier
                     .graphicsLayer {
                         translationX = peekOffset.value
-                        rotationZ = if (peekSide == "left") -8f else 8f
+                        rotationZ = if (peekSide == "left") -16f else 16f
                     },
                 contentAlignment = Alignment.Center
             ) {
                 PochiMascot(
                     state = botState,
                     emoteOverride = collapsedEmote,
-                    size = 48.dp
+                    size = 52.dp
                 )
             }
         }

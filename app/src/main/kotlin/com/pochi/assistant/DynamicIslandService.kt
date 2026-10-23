@@ -235,9 +235,9 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         params.width = peekWidthPx
         params.height = peekHeightPx
         if (rightSide == "right") {
-            params.x = screenWidthPx / 2 - peekWidthPx / 4
+            params.x = screenWidthPx / 2 - peekWidthPx / 3
         } else {
-            params.x = -(screenWidthPx / 2 - peekWidthPx / 4)
+            params.x = -(screenWidthPx / 2 - peekWidthPx / 3)
         }
         val baseY = (PochiPrefs.offsetYFlow.value * density).toInt()
         params.y = (baseY + screenHeightPx / 6)
@@ -256,9 +256,9 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         params.width = tabWidthPx
         params.height = tabHeightPx
         if (right) {
-            params.x = screenWidthPx / 2 - tabWidthPx / 4
+            params.x = screenWidthPx / 2 - tabWidthPx / 3
         } else {
-            params.x = -(screenWidthPx / 2 - tabWidthPx / 4)
+            params.x = -(screenWidthPx / 2 - tabWidthPx / 3)
         }
         val baseY = (PochiPrefs.offsetYFlow.value * density).toInt()
         params.y = (baseY + screenHeightPx / 6)
