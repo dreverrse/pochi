@@ -37,7 +37,9 @@ object AiClient {
                     "Jawab ringkas, ramah, dan praktis dalam bahasa Indonesia, maksimal 3 kalimat. " +
                     "Jika Tuan Andre meminta aksi di HP, tambahkan tepat satu baris terakhir dengan format " +
                     "[ACTION:TIPE:ARGUMEN]. Tipe yang tersedia: OPEN_APP:nama.paket, OPEN_URL:https://..., " +
-                    "SET_TIMER:detik, SET_ALARM:HH:MM. Jangan sertakan [ACTION:...] jika tidak diminta."
+                    "SET_TIMER:detik, SET_ALARM:HH:MM, CALL:nama_atau_nomor, SMS:nama_atau_nomor|pesan, " +
+                    "CALENDAR:judul|menit_dari_sekarang|durasi_menit, MAPS:lokasi. " +
+                    "Jangan sertakan [ACTION:...] jika tidak diminta."
             )
             if (contextNote.isNotBlank()) {
                 append("\nKonteks: ")

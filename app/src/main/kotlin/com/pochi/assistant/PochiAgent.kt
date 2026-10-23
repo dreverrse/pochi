@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.AlarmClock
+import android.provider.CalendarContract
 import android.widget.Toast
+import java.net.URLEncoder
 
 data class AgentAction(val type: String, val argument: String)
 
@@ -31,6 +33,16 @@ object PochiAgent {
             "OPEN_URL" -> "Pochi ingin membuka tautan ${action.argument}"
             "SET_TIMER" -> "Pochi ingin memasang timer ${action.argument} detik"
             "SET_ALARM" -> "Pochi ingin memasang alarm jam ${action.argument}"
+            "CALL" -> "Pochi ingin menelepon ${action.argument}"
+            "SMS" -> {
+                val target = action.argument.substringBefore("|")
+                "Pochi ingin mengirim SMS ke $target"
+            }
+            "CALENDAR" -> {
+                val title = action.argument.substringBefore("|")
+                "Pochi ingin menambah jadwal \"$title\""
+            }
+            "MAPS" -> "Pochi ingin membuka peta untuk ${action.argument}"
             else -> "Pochi ingin menjalankan aksi ${action.type}"
         }
     }
@@ -89,6 +101,58 @@ object PochiAgent {
                         context.startActivity(intent)
                         "Alarm dipasang."
                     }
+                }
+                "CALL" -> {
+                    val number = PochiContacts.resolveNumber(context, action.argument)
+                    if (number.isBlank()) {
+                        "Nomor tidak ditemukan."
+                    } else {
+                        val intent = Intent(
+                            Intent.ACTION_DIAL,
+                            Uri.fromParts("tel", number, null)
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        "Dialer dibuka untuk $number."
+                    }
+                }
+                "SMS" -> {
+                    val target = action.argument.substringBefore("|").trim()
+                    val message = action.argument.substringAfter("|", "")
+                    val number = PochiContacts.resolveNumber(context, target)
+                    if (number.isBlank()) {
+                        "Nomor tidak ditemukan."
+                    } else {
+                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number"))
+                            .putExtra("sms_body", message)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        "Aplikasi SMS dibuka untuk $number."
+                    }
+                }
+                "CALENDAR" -> {
+                    val parts = action.argument.split("|")
+                    val title = parts.getOrNull(0)?.trim().orEmpty().ifBlank { "Jadwal Pochi" }
+                    val minutesFromNow = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: 60
+                    val durationMinutes = parts.getOrNull(2)?.trim()?.toIntOrNull() ?: 30
+                    val start = System.currentTimeMillis() + minutesFromNow * 60_000L
+                    val end = start + durationMinutes * 60_000L
+                    val intent = Intent(Intent.ACTION_INSERT)
+                        .setData(CalendarContract.Events.CONTENT_URI)
+                        .putExtra(CalendarContract.Events.TITLE, title)
+                        .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start)
+                        .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    "Form jadwal dibuka."
+                }
+                "MAPS" -> {
+                    val query = URLEncoder.encode(action.argument, "UTF-8")
+                    val intent = Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse("geo:0,0?q=$query")
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    "Peta dibuka."
                 }
                 else -> "Aksi tidak dikenal."
             }

@@ -9,7 +9,9 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -75,7 +78,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "Pochi 5.6.0",
+                    text = "Pochi 5.7.0",
                     color = Color(0xFF111827),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
@@ -186,7 +189,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             stopService(Intent(this@MainActivity, DynamicIslandService::class.java))
                             startForegroundService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            Toast.makeText(this@MainActivity, "Pochi Island 5.6.0 Aktif!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Pochi Island 5.7.0 Aktif!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -350,6 +353,58 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Buka Setelan Akses Notifikasi", color = Color(0xFF0A84FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(18.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "📇 Kontak & Telepon",
+                        color = Color(0xFF111827),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    var contactGranted by remember {
+                        mutableStateOf(
+                            ContextCompat.checkSelfPermission(
+                                this@MainActivity,
+                                Manifest.permission.READ_CONTACTS
+                            ) == PackageManager.PERMISSION_GRANTED
+                        )
+                    }
+                    val contactLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { granted -> contactGranted = granted }
+                    Text(
+                        text = "Izinkan akses kontak agar Pochi bisa mencari nomor saat Tuan Andre minta telepon atau SMS.",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            if (contactGranted) {
+                                Toast.makeText(this@MainActivity, "Akses kontak sudah aktif", Toast.LENGTH_SHORT).show()
+                            } else {
+                                contactLauncher.launch(Manifest.permission.READ_CONTACTS)
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (contactGranted) "Kontak diizinkan" else "Izinkan Akses Kontak",
+                            color = Color(0xFF0A84FF),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
