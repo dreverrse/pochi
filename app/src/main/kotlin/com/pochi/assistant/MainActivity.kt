@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "Pochi 5.4.0",
+                    text = "Pochi 5.5.0",
                     color = Color(0xFF111827),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             stopService(Intent(this@MainActivity, DynamicIslandService::class.java))
                             startForegroundService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            Toast.makeText(this@MainActivity, "Pochi Island 5.4.0 Aktif!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Pochi Island 5.5.0 Aktif!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -349,6 +349,70 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Buka Setelan Akses Notifikasi", color = Color(0xFF0A84FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(18.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "🔄 Pembaruan",
+                        color = Color(0xFF111827),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
+                    var checking by remember { mutableStateOf(false) }
+                    val scope = rememberCoroutineScope()
+                    val currentVersion = remember {
+                        runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("0")
+                    }
+                    Text(
+                        text = "Versi saat ini: $currentVersion",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                checking = true
+                                scope.launch {
+                                    updateInfo = UpdateChecker.check(this@MainActivity)
+                                    checking = false
+                                }
+                            },
+                            enabled = !checking,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (checking) "Memeriksa..." else "Periksa Pembaruan", fontSize = 12.sp)
+                        }
+                        if (updateInfo?.hasUpdate == true && !updateInfo?.downloadUrl.isNullOrBlank()) {
+                            Button(
+                                onClick = {
+                                    UpdateChecker.download(this@MainActivity, updateInfo!!.downloadUrl, updateInfo!!.latestVersion)
+                                    Toast.makeText(this@MainActivity, "Mengunduh Pochi ${updateInfo!!.latestVersion}...", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Unduh v${updateInfo!!.latestVersion}", color = Color.White, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    updateInfo?.let {
+                        if (it.hasUpdate) {
+                            Text("Tersedia versi baru v${it.latestVersion}", color = Color(0xFF30D158), fontSize = 11.sp)
+                        } else if (it.latestVersion.isNotBlank()) {
+                            Text("Sudah terbaru", color = Color(0xFF8E8E93), fontSize = 11.sp)
+                        }
                     }
                 }
 
