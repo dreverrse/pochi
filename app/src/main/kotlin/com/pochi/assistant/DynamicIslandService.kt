@@ -11,7 +11,6 @@ import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.IBinder
-import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -28,7 +27,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -48,7 +46,8 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var isIslandExpanded = false
-    private var xAnimation: Job? = null
+    private var collapseJob: Job? = null
+    private var expandedHeightPx = 0
 
     private val collapsedFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -99,6 +98,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             }
         }
 
+        val screenWidthPx = resources.displayMetrics.widthPixels
+        val expandedWidthPx = ((screenWidthPx - (28 * density)).toInt())
+            .coerceIn((300 * density).toInt(), (372 * density).toInt())
+
         composeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@DynamicIslandService)
             setViewTreeViewModelStoreOwner(this@DynamicIslandService)
@@ -117,14 +120,33 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                 PochiIslandBot(
                     onExpandChange = { expanded ->
                         isIslandExpanded = expanded
-                        params.flags = if (expanded) expandedFlags else collapsedFlags
-                        val targetX = if (expanded) 0 else (PochiPrefs.offsetXFlow.value * density).toInt()
-                        if (params.x == targetX) {
+                        collapseJob?.cancel()
+                        if (expanded) {
+                            params.flags = expandedFlags
+                            params.x = 0
+                            params.width = expandedWidthPx
+                            params.height = if (expandedHeightPx > 0) {
+                                expandedHeightPx
+                            } else {
+                                WindowManager.LayoutParams.WRAP_CONTENT
+                            }
+                        } else {
+                            params.flags = collapsedFlags
+                            params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
+                            params.width = WindowManager.LayoutParams.WRAP_CONTENT
+                            params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                        }
+                        try {
+                            windowManager.updateViewLayout(composeView, params)
+                        } catch (_: Exception) {}
+                    },
+                    onExpandedHeightChange = { heightPx ->
+                        expandedHeightPx = heightPx
+                        if (isIslandExpanded && params.height != heightPx) {
+                            params.height = heightPx
                             try {
                                 windowManager.updateViewLayout(composeView, params)
                             } catch (_: Exception) {}
-                        } else {
-                            animateXTo(targetX)
                         }
                     },
                     onPowerOffService = {
@@ -143,7 +165,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             }.collect { (xDp, yDp) ->
                 if (::composeView.isInitialized) {
                     params.y = (yDp * density).toInt()
-                    if (!isIslandExpanded && xAnimation?.isActive != true) {
+                    if (!isIslandExpanded) {
                         params.x = (xDp * density).toInt()
                     }
                     try {
@@ -192,25 +214,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
     }
 
-    private fun animateXTo(target: Int) {
-        xAnimation?.cancel()
-        xAnimation = serviceScope.launch {
-            val start = params.x
-            val startTime = SystemClock.uptimeMillis()
-            val duration = 240L
-            while (true) {
-                val progress = ((SystemClock.uptimeMillis() - startTime).toFloat() / duration).coerceIn(0f, 1f)
-                val eased = progress * progress * (3f - 2f * progress)
-                params.x = (start + (target - start) * eased).toInt()
-                try {
-                    windowManager.updateViewLayout(composeView, params)
-                } catch (_: Exception) {}
-                if (progress >= 1f) break
-                delay(16)
-            }
-        }
-    }
-
     private fun turnOffTorch() {
         try {
             val manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
@@ -220,7 +223,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
     override fun onDestroy() {
         super.onDestroy()
-        xAnimation?.cancel()
+        collapseJob?.cancel()
         serviceScope.cancel()
         turnOffTorch()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
