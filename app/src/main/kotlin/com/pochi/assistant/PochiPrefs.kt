@@ -15,12 +15,19 @@ object PochiPrefs {
     private const val KEY_OFFSET_Y = "pochi_offset_y"
     private const val KEY_DARK_MODE = "pochi_dark_mode"
     private const val KEY_PROVIDER = "pochi_ai_provider"
+    private const val KEY_SCREEN_AWARENESS = "pochi_screen_awareness"
 
     private val _offsetXFlow = MutableStateFlow(0)
     val offsetXFlow: StateFlow<Int> = _offsetXFlow
 
     private val _offsetYFlow = MutableStateFlow(4)
     val offsetYFlow: StateFlow<Int> = _offsetYFlow
+
+    private val _hiddenFlow = MutableStateFlow(false)
+    val hiddenFlow: StateFlow<Boolean> = _hiddenFlow
+
+    private val _screenAwarenessFlow = MutableStateFlow(false)
+    val screenAwarenessFlow: StateFlow<Boolean> = _screenAwarenessFlow
 
     private val _darkModeFlow = MutableStateFlow(false)
     val darkModeFlow: StateFlow<Boolean> = _darkModeFlow
@@ -33,9 +40,21 @@ object PochiPrefs {
         _offsetXFlow.value = prefs.getInt(KEY_OFFSET_X, 0)
         _offsetYFlow.value = prefs.getInt(KEY_OFFSET_Y, 4)
         _darkModeFlow.value = prefs.getBoolean(KEY_DARK_MODE, false)
+        _screenAwarenessFlow.value = prefs.getBoolean(KEY_SCREEN_AWARENESS, false)
+        _hiddenFlow.value = false
         _providerFlow.value = prefs.getString(KEY_PROVIDER, AiProvider.GEMINI.name)
             ?.let { saved -> AiProvider.entries.firstOrNull { it.name == saved } }
             ?: AiProvider.GEMINI
+    }
+
+    fun setScreenAwareness(context: Context, enabled: Boolean) {
+        _screenAwarenessFlow.value = enabled
+        prefs(context).edit().putBoolean(KEY_SCREEN_AWARENESS, enabled).apply()
+        if (!enabled) PochiSignals.clear()
+    }
+
+    fun isScreenAwarenessEnabled(context: Context): Boolean {
+        return prefs(context).getBoolean(KEY_SCREEN_AWARENESS, false)
     }
 
     fun setDarkMode(context: Context, isDark: Boolean) {

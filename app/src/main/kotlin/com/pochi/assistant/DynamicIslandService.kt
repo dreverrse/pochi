@@ -14,6 +14,7 @@ import android.os.IBinder
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -47,6 +48,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var isIslandExpanded = false
+    private val hiddenState = mutableStateOf(false)
     private var collapseJob: Job? = null
     private var heightJob: Job? = null
     private var expandedHeightPx = 0
@@ -166,6 +168,20 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                             }
                         }
                     },
+                    isHidden = hiddenState.value,
+                    onRestoreFromHidden = { restoreFromHidden(collapsedPx, density) },
+                    onDragBubble = { dx, dy ->
+                        if (!hiddenState.value && !isIslandExpanded) {
+                            val screenWidthPx = resources.displayMetrics.widthPixels
+                            val screenHeightPx = resources.displayMetrics.heightPixels
+                            params.x = (params.x + dx.toInt())
+                                .coerceIn(-screenWidthPx / 2, screenWidthPx / 2)
+                            params.y = (params.y + dy.toInt())
+                                .coerceIn(0, screenHeightPx - params.height)
+                            applyLayout()
+                        }
+                    },
+                    onDragEnd = { finishDrag(collapsedPx, density) },
                     onPowerOffService = {
                         turnOffTorch()
                         stopSelf()
@@ -182,7 +198,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             }.collect { (xDp, yDp) ->
                 if (::composeView.isInitialized) {
                     params.y = (yDp * density).toInt()
-                    if (!isIslandExpanded) {
+                    if (!isIslandExpanded && !hiddenState.value) {
                         params.x = (xDp * density).toInt()
                     }
                     applyLayout()
@@ -196,6 +212,45 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         try {
             windowManager.updateViewLayout(composeView, params)
         } catch (_: Exception) {}
+    }
+
+    private fun finishDrag(collapsedPx: Int, density: Float) {
+        if (hiddenState.value || isIslandExpanded) return
+        val screenWidthPx = resources.displayMetrics.widthPixels
+        val edgeMargin = (48 * density).toInt()
+        if (params.x > screenWidthPx / 2 - edgeMargin) {
+            hideAtEdge(right = true, collapsedPx = collapsedPx, density = density)
+        } else if (params.x < -(screenWidthPx / 2 - edgeMargin)) {
+            hideAtEdge(right = false, collapsedPx = collapsedPx, density = density)
+        } else {
+            PochiPrefs.saveOffsets(
+                this,
+                (params.x / density).toInt(),
+                (params.y / density).toInt()
+            )
+        }
+    }
+
+    private fun hideAtEdge(right: Boolean, collapsedPx: Int, density: Float) {
+        hiddenState.value = true
+        val tabWidthPx = (16 * density).toInt()
+        val tabHeightPx = (56 * density).toInt()
+        val screenWidthPx = resources.displayMetrics.widthPixels
+        params.flags = collapsedFlags
+        params.width = tabWidthPx
+        params.height = tabHeightPx
+        params.x = if (right) screenWidthPx / 2 - tabWidthPx / 2
+        else -(screenWidthPx / 2 - tabWidthPx / 2)
+        applyLayout()
+    }
+
+    private fun restoreFromHidden(collapsedPx: Int, density: Float) {
+        hiddenState.value = false
+        params.width = collapsedPx
+        params.height = collapsedPx
+        params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
+        params.y = (PochiPrefs.offsetYFlow.value * density).toInt()
+        applyLayout()
     }
 
     private fun startAsForeground() {

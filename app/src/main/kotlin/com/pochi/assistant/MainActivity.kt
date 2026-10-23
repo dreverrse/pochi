@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "Pochi 5.2.1",
+                    text = "Pochi 5.3.0",
                     color = Color(0xFF111827),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             stopService(Intent(this@MainActivity, DynamicIslandService::class.java))
                             startForegroundService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            Toast.makeText(this@MainActivity, "Pochi Island 5.2.1 Aktif!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Pochi Island 5.3.0 Aktif!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -264,6 +264,54 @@ class MainActivity : ComponentActivity() {
                         onValueChange = { PochiPrefs.saveOffsets(this@MainActivity, it.roundToInt(), offsetY) },
                         valueRange = -140f..140f,
                         colors = SliderDefaults.colors(thumbColor = Color(0xFF30D158), activeTrackColor = Color(0xFF30D158))
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(18.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val screenAwareness by PochiPrefs.screenAwarenessFlow.collectAsState()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "👁️ Screen Awareness",
+                            color = Color(0xFF111827),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Switch(
+                            checked = screenAwareness,
+                            onCheckedChange = { enabled ->
+                                PochiPrefs.setScreenAwareness(this@MainActivity, enabled)
+                                if (enabled) {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Aktifkan 'Pochi Screen Awareness' di daftar layanan",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF0A84FF)
+                            )
+                        )
+                    }
+                    Text(
+                        text = "Opsional. Pochi membaca teks layar untuk memberi saran. Bisa dimatikan kapan saja.",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
                     )
                 }
 

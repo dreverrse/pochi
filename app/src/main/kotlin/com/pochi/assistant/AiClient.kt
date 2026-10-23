@@ -26,23 +26,37 @@ object AiClient {
         provider: AiProvider,
         apiKey: String,
         model: String,
-        prompt: String
+        prompt: String,
+        contextNote: String = ""
     ): String = withContext(Dispatchers.IO) {
         val modelName = model.ifBlank { provider.defaultModel }
+        val fullPrompt = buildString {
+            append(
+                "Kamu adalah Pochi, asisten pribadi di HP Tuan Andre. " +
+                    "Selalu sapa dan panggil pengguna dengan sebutan 'Tuan Andre'. " +
+                    "Jawab ringkas, ramah, dan praktis dalam bahasa Indonesia, maksimal 3 kalimat."
+            )
+            if (contextNote.isNotBlank()) {
+                append("\nKonteks: ")
+                append(contextNote)
+            }
+            append("\n\nPermintaan Tuan Andre: ")
+            append(prompt)
+        }
         when (provider) {
-            AiProvider.GEMINI -> askGemini(apiKey, modelName, prompt)
+            AiProvider.GEMINI -> askGemini(apiKey, modelName, fullPrompt)
             AiProvider.OPENROUTER -> askOpenAiCompatible(
                 url = OPENROUTER_URL,
                 apiKey = apiKey,
                 model = modelName,
-                prompt = prompt,
+                prompt = fullPrompt,
                 referer = "https://pochi.app"
             )
             AiProvider.OPENCODE -> askOpenAiCompatible(
                 url = OPENCODE_URL,
                 apiKey = apiKey,
                 model = modelName,
-                prompt = prompt,
+                prompt = fullPrompt,
                 referer = null
             )
         }

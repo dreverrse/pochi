@@ -17,6 +17,7 @@ import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
@@ -67,6 +69,10 @@ enum class PochiTab(val title: String, val icon: ImageVector) {
 fun PochiIslandBot(
     onExpandChange: (Boolean) -> Unit,
     onExpandedHeightChange: (Int) -> Unit = {},
+    isHidden: Boolean = false,
+    onRestoreFromHidden: () -> Unit = {},
+    onDragBubble: (Float, Float) -> Unit = { _, _ -> },
+    onDragEnd: () -> Unit = {},
     onPowerOffService: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -87,8 +93,9 @@ fun PochiIslandBot(
     var interactionTick by remember { mutableIntStateOf(0) }
 
     var prompt by remember { mutableStateOf("") }
-    var botReply by remember { mutableStateOf("Halo! Aku Pochi. Ada yang bisa kubantu hari ini?") }
+    var botReply by remember { mutableStateOf("Halo Tuan Andre! Aku Pochi. Ada yang bisa kubantu hari ini?") }
     var pokeCount by remember { mutableIntStateOf(0) }
+    var screenCardDismissed by remember { mutableStateOf(false) }
 
     var isTorchOn by remember { mutableStateOf(false) }
     var noteText by remember { mutableStateOf(PochiPrefs.getNotes(context)) }
@@ -100,7 +107,14 @@ fun PochiIslandBot(
     val activeApproval by ApprovalManager.activeRequest.collectAsState()
     val lastDecision by ApprovalManager.lastDecision.collectAsState()
     val dismissSignal by ApprovalManager.dismissSignal.collectAsState()
+    val screenAwarenessEnabled by PochiPrefs.screenAwarenessFlow.collectAsState()
+    val screenApp by PochiSignals.screenApp.collectAsState()
+    val screenText by PochiSignals.screenText.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(screenApp) {
+        screenCardDismissed = false
+    }
 
     fun bump() {
         interactionTick++
@@ -173,7 +187,7 @@ fun PochiIslandBot(
         val currentProvider = PochiPrefs.getProvider(context)
         val apiKey = PochiPrefs.getApiKey(context, currentProvider)
         if (apiKey.isBlank()) {
-            botReply = "Isi ${currentProvider.label} API Key dulu di aplikasi Pochi ya!"
+            botReply = "Isi ${currentProvider.label} API Key dulu di aplikasi Pochi ya, Tuan Andre!"
             botState = BotState.ANNOYED
             customEmote = PochiEmote.ERROR
             return
@@ -199,6 +213,17 @@ fun PochiIslandBot(
                 botState = BotState.ANNOYED
             }
         }
+    }
+
+    fun askForSuggestion() {
+        val app = screenApp.ifBlank { "aplikasi ini" }
+        val seen = screenText.take(400)
+        if (seen.isBlank()) {
+            botReply = "Aku belum bisa membaca layar, Tuan Andre. Aktifkan Screen Awareness dulu ya."
+            return
+        }
+        currentTab = PochiTab.CHAT
+        askAi("Aku sedang memakai $app. Isi layar: $seen. Beri satu saran singkat dan praktis untukku.")
     }
 
     val transition = updateTransition(targetState = isExpanded, label = "islandMorph")
@@ -248,6 +273,30 @@ fun PochiIslandBot(
     val primaryBlue = Color(0xFF0A84FF)
     val collapsedEmote = customEmote ?: idleEmote ?: botState.defaultEmote
     val currentModel = remember(provider, isExpanded) { PochiPrefs.getModel(context, provider) }
+
+    if (isHidden) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF09090B))
+                .border(1.dp, Color(0xFF2E2E36), RoundedCornerShape(10.dp))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onRestoreFromHidden() },
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(26.dp)
+                    .clip(CircleShape)
+                    .background(botState.accentColor)
+            )
+        }
+        return
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -427,6 +476,57 @@ fun PochiIslandBot(
                                                 fontSize = 13.sp,
                                                 lineHeight = 18.sp,
                                                 fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+
+                                    if (screenAwarenessEnabled && screenApp.isNotBlank() &&
+                                        screenText.isNotBlank() && !screenCardDismissed
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(surfaceBg)
+                                                .border(1.dp, primaryBlue.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "Layar: $screenApp",
+                                                    color = textPrimary,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = screenText.take(60),
+                                                    color = textSecondary,
+                                                    fontSize = 10.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            Text(
+                                                text = "Saran",
+                                                color = primaryBlue,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(50))
+                                                    .background(primaryBlue.copy(alpha = 0.14f))
+                                                    .clickable { askForSuggestion() }
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                            )
+                                            Text(
+                                                text = "\u00D7",
+                                                color = textSecondary,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier
+                                                    .clickable { screenCardDismissed = true }
+                                                    .padding(horizontal = 4.dp)
                                             )
                                         }
                                     }
@@ -856,20 +956,22 @@ fun PochiIslandBot(
                     emoteOverride = collapsedEmote,
                     size = collapsedSize * 0.56f
                 )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 7.dp)
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(if (isTorchOn) Color(0xFFFF9F0A) else botState.accentColor)
-                )
             }
 
             if (!isExpanded) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    onDragBubble(dragAmount.x, dragAmount.y)
+                                },
+                                onDragEnd = { onDragEnd() },
+                                onDragCancel = { onDragEnd() }
+                            )
+                        }
                         .clickable(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() }
