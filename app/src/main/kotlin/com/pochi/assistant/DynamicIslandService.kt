@@ -53,6 +53,9 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var isIslandExpanded = false
     private val hiddenState = mutableStateOf(false)
+    private val peekState = mutableStateOf(false)
+    private var peekSide = "right"
+    private var lastInteraction = System.currentTimeMillis()
     private var collapseJob: Job? = null
     private var heightJob: Job? = null
     private var expandedHeightPx = 0
@@ -85,10 +88,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val density = resources.displayMetrics.density
         val collapsedPx = (62 * density).toInt()
-
-        var lastInteraction = System.currentTimeMillis()
-        var peekSide = "right"
-        val peekState = mutableStateOf(false)
 
         fun updateInteraction() {
             lastInteraction = System.currentTimeMillis()
@@ -170,13 +169,14 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                     onPowerOffService = { turnOffTorch(); stopSelf() }
                 )
             }
+        }
 
         windowManager.addView(composeView, params)
 
         serviceScope.launch {
             while (true) {
                 delay(1000)
-                if (hiddenState.value && !isIslandExpanded && !peekState.value) {
+                if (!isIslandExpanded && !peekState.value) {
                     if (System.currentTimeMillis() - lastInteraction > 15000) {
                         peekSide = if (Math.random() > 0.5) "left" else "right"
                         peekState.value = true
