@@ -2,15 +2,16 @@ name: Build Pochi APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-      - name: Checkout Source Code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -19,32 +20,50 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
 
-      - name: Build Pochi Debug APK
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Extract version
+        id: version
         run: |
-          set -o pipefail
-          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n1)
+          echo "version=$VERSION_NAME" >> $GITHUB_OUTPUT
 
-      - name: Write build errors to summary
-        if: failure()
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Rename APK
         run: |
-          {
-            echo "### Build failure"
-            echo '```'
-            grep -nE "(^e: |error:|FAILURE:|What went wrong|Android resource linking failed|Unresolved reference|Caused by:)" build.log | head -100 || true
-            echo '```'
-            echo "### Last 120 lines"
-            echo '```'
-            tail -120 build.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          cp app/build/outputs/apk/release/app-release.apk "Pochi-${{ steps.version.outputs.version }}.apk"
 
-      - name: Upload Pochi APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Pochi-Android-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: Pochi-${{ steps.version.outputs.version }}.apk
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Pochi v${{ steps.version.outputs.version }}
+          body: |
+            Pochi Android APK build ${{ steps.version.outputs.version }}
+            Commit: ${{ github.sha }}
+          files: Pochi-${{ steps.version.outputs.version }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "### Build Result" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
