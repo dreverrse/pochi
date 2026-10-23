@@ -23,9 +23,6 @@ object PochiPrefs {
     private val _offsetYFlow = MutableStateFlow(4)
     val offsetYFlow: StateFlow<Int> = _offsetYFlow
 
-    private val _hiddenFlow = MutableStateFlow(false)
-    val hiddenFlow: StateFlow<Boolean> = _hiddenFlow
-
     private val _screenAwarenessFlow = MutableStateFlow(false)
     val screenAwarenessFlow: StateFlow<Boolean> = _screenAwarenessFlow
 
@@ -35,13 +32,16 @@ object PochiPrefs {
     private val _providerFlow = MutableStateFlow(AiProvider.GEMINI)
     val providerFlow: StateFlow<AiProvider> = _providerFlow
 
+    private val _notesFlow = MutableStateFlow("")
+    val notesFlow: StateFlow<String> = _notesFlow
+
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         _offsetXFlow.value = prefs.getInt(KEY_OFFSET_X, 0)
         _offsetYFlow.value = prefs.getInt(KEY_OFFSET_Y, 4)
         _darkModeFlow.value = prefs.getBoolean(KEY_DARK_MODE, false)
         _screenAwarenessFlow.value = prefs.getBoolean(KEY_SCREEN_AWARENESS, false)
-        _hiddenFlow.value = false
+        _notesFlow.value = prefs.getString(KEY_NOTES, "") ?: ""
         _providerFlow.value = prefs.getString(KEY_PROVIDER, AiProvider.GEMINI.name)
             ?.let { saved -> AiProvider.entries.firstOrNull { it.name == saved } }
             ?: AiProvider.GEMINI
@@ -106,11 +106,14 @@ object PochiPrefs {
     }
 
     fun saveNotes(context: Context, notes: String) {
+        _notesFlow.value = notes
         prefs(context).edit().putString(KEY_NOTES, notes).apply()
     }
 
     fun getNotes(context: Context): String {
-        return prefs(context).getString(KEY_NOTES, "") ?: ""
+        val saved = prefs(context).getString(KEY_NOTES, "") ?: ""
+        _notesFlow.value = saved
+        return saved
     }
 
     fun saveCity(context: Context, city: String) {

@@ -67,12 +67,12 @@ enum class BotState(
     val collapsedLabel: String,
     val defaultEmote: PochiEmote
 ) {
-    IDLE(Color(0xFF0A84FF), "Pochi siap ✨", "Pochi", PochiEmote.SMILING),
-    WAITING(Color(0xFFFF9F0A), "Menunggu perintah...", "Menunggu perintah...", PochiEmote.CALM),
-    WORKING(Color(0xFF0A84FF), "Memproses...", "Memproses...", PochiEmote.WORKING),
-    DONE(Color(0xFF30D158), "Berhasil!", "Berhasil!", PochiEmote.SUCCESS),
-    APPROVAL(Color(0xFFFF9F0A), "Perlu persetujuan", "Perlu persetujuan", PochiEmote.SURPRISED),
-    ANNOYED(Color(0xFFFF453A), "Jangan dicolek terus!", "Jangan dicolek terus!", PochiEmote.ANGRY)
+    IDLE(Color(0xFF0A84FF), "Pochi", "Pochi", PochiEmote.SMILING),
+    WAITING(Color(0xFFFF9F0A), "Mengetik...", "Pochi", PochiEmote.CALM),
+    WORKING(Color(0xFF0A84FF), "Sebentar...", "Sebentar...", PochiEmote.WORKING),
+    DONE(Color(0xFF30D158), "Beres", "Beres", PochiEmote.SUCCESS),
+    APPROVAL(Color(0xFFFF9F0A), "Butuh konfirmasi", "Konfirmasi", PochiEmote.SURPRISED),
+    ANNOYED(Color(0xFFFF453A), "Periksa lagi", "Pochi", PochiEmote.ANGRY)
 }
 
 @Composable
@@ -155,7 +155,14 @@ fun PochiMascot(
             val rightX = w * 0.65f
             val eyeY = h * 0.54f
 
-            if (isBlinking && activeEmote == PochiEmote.NORMAL) {
+            val canBlink = activeEmote in setOf(
+                PochiEmote.NORMAL,
+                PochiEmote.SMILING,
+                PochiEmote.HAPPY,
+                PochiEmote.HI,
+                PochiEmote.EXCITED
+            )
+            if (isBlinking && canBlink) {
                 drawClosedLineEye(leftX, eyeY, w, lineColor, strokeW)
                 drawClosedLineEye(rightX, eyeY, w, lineColor, strokeW)
             } else {

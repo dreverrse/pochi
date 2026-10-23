@@ -7,6 +7,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class AiProvider(
     val label: String,
@@ -15,7 +18,7 @@ enum class AiProvider(
 ) {
     GEMINI("Gemini", "gemini-2.5-flash", "AIza..."),
     OPENROUTER("OpenRouter", "openai/gpt-4o-mini", "sk-or-..."),
-    OPENCODE("OpenCode", "glm-5.3-flash", "API key OpenCode Console")
+    OPENCODE("OpenCode", "glm-5.3-flash", "API key OpenCode")
 }
 
 object AiClient {
@@ -30,25 +33,30 @@ object AiClient {
         contextNote: String = ""
     ): String = withContext(Dispatchers.IO) {
         val modelName = model.ifBlank { provider.defaultModel }
+        val nowStr = SimpleDateFormat("EEEE, dd MMM yyyy HH:mm", Locale("id", "ID")).format(Date())
         val fullPrompt = buildString {
             append(
-                "Kamu adalah Pochi, asisten pribadi di HP Tuan Andre. " +
-                    "Selalu sapa dan panggil pengguna dengan sebutan 'Tuan Andre'. " +
-                    "Jawab ringkas, ramah, dan praktis dalam bahasa Indonesia, maksimal 3 kalimat. " +
-                    "Jika Tuan Andre meminta aksi di HP, tambahkan tepat satu baris terakhir dengan format " +
-                    "[ACTION:TIPE:ARGUMEN]. Tipe yang tersedia: OPEN_APP:nama.paket, OPEN_URL:https://..., " +
-                    "SET_TIMER:detik, SET_ALARM:HH:MM, CALL:nama_atau_nomor, SMS:nama_atau_nomor|pesan, " +
-                    "CALENDAR:judul|menit_dari_sekarang|durasi_menit, MAPS:lokasi. " +
-                    "Jangan sertakan [ACTION:...] jika tidak diminta."
+                "Kamu adalah Pochi, pendamping pribadi di HP Andre. " +
+                    "Gaya bicaramu natural, santai, hangat, dan langsung ke inti seperti teman dekat yang cerdas—jangan kaku, " +
+                    "jangan terdengar seperti AI/robot, hindari basa-basi ('Tentu!', 'Baiklah', dsb), dan jangan gunakan simbol markdown (**). " +
+                    "Jawab singkat maksimal 2-3 kalimat. " +
+                    "Waktu sekarang: $nowStr. " +
+                    "Jika diminta melakukan sesuatu di HP, tambahkan tepat satu baris paling akhir dengan format " +
+                    "[ACTION:TIPE:ARGUMEN]. Pilihan TIPE: " +
+                    "OPEN_APP:nama_aplikasi, OPEN_URL:https://..., SEARCH_WEB:kata_kunci, YOUTUBE:kata_kunci, " +
+                    "SET_TIMER:detik, SET_ALARM:HH:MM|label, CALL:nama_atau_nomor, SMS:nama_atau_nomor|pesan, " +
+                    "WHATSAPP:nama_atau_nomor|pesan, CALENDAR:judul|menit_dari_sekarang|durasi_menit, " +
+                    "MAPS:lokasi, CLIPBOARD:teks, SAVE_NOTE:isi_catatan, TORCH:ON_atau_OFF, SETTINGS:WIFI_atau_BLUETOOTH. " +
+                    "Jangan tulis [ACTION:...] jika hanya mengobrol atau menjawab pertanyaan."
             )
             if (contextNote.isNotBlank()) {
-                append("\nKonteks: ")
+                append("\nKonteks HP saat ini: ")
                 append(contextNote)
             }
-            append("\n\nPermintaan Tuan Andre: ")
+            append("\n\nAndre: ")
             append(prompt)
         }
-        when (provider) {
+        val raw = when (provider) {
             AiProvider.GEMINI -> askGemini(apiKey, modelName, fullPrompt)
             AiProvider.OPENROUTER -> askOpenAiCompatible(
                 url = OPENROUTER_URL,
@@ -65,12 +73,13 @@ object AiClient {
                 referer = null
             )
         }
+        raw.replace("**", "").trim()
     }
 
     private suspend fun askGemini(apiKey: String, modelName: String, prompt: String): String {
         val response = GenerativeModel(modelName = modelName, apiKey = apiKey)
             .generateContent(prompt)
-        return response.text?.trim().takeUnless { it.isNullOrBlank() } ?: "Tidak ada jawaban."
+        return response.text?.trim().takeUnless { it.isNullOrBlank() } ?: "Belum ada respons."
     }
 
     private fun askOpenAiCompatible(
@@ -127,7 +136,7 @@ object AiClient {
                 ?.optString("content")
                 .orEmpty()
 
-            return content.trim().takeUnless { it.isNullOrBlank() } ?: "Tidak ada jawaban."
+            return content.trim().takeUnless { it.isNullOrBlank() } ?: "Belum ada respons."
         } finally {
             connection.disconnect()
         }

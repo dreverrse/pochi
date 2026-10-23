@@ -1,35 +1,39 @@
 package com.pochi.assistant
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.provider.Settings
 import android.view.KeyEvent
+import android.widget.Toast
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
-import kotlin.math.abs
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
@@ -43,13 +47,17 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,13 +68,39 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 enum class PochiTab(val title: String, val icon: ImageVector) {
-    CHAT("Chat", Icons.Rounded.ChatBubbleOutline),
+    CHAT("Utama", Icons.Rounded.FlashOn),
+    NOTES("Catatan", Icons.Rounded.CheckCircleOutline),
     TOOLS("Kontrol", Icons.Rounded.Tune),
-    MUSIC("Musik", Icons.Rounded.MusicNote),
-    WEATHER("Cuaca", Icons.Rounded.CloudQueue),
-    NOTES("Notes", Icons.Rounded.Description)
+    MUSIC("Media", Icons.Rounded.MusicNote),
+    WEATHER("Cuaca", Icons.Rounded.CloudQueue)
+}
+
+private fun naturalGreeting(): String {
+    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    return when (hour) {
+        in 4..10 -> "Pagi, Dre! Mau cek jadwal, hitung cepat, atau buka sesuatu?"
+        in 11..14 -> "Siang, Dre! Ketik aja kalau mau catat sesuatu atau pasang pengingat."
+        in 15..18 -> "Sore, Dre! Ada yang perlu diberesin sore ini?"
+        else -> "Malam, Dre! Butuh pasang alarm besok atau catat sesuatu?"
+    }
+}
+
+private fun shortTimeGreeting(): String {
+    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    val greet = when (hour) {
+        in 4..10 -> "Selamat pagi"
+        in 11..14 -> "Selamat siang"
+        in 15..18 -> "Selamat sore"
+        else -> "Selamat malam"
+    }
+    val clock = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+    return "$greet • $clock"
 }
 
 @Composable
@@ -84,11 +118,11 @@ fun PochiIslandBot(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val expandedWidth = (configuration.screenWidthDp - 28).coerceIn(300, 372).dp
-    val collapsedSize = 56.dp
+    val expandedWidth = (configuration.screenWidthDp - 24).coerceIn(308, 384).dp
+    val collapsedSize = 54.dp
     var expandedHeightPx by remember { mutableIntStateOf(0) }
     val expandedHeight = with(density) {
-        if (expandedHeightPx > 0) expandedHeightPx.toDp() else 250.dp
+        if (expandedHeightPx > 0) expandedHeightPx.toDp() else 270.dp
     }
 
     var isExpanded by remember { mutableStateOf(false) }
@@ -99,17 +133,18 @@ fun PochiIslandBot(
     var interactionTick by remember { mutableIntStateOf(0) }
 
     var prompt by remember { mutableStateOf("") }
-    var botReply by remember { mutableStateOf("Halo Tuan Andre! Aku Pochi. Ada yang bisa kubantu hari ini?") }
+    var botReply by remember { mutableStateOf(naturalGreeting()) }
     var pokeCount by remember { mutableIntStateOf(0) }
     var screenCardDismissed by remember { mutableStateOf(false) }
 
     var isTorchOn by remember { mutableStateOf(false) }
-    var noteText by remember { mutableStateOf(PochiPrefs.getNotes(context)) }
+    val savedNotes by PochiPrefs.notesFlow.collectAsState()
+    var newNoteItem by remember { mutableStateOf("") }
+    var isRawNoteEdit by remember { mutableStateOf(false) }
     var cityInput by remember { mutableStateOf(PochiPrefs.getCity(context)) }
-    var liveWeatherText by remember { mutableStateOf("Ketuk Cek Live untuk memuat cuaca.") }
+    var liveWeatherText by remember { mutableStateOf("Ketuk Cek untuk memuat cuaca terkini.") }
 
     val isDarkMode by PochiPrefs.darkModeFlow.collectAsState()
-    val provider by PochiPrefs.providerFlow.collectAsState()
     val activeApproval by ApprovalManager.activeRequest.collectAsState()
     val lastDecision by ApprovalManager.lastDecision.collectAsState()
     val dismissSignal by ApprovalManager.dismissSignal.collectAsState()
@@ -164,22 +199,24 @@ fun PochiIslandBot(
         }
     }
 
-    // Auto-minimize ke lingkaran setelah beberapa detik tanpa interaksi.
-    LaunchedEffect(isExpanded, interactionTick, activeApproval, botState) {
-        if (isExpanded && activeApproval == null && botState != BotState.WORKING) {
-            delay(8000)
+    // Auto-minimize setelah tidak ada interaksi selama 12 detik
+    LaunchedEffect(isExpanded, interactionTick, activeApproval, botState, prompt, newNoteItem) {
+        if (isExpanded && activeApproval == null && botState != BotState.WORKING &&
+            prompt.isBlank() && newNoteItem.isBlank()
+        ) {
+            delay(12_000)
             collapse()
         }
     }
 
-    // Ekspresi idle saat minimized, biar terasa hidup seperti AI.
+    // Ekspresi hidup saat minimized
     LaunchedEffect(isExpanded, botState) {
         if (!isExpanded && botState == BotState.IDLE) {
             while (true) {
-                delay((4500..8500).random().toLong())
+                delay((5000..9000).random().toLong())
                 idleEmote = listOf(
                     PochiEmote.CALM,
-                    PochiEmote.THINKING,
+                    PochiEmote.SMILING,
                     PochiEmote.HAPPY,
                     PochiEmote.SLEEPY,
                     PochiEmote.NORMAL
@@ -190,72 +227,142 @@ fun PochiIslandBot(
         }
     }
 
-    fun askAi(queryText: String) {
+    fun handleAction(action: AgentAction) {
+        if (PochiAgent.requiresApproval(action)) {
+            ApprovalManager.requestAction(context, action)
+        } else {
+            val status = PochiAgent.execute(context, action)
+            if (action.type == "TORCH") {
+                isTorchOn = !action.argument.equals("OFF", ignoreCase = true)
+            }
+            if (action.type in setOf("OPEN_APP", "MAPS", "SEARCH_WEB", "YOUTUBE", "CALENDAR", "SETTINGS")) {
+                collapse()
+            } else if (botReply.isBlank()) {
+                botReply = status
+            }
+        }
+    }
+
+    fun submitInput(queryText: String, forceAi: Boolean = false) {
+        val trimmed = queryText.trim()
+        if (trimmed.isEmpty()) return
+        bump()
+
+        // 1. Coba eksekusi lokal secara instan (0ms, tanpa perlu menunggu internet/API)
+        if (!forceAi) {
+            val localMatch = PochiAgent.tryHandleLocal(context, trimmed)
+            if (localMatch != null) {
+                val (replyText, localAction) = localMatch
+                botReply = replyText
+                customEmote = PochiEmote.SUCCESS
+                botState = BotState.DONE
+                if (localAction != null) {
+                    handleAction(localAction)
+                }
+                coroutineScope.launch {
+                    delay(2200)
+                    if (botState == BotState.DONE) {
+                        botState = BotState.IDLE
+                        customEmote = null
+                    }
+                }
+                return
+            }
+        }
+
+        // 2. Gunakan koneksi asisten pintar dengan konteks lengkap
         val currentProvider = PochiPrefs.getProvider(context)
         val apiKey = PochiPrefs.getApiKey(context, currentProvider)
         if (apiKey.isBlank()) {
-            botReply = "Isi ${currentProvider.label} API Key dulu di aplikasi Pochi ya, Tuan Andre!"
+            botReply = "Untuk pertanyaan bebas, isi kunci ${currentProvider.label} di aplikasi Pochi dulu ya. (Perintah seperti 'timer 5 menit', '45rb * 3', 'catat ...', 'buka wa' tetap bisa langsung dipakai!)"
             botState = BotState.ANNOYED
-            customEmote = PochiEmote.ERROR
+            customEmote = PochiEmote.THINKING
             return
         }
+
         val model = PochiPrefs.getModel(context, currentProvider)
+        val contextBuilder = buildString {
+            if (screenAwarenessEnabled && screenApp.isNotBlank()) {
+                append("Aplikasi aktif: $screenApp. ")
+                if (screenText.isNotBlank()) {
+                    append("Teks di layar: ${screenText.take(350)}. ")
+                }
+            }
+            if (notifications.isNotEmpty()) {
+                val latestNotifs = notifications.take(4)
+                    .joinToString("; ") { "${it.app} (${it.title}: ${it.text.take(60)})" }
+                append("Notifikasi terbaru: $latestNotifs. ")
+            }
+            if (savedNotes.isNotBlank()) {
+                append("Catatan tersimpan: ${savedNotes.take(200)}.")
+            }
+        }
+
         customEmote = PochiEmote.WORKING
         botState = BotState.WORKING
-        bump()
         coroutineScope.launch {
             try {
-                val rawResponse = AiClient.ask(currentProvider, apiKey, model, queryText)
+                val rawResponse = AiClient.ask(
+                    provider = currentProvider,
+                    apiKey = apiKey,
+                    model = model,
+                    prompt = trimmed,
+                    contextNote = contextBuilder
+                )
                 val (cleanReply, action) = PochiAgent.extract(rawResponse)
                 botReply = cleanReply
                 if (action != null) {
-                    ApprovalManager.requestAction(context, action)
+                    handleAction(action)
                 }
                 customEmote = PochiEmote.SUCCESS
                 botState = BotState.DONE
-                delay(2800)
+                delay(2500)
                 if (botState == BotState.DONE) {
                     botState = BotState.IDLE
                     customEmote = null
                 }
             } catch (e: Exception) {
-                botReply = "Kendala AI: ${e.localizedMessage}"
+                botReply = "Koneksi lagi bermasalah: ${e.localizedMessage?.take(100)}"
                 customEmote = PochiEmote.ERROR
                 botState = BotState.ANNOYED
             }
         }
     }
 
-    fun askForSuggestion() {
-        val app = screenApp.ifBlank { "aplikasi ini" }
-        val seen = screenText.take(400)
-        if (seen.isBlank()) {
-            botReply = "Aku belum bisa membaca layar, Tuan Andre. Aktifkan Screen Awareness dulu ya."
-            return
-        }
-        currentTab = PochiTab.CHAT
-        askAi("Aku sedang memakai $app. Isi layar: $seen. Beri satu saran singkat dan praktis untukku.")
-    }
-
     val transition = updateTransition(targetState = isExpanded, label = "islandMorph")
 
     val islandWidth by transition.animateDp(
-        transitionSpec = { tween(220, easing = FastOutSlowInEasing) },
+        transitionSpec = {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
         label = "islandWidth"
     ) { expanded -> if (expanded) expandedWidth else collapsedSize }
 
     val islandHeight by transition.animateDp(
-        transitionSpec = { tween(220, easing = FastOutSlowInEasing) },
+        transitionSpec = {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
         label = "islandHeight"
     ) { expanded -> if (expanded) expandedHeight else collapsedSize }
 
     val cornerRadius by transition.animateDp(
-        transitionSpec = { tween(220, easing = FastOutSlowInEasing) },
+        transitionSpec = {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
         label = "cornerRadius"
-    ) { expanded -> if (expanded) 30.dp else collapsedSize / 2f }
+    ) { expanded -> if (expanded) 28.dp else collapsedSize / 2f }
 
     val panelAlpha by transition.animateFloat(
-        transitionSpec = { tween(150, delayMillis = 40) },
+        transitionSpec = { tween(150, delayMillis = if (targetState) 35 else 0) },
         label = "panelAlpha"
     ) { expanded -> if (expanded) 1f else 0f }
 
@@ -266,41 +373,41 @@ fun PochiIslandBot(
 
     val panelBg by animateColorAsState(
         targetValue = if (!isExpanded) Color.Transparent
-        else if (isDarkMode) Color(0xFF121215)
-        else Color(0xFFFAFBFC),
+        else if (isDarkMode) Color(0xFF111114)
+        else Color(0xFFF8FAFC),
         animationSpec = tween(180),
         label = "panelBg"
     )
 
-    val surfaceBg = if (isDarkMode) Color(0xFF1E1E24) else Color(0xFFFFFFFF)
+    val surfaceBg = if (isDarkMode) Color(0xFF1C1C22) else Color(0xFFFFFFFF)
+    val subtleBg = if (isDarkMode) Color(0xFF25252D) else Color(0xFFF1F5F9)
     val borderCol by animateColorAsState(
         targetValue = if (!isExpanded) Color.Transparent
-        else if (isDarkMode) Color(0xFF2E2E36) else Color(0xFFE5E7EB),
-        animationSpec = tween(220),
+        else if (isDarkMode) Color(0xFF2B2B35) else Color(0xFFE2E8F0),
+        animationSpec = tween(200),
         label = "borderCol"
     )
-    val textPrimary = if (isDarkMode) Color(0xFFF9FAFB) else Color(0xFF111827)
-    val textSecondary = Color(0xFF8E8E93)
-    val primaryBlue = Color(0xFF0A84FF)
+    val textPrimary = if (isDarkMode) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+    val textSecondary = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val primaryAccent = Color(0xFF0A84FF)
     val collapsedEmote = customEmote ?: idleEmote ?: botState.defaultEmote
-    val currentModel = remember(provider, isExpanded) { PochiPrefs.getModel(context, provider) }
 
     if (isHidden) {
         val peekOffset = remember(peekMode, peekSide) {
-            Animatable(if (peekMode) if (peekSide == "left") -12f else 12f else 0f)
+            Animatable(if (peekMode) if (peekSide == "left") -10f else 10f else 0f)
         }
         LaunchedEffect(peekMode, peekSide) {
             if (peekMode) {
                 while (true) {
                     peekOffset.animateTo(
-                        targetValue = if (peekSide == "left") -18f else 18f,
-                        animationSpec = spring(dampingRatio = 0.5f, stiffness = 380f)
+                        targetValue = if (peekSide == "left") -16f else 16f,
+                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 340f)
                     )
                     peekOffset.animateTo(
-                        targetValue = if (peekSide == "left") -12f else 12f,
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 260f)
+                        targetValue = if (peekSide == "left") -10f else 10f,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 240f)
                     )
-                    delay(4500)
+                    delay(4800)
                 }
             } else {
                 peekOffset.snapTo(0f)
@@ -319,18 +426,26 @@ fun PochiIslandBot(
                 modifier = Modifier
                     .graphicsLayer {
                         translationX = peekOffset.value
-                        rotationZ = if (peekSide == "left") -16f else 16f
+                        rotationZ = if (peekSide == "left") -15f else 15f
                     },
                 contentAlignment = Alignment.Center
             ) {
                 PochiMascot(
                     state = botState,
                     emoteOverride = collapsedEmote,
-                    size = 52.dp
+                    size = 48.dp
                 )
             }
         }
         return
+    }
+
+    val headerSubtext = remember(screenAwarenessEnabled, screenApp, notifications.size, isExpanded) {
+        when {
+            screenAwarenessEnabled && screenApp.isNotBlank() -> "Layar aktif: $screenApp"
+            notifications.isNotEmpty() -> "${notifications.size} notifikasi masuk"
+            else -> shortTimeGreeting()
+        }
     }
 
     Box(
@@ -345,11 +460,11 @@ fun PochiIslandBot(
                 .background(panelBg)
                 .border(1.dp, borderCol, RoundedCornerShape(cornerRadius))
         ) {
-            // ================= EXPANDED =================
+            // ================= EXPANDED PANEL =================
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .requiredWidth(expandedWidth - 24.dp)
+                    .requiredWidth(expandedWidth - 20.dp)
                     .wrapContentHeight(unbounded = true)
                     .onSizeChanged { size ->
                         if (size.height > 0 && size.height != expandedHeightPx) {
@@ -358,12 +473,13 @@ fun PochiIslandBot(
                         }
                     }
                     .alpha(panelAlpha)
-                    .padding(12.dp)
+                    .padding(horizontal = 10.dp, vertical = 12.dp)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    // Header Bar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -372,21 +488,21 @@ fun PochiIslandBot(
                         PochiMascot(
                             state = botState,
                             emoteOverride = customEmote,
-                            size = 24.dp
+                            size = 26.dp
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = botState.statusLabel,
                                 color = textPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "${provider.label} • $currentModel",
+                                text = headerSubtext,
                                 color = textSecondary,
-                                fontSize = 9.sp,
+                                fontSize = 10.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -395,105 +511,63 @@ fun PochiIslandBot(
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(CircleShape)
-                                .background(surfaceBg)
-                                .border(1.dp, borderCol, CircleShape)
+                                .background(subtleBg)
                                 .clickable { collapse() },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Close,
+                                imageVector = Icons.Rounded.KeyboardArrowUp,
                                 contentDescription = "Tutup",
                                 tint = textPrimary,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                                        }
-                                    }
+                        }
+                    }
 
-                                    if (notifications.isNotEmpty()) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(16.dp))
-                                                .background(surfaceBg)
-                                                .border(1.dp, borderCol, RoundedCornerShape(16.dp))
-                                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = "\uD83D\uDD14 ${notifications.size} notifikasi",
-                                                    color = textPrimary,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    text = notifications.first().let { "${it.app}: ${it.title}" },
-                                                    color = textSecondary,
-                                                    fontSize = 10.sp,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                            Text(
-                                                text = "Ringkas",
-                                                color = primaryBlue,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(50))
-                                                    .background(primaryBlue.copy(alpha = 0.14f))
-                                                    .clickable {
-                                                        val summary = notifications.take(8)
-                                                            .joinToString("; ") { "${it.app} - ${it.title}: ${it.text.take(80)}" }
-                                                        askAi("Ringkas notifikasi berikut jadi poin singkat: $summary")
-                                                    }
-                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                                            )
-                                            Text(
-                                                text = "\u00D7",
-                                                color = textSecondary,
-                                                fontSize = 15.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier
-                                                    .clickable { PochiSignals.clearNotifications() }
-                                                    .padding(horizontal = 4.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Row(
-
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                    // Pill Navigation Tabs
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(subtleBg)
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         PochiTab.entries.forEach { tab ->
                             val selected = tab == currentTab
-                            Box(
+                            Row(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (selected) primaryBlue.copy(alpha = 0.14f)
-                                        else Color.Transparent
-                                    )
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(if (selected) surfaceBg else Color.Transparent)
                                     .clickable {
                                         bump()
                                         currentTab = tab
-                                    },
-                                contentAlignment = Alignment.Center
+                                    }
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     imageVector = tab.icon,
                                     contentDescription = tab.title,
-                                    tint = if (selected) primaryBlue else textSecondary,
-                                    modifier = Modifier.size(19.dp)
+                                    tint = if (selected) primaryAccent else textSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = tab.title,
+                                    color = if (selected) textPrimary else textSecondary,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1
                                 )
                             }
                         }
                     }
 
+                    // Approval Card (jika ada tindakan sensitif yang butuh konfirmasi)
                     activeApproval?.let { request ->
                         PochiApprovalCard(
                             request = request,
@@ -506,120 +580,255 @@ fun PochiIslandBot(
                         )
                     }
 
+                    // Konten per Tab
                     Crossfade(
                         targetState = currentTab,
-                        animationSpec = tween(160),
+                        animationSpec = tween(150),
                         label = "tabCrossfade"
                     ) { tab ->
                         when (tab) {
                             PochiTab.CHAT -> {
-                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        PochiMascot(
-                                            state = botState,
-                                            emoteOverride = customEmote ?: PochiEmote.NORMAL,
-                                            size = 64.dp,
-                                            onPoke = {
-                                                bump()
-                                                pokeCount++
-                                                if (pokeCount >= 3) {
-                                                    botState = BotState.ANNOYED
-                                                    customEmote = PochiEmote.ANGRY
-                                                    botReply = "Jangan dicolek terus! Pochi lagi fokus."
-                                                    coroutineScope.launch {
-                                                        delay(2200)
-                                                        pokeCount = 0
-                                                        botState = BotState.IDLE
-                                                        customEmote = null
-                                                    }
-                                                } else {
-                                                    customEmote = PochiEmote.WINK_LEFT
-                                                    botReply = "Hei! Ketuk & tahan kepala Pochi kalau mau mengelus ya."
-                                                }
-                                            },
-                                            onPet = {
-                                                bump()
-                                                botState = BotState.DONE
-                                                customEmote = PochiEmote.PET_POKE
-                                                botReply = "Nyaman banget dielus! Makasih ya."
-                                            }
-                                        )
-
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(18.dp))
-                                                .background(surfaceBg)
-                                                .border(1.dp, borderCol, RoundedCornerShape(18.dp))
-                                                .padding(12.dp)
-                                                .heightIn(min = 56.dp, max = 100.dp)
-                                                .verticalScroll(rememberScrollState())
-                                        ) {
-                                            Text(
-                                                text = botReply,
-                                                color = textPrimary,
-                                                fontSize = 13.sp,
-                                                lineHeight = 18.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-                                    }
-
-                                    if (screenAwarenessEnabled && screenApp.isNotBlank() &&
-                                        screenText.isNotBlank() && !screenCardDismissed
-                                    ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    // Notifikasi Masuk (jika ada)
+                                    if (notifications.isNotEmpty()) {
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clip(RoundedCornerShape(16.dp))
+                                                .clip(RoundedCornerShape(14.dp))
                                                 .background(surfaceBg)
-                                                .border(1.dp, primaryBlue.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                .border(1.dp, borderCol, RoundedCornerShape(14.dp))
+                                                .padding(horizontal = 10.dp, vertical = 7.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.NotificationsNone,
+                                                contentDescription = null,
+                                                tint = primaryAccent,
+                                                modifier = Modifier.size(16.dp)
+                                            )
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "Layar: $screenApp",
+                                                    text = notifications.first().let { "${it.app}: ${it.title}" },
                                                     color = textPrimary,
                                                     fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
                                                 Text(
-                                                    text = screenText.take(60),
+                                                    text = notifications.first().text,
                                                     color = textSecondary,
                                                     fontSize = 10.sp,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                             }
-                                            Text(
-                                                text = "Saran",
-                                                color = primaryBlue,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
+                                            QuickActionBadge("Intisari", primaryAccent) {
+                                                val summary = notifications.take(8)
+                                                    .joinToString("; ") { "${it.app} - ${it.title}: ${it.text.take(80)}" }
+                                                submitInput("Rangkum singkat notifikasi yang masuk ini dan beri tahu mana yang paling penting: $summary", forceAi = true)
+                                            }
+                                            Icon(
+                                                imageVector = Icons.Rounded.Close,
+                                                contentDescription = "Bersihkan",
+                                                tint = textSecondary,
                                                 modifier = Modifier
-                                                    .clip(RoundedCornerShape(50))
-                                                    .background(primaryBlue.copy(alpha = 0.14f))
-                                                    .clickable { askForSuggestion() }
-                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                                            )
-                                            Text(
-                                                text = "\u00D7",
-                                                color = textSecondary,
-                                                fontSize = 15.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier
-                                                    .clickable { screenCardDismissed = true }
-                                                    .padding(horizontal = 4.dp)
+                                                    .size(16.dp)
+                                                    .clickable { PochiSignals.clearNotifications() }
                                             )
                                         }
                                     }
 
+                                    // Balon Pesan + Maskot Interaktif
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        PochiMascot(
+                                            state = botState,
+                                            emoteOverride = customEmote ?: PochiEmote.NORMAL,
+                                            size = 54.dp,
+                                            onPoke = {
+                                                bump()
+                                                pokeCount++
+                                                if (pokeCount >= 3) {
+                                                    botState = BotState.ANNOYED
+                                                    customEmote = PochiEmote.ANGRY
+                                                    botReply = "Jangan dicolek terus dong, lagi siap-siap bantu nih."
+                                                    coroutineScope.launch {
+                                                        delay(2000)
+                                                        pokeCount = 0
+                                                        botState = BotState.IDLE
+                                                        customEmote = null
+                                                    }
+                                                } else {
+                                                    customEmote = PochiEmote.WINK_LEFT
+                                                    botReply = "Tahan sebentar di kepala Pochi kalau mau ngelus ya!"
+                                                }
+                                            },
+                                            onPet = {
+                                                bump()
+                                                botState = BotState.DONE
+                                                customEmote = PochiEmote.PET_POKE
+                                                botReply = "Makasih! Jadi makin semangat bantuin kamu."
+                                            }
+                                        )
+
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(surfaceBg)
+                                                .border(1.dp, borderCol, RoundedCornerShape(16.dp))
+                                                .padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .heightIn(min = 38.dp, max = 92.dp)
+                                                    .verticalScroll(rememberScrollState())
+                                            ) {
+                                                Text(
+                                                    text = botReply,
+                                                    color = textPrimary,
+                                                    fontSize = 12.sp,
+                                                    lineHeight = 17.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+
+                                            // Tombol Aksi Cepat pada Respons (Salin & Simpan ke Catatan)
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(subtleBg)
+                                                        .clickable {
+                                                            bump()
+                                                            val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                            cb.setPrimaryClip(ClipData.newPlainText("Pochi", botReply))
+                                                            Toast.makeText(context, "Teks disalin", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                                ) {
+                                                    Icon(Icons.Rounded.ContentCopy, null, tint = textSecondary, modifier = Modifier.size(11.dp))
+                                                    Text("Salin", color = textSecondary, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                                                }
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Row(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(subtleBg)
+                                                        .clickable {
+                                                            bump()
+                                                            PochiAgent.execute(context, AgentAction("SAVE_NOTE", botReply))
+                                                            Toast.makeText(context, "Disimpan ke catatan", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                                ) {
+                                                    Icon(Icons.Rounded.BookmarkBorder, null, tint = textSecondary, modifier = Modifier.size(11.dp))
+                                                    Text("+ Catatan", color = textSecondary, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Konteks Layar Aktif (Screen Awareness)
+                                    if (screenAwarenessEnabled && screenApp.isNotBlank() &&
+                                        screenText.isNotBlank() && !screenCardDismissed
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(surfaceBg)
+                                                .border(1.dp, primaryAccent.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = "Konteks layar: $screenApp",
+                                                    color = textPrimary,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Close,
+                                                    contentDescription = "Tutup",
+                                                    tint = textSecondary,
+                                                    modifier = Modifier
+                                                        .size(14.dp)
+                                                        .clickable { screenCardDismissed = true }
+                                                )
+                                            }
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .horizontalScroll(rememberScrollState()),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                QuickActionBadge("Ringkas layar", primaryAccent) {
+                                                    submitInput("Ringkas isi layar $screenApp ini jadi 2 kalimat jelas: ${screenText.take(450)}", forceAi = true)
+                                                }
+                                                QuickActionBadge("Bantu balas", primaryAccent) {
+                                                    submitInput("Buatkan draf balasan singkat yang natural dan sopan untuk percakapan di layar $screenApp ini, lalu salin ke clipboard dengan [ACTION:CLIPBOARD:isi_balasan]. Isi layar: ${screenText.take(450)}", forceAi = true)
+                                                }
+                                                QuickActionBadge("Terjemahkan", primaryAccent) {
+                                                    submitInput("Terjemahkan teks di layar ini ke bahasa Indonesia yang natural: ${screenText.take(450)}", forceAi = true)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        // Deretan Chip Pintasan Harian
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            ShortcutChip("⏱️ Timer 5m", subtleBg, textPrimary) {
+                                                submitInput("timer 5 menit")
+                                            }
+                                            ShortcutChip("📋 Cek Clipboard", subtleBg, textPrimary) {
+                                                val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                val clipText = cb.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty()
+                                                if (clipText.isBlank()) {
+                                                    botReply = "Clipboard masih kosong."
+                                                } else {
+                                                    submitInput("Ini isi clipboard-ku: \"$clipText\". Jelaskan singkat atau rapikan isinya.", forceAi = true)
+                                                }
+                                            }
+                                            ShortcutChip("💬 Buka WA", subtleBg, textPrimary) {
+                                                submitInput("buka whatsapp")
+                                            }
+                                            ShortcutChip("🔦 Senter", subtleBg, textPrimary) {
+                                                submitInput(if (isTorchOn) "matikan senter" else "nyalakan senter")
+                                            }
+                                            ShortcutChip("📝 Catatan", subtleBg, textPrimary) {
+                                                bump()
+                                                currentTab = PochiTab.NOTES
+                                            }
+                                        }
+                                    }
+
+                                    // Kolom Input Perintah / Hitung / Catat / Tanya
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -631,9 +840,9 @@ fun PochiIslandBot(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Rounded.AutoAwesome,
+                                            imageVector = Icons.Rounded.Search,
                                             contentDescription = null,
-                                            tint = primaryBlue,
+                                            tint = textSecondary,
                                             modifier = Modifier.size(16.dp)
                                         )
 
@@ -644,16 +853,28 @@ fun PochiIslandBot(
                                                 bump()
                                                 if (botState != BotState.WORKING) botState = BotState.WAITING
                                             },
-                                            textStyle = TextStyle(color = textPrimary, fontSize = 13.sp),
-                                            cursorBrush = SolidColor(primaryBlue),
+                                            textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                            cursorBrush = SolidColor(primaryAccent),
                                             singleLine = true,
+                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                            keyboardActions = KeyboardActions(
+                                                onSend = {
+                                                    if (prompt.isNotBlank() && botState != BotState.WORKING) {
+                                                        val q = prompt
+                                                        prompt = ""
+                                                        submitInput(q)
+                                                    }
+                                                }
+                                            ),
                                             modifier = Modifier.weight(1f),
                                             decorationBox = { innerTextField ->
                                                 if (prompt.isEmpty()) {
                                                     Text(
-                                                        text = "Tanya Pochi...",
+                                                        text = "Ketik perintah, 45rb*3, catat..., atau tanya",
                                                         color = textSecondary,
-                                                        fontSize = 13.sp
+                                                        fontSize = 11.sp,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                 }
                                                 innerTextField()
@@ -662,24 +883,193 @@ fun PochiIslandBot(
 
                                         Box(
                                             modifier = Modifier
-                                                .size(30.dp)
+                                                .size(28.dp)
                                                 .clip(CircleShape)
-                                                .background(primaryBlue)
+                                                .background(if (prompt.isNotBlank()) primaryAccent else subtleBg)
                                                 .clickable {
                                                     if (prompt.isNotBlank() && botState != BotState.WORKING) {
                                                         val q = prompt
                                                         prompt = ""
-                                                        askAi(q)
+                                                        submitInput(q)
                                                     }
                                                 },
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Rounded.Send,
-                                                contentDescription = "Kirim",
-                                                tint = Color.White,
+                                                imageVector = Icons.Rounded.ArrowUpward,
+                                                contentDescription = "Jalankan",
+                                                tint = if (prompt.isNotBlank()) Color.White else textSecondary,
                                                 modifier = Modifier.size(15.dp)
                                             )
+                                        }
+                                    }
+                                }
+                            }
+
+                            PochiTab.NOTES -> {
+                                val noteLines = remember(savedNotes) {
+                                    savedNotes.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    // Bar tambah item cepat
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(surfaceBg)
+                                            .border(1.dp, borderCol, RoundedCornerShape(14.dp))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        BasicTextField(
+                                            value = newNoteItem,
+                                            onValueChange = {
+                                                newNoteItem = it
+                                                bump()
+                                            },
+                                            textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                            cursorBrush = SolidColor(primaryAccent),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f),
+                                            decorationBox = { inner ->
+                                                if (newNoteItem.isEmpty()) {
+                                                    Text("Tambah tugas atau catatan...", color = textSecondary, fontSize = 11.sp)
+                                                }
+                                                inner()
+                                            }
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(primaryAccent)
+                                                .clickable {
+                                                    if (newNoteItem.isNotBlank()) {
+                                                        bump()
+                                                        PochiAgent.execute(context, AgentAction("SAVE_NOTE", newNoteItem))
+                                                        newNoteItem = ""
+                                                    }
+                                                }
+                                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                                        ) {
+                                            Text("+ Tambah", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    if (isRawNoteEdit) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(90.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(surfaceBg)
+                                                .border(1.dp, borderCol, RoundedCornerShape(14.dp))
+                                                .padding(10.dp)
+                                        ) {
+                                            BasicTextField(
+                                                value = savedNotes,
+                                                onValueChange = {
+                                                    bump()
+                                                    PochiPrefs.saveNotes(context, it)
+                                                },
+                                                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                                cursorBrush = SolidColor(primaryAccent),
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                    } else {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(min = 56.dp, max = 115.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(surfaceBg)
+                                                .border(1.dp, borderCol, RoundedCornerShape(14.dp))
+                                                .padding(8.dp)
+                                                .verticalScroll(rememberScrollState()),
+                                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            if (noteLines.isEmpty()) {
+                                                Text(
+                                                    text = "Belum ada catatan. Ketik di atas atau gunakan perintah 'catat ...'",
+                                                    color = textSecondary,
+                                                    fontSize = 11.sp,
+                                                    modifier = Modifier.padding(4.dp)
+                                                )
+                                            } else {
+                                                noteLines.forEachIndexed { idx, line ->
+                                                    val isDone = line.startsWith("[x] ")
+                                                    val display = line
+                                                        .removePrefix("[x] ")
+                                                        .removePrefix("• ")
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .clickable {
+                                                                bump()
+                                                                val updated = noteLines.toMutableList()
+                                                                updated[idx] = if (isDone) "• $display" else "[x] $display"
+                                                                PochiPrefs.saveNotes(context, updated.joinToString("\n"))
+                                                            }
+                                                            .padding(horizontal = 4.dp, vertical = 3.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (isDone) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                                                            contentDescription = null,
+                                                            tint = if (isDone) Color(0xFF30D158) else textSecondary,
+                                                            modifier = Modifier.size(15.dp)
+                                                        )
+                                                        Text(
+                                                            text = display,
+                                                            color = if (isDone) textSecondary else textPrimary,
+                                                            fontSize = 11.sp,
+                                                            textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
+                                                            modifier = Modifier.weight(1f),
+                                                            maxLines = 2,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        ActionChipButton(
+                                            modifier = Modifier.weight(1f),
+                                            label = if (isRawNoteEdit) "Mode Daftar" else "Edit Teks",
+                                            bg = subtleBg,
+                                            textColor = textPrimary
+                                        ) {
+                                            bump()
+                                            isRawNoteEdit = !isRawNoteEdit
+                                        }
+                                        ActionChipButton(
+                                            modifier = Modifier.weight(1f),
+                                            label = "Rapikan",
+                                            bg = primaryAccent.copy(alpha = 0.14f),
+                                            textColor = primaryAccent
+                                        ) {
+                                            if (savedNotes.isNotBlank()) {
+                                                bump()
+                                                currentTab = PochiTab.CHAT
+                                                submitInput("Rapikan catatan ini menjadi urutan prioritas yang singkat dan jelas: $savedNotes", forceAi = true)
+                                            }
+                                        }
+                                        ActionChipButton(
+                                            modifier = Modifier.weight(0.8f),
+                                            label = "Bersihkan",
+                                            bg = subtleBg,
+                                            textColor = Color(0xFFFF453A)
+                                        ) {
+                                            bump()
+                                            PochiPrefs.saveNotes(context, "")
                                         }
                                     }
                                 }
@@ -696,7 +1086,7 @@ fun PochiIslandBot(
                                             surfaceBg = surfaceBg,
                                             borderCol = borderCol,
                                             textPrimary = textPrimary,
-                                            primaryBlue = primaryBlue,
+                                            primaryBlue = primaryAccent,
                                             isTorchOn = isTorchOn,
                                             onToggle = { checked ->
                                                 bump()
@@ -712,6 +1102,24 @@ fun PochiIslandBot(
                                             }
                                         )
 
+                                        DarkModeTile(
+                                            modifier = Modifier.weight(1f),
+                                            surfaceBg = surfaceBg,
+                                            borderCol = borderCol,
+                                            textPrimary = textPrimary,
+                                            primaryBlue = primaryAccent,
+                                            isDarkMode = isDarkMode,
+                                            onToggle = {
+                                                bump()
+                                                PochiPrefs.setDarkMode(context, it)
+                                            }
+                                        )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
                                         ControlTile(
                                             modifier = Modifier.weight(1f),
                                             surfaceBg = surfaceBg,
@@ -727,12 +1135,28 @@ fun PochiIslandBot(
                                                 }
                                                 context.startActivity(intent)
                                                 collapse()
-                                            } catch (e: Exception) {
+                                            } catch (_: Exception) {
                                                 val fallback = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
                                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                 }
                                                 context.startActivity(fallback)
                                             }
+                                        }
+
+                                        ControlTile(
+                                            modifier = Modifier.weight(1f),
+                                            surfaceBg = surfaceBg,
+                                            borderCol = borderCol,
+                                            textPrimary = textPrimary,
+                                            icon = Icons.Rounded.Wifi,
+                                            title = "Wi-Fi"
+                                        ) {
+                                            bump()
+                                            val intent = Intent(Settings.ACTION_WIFI_SETTINGS).apply {
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                            context.startActivity(intent)
+                                            collapse()
                                         }
                                     }
 
@@ -740,24 +1164,29 @@ fun PochiIslandBot(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        DarkModeTile(
-                                            modifier = Modifier.weight(1f),
-                                            surfaceBg = surfaceBg,
-                                            borderCol = borderCol,
-                                            textPrimary = textPrimary,
-                                            primaryBlue = primaryBlue,
-                                            isDarkMode = isDarkMode,
-                                            onToggle = {
-                                                bump()
-                                                PochiPrefs.setDarkMode(context, it)
-                                            }
-                                        )
-
                                         ControlTile(
                                             modifier = Modifier.weight(1f),
                                             surfaceBg = surfaceBg,
                                             borderCol = borderCol,
                                             textPrimary = textPrimary,
+                                            icon = Icons.Rounded.Alarm,
+                                            title = "Jam & Alarm"
+                                        ) {
+                                            bump()
+                                            runCatching {
+                                                val intent = Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS).apply {
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                                context.startActivity(intent)
+                                                collapse()
+                                            }
+                                        }
+
+                                        ControlTile(
+                                            modifier = Modifier.weight(1f),
+                                            surfaceBg = surfaceBg,
+                                            borderCol = borderCol,
+                                            textPrimary = Color(0xFFFF453A),
                                             icon = Icons.Rounded.PowerSettingsNew,
                                             title = "Matikan"
                                         ) {
@@ -771,27 +1200,27 @@ fun PochiIslandBot(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(18.dp))
+                                        .clip(RoundedCornerShape(16.dp))
                                         .background(surfaceBg)
-                                        .border(1.dp, borderCol, RoundedCornerShape(18.dp))
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        .border(1.dp, borderCol, RoundedCornerShape(16.dp))
+                                        .padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceEvenly,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        MusicButton(Icons.Rounded.SkipPrevious, "Prev", textPrimary) {
+                                        MusicButton(Icons.Rounded.SkipPrevious, "Sebelumnya", textPrimary) {
                                             bump()
                                             dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
                                         }
-                                        MusicButton(Icons.Rounded.PlayArrow, "Play", primaryBlue) {
+                                        MusicButton(Icons.Rounded.PlayArrow, "Putar/Jeda", primaryAccent) {
                                             bump()
                                             dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
                                             botState = BotState.DONE
                                         }
-                                        MusicButton(Icons.Rounded.SkipNext, "Next", textPrimary) {
+                                        MusicButton(Icons.Rounded.SkipNext, "Berikutnya", textPrimary) {
                                             bump()
                                             dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
                                         }
@@ -799,54 +1228,37 @@ fun PochiIslandBot(
 
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(panelBg)
-                                                .border(1.dp, borderCol, RoundedCornerShape(10.dp))
-                                                .clickable {
-                                                    bump()
-                                                    val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                                                    am.adjustStreamVolume(
-                                                        AudioManager.STREAM_MUSIC,
-                                                        AudioManager.ADJUST_LOWER,
-                                                        AudioManager.FLAG_SHOW_UI
-                                                    )
-                                                }
-                                                .padding(vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
+                                        ActionChipButton(
+                                            modifier = Modifier.weight(1f),
+                                            label = "Vol -",
+                                            bg = subtleBg,
+                                            textColor = textPrimary
                                         ) {
-                                            Icon(Icons.Rounded.VolumeDown, null, tint = textPrimary, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Vol -", color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                            bump()
+                                            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                                            am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                                         }
-
-                                        Row(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(panelBg)
-                                                .border(1.dp, borderCol, RoundedCornerShape(10.dp))
-                                                .clickable {
-                                                    bump()
-                                                    val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                                                    am.adjustStreamVolume(
-                                                        AudioManager.STREAM_MUSIC,
-                                                        AudioManager.ADJUST_RAISE,
-                                                        AudioManager.FLAG_SHOW_UI
-                                                    )
-                                                }
-                                                .padding(vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
+                                        ActionChipButton(
+                                            modifier = Modifier.weight(1f),
+                                            label = "Vol +",
+                                            bg = subtleBg,
+                                            textColor = textPrimary
                                         ) {
-                                            Icon(Icons.Rounded.VolumeUp, null, tint = textPrimary, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Vol +", color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                            bump()
+                                            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                                            am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                                        }
+                                        ActionChipButton(
+                                            modifier = Modifier.weight(1f),
+                                            label = "Spotify",
+                                            bg = primaryAccent.copy(alpha = 0.14f),
+                                            textColor = primaryAccent
+                                        ) {
+                                            bump()
+                                            PochiAgent.execute(context, AgentAction("OPEN_APP", "spotify"))
+                                            collapse()
                                         }
                                     }
                                 }
@@ -865,7 +1277,7 @@ fun PochiIslandBot(
                                                 .clip(RoundedCornerShape(12.dp))
                                                 .background(surfaceBg)
                                                 .border(1.dp, borderCol, RoundedCornerShape(12.dp))
-                                                .padding(horizontal = 10.dp, vertical = 9.dp)
+                                                .padding(horizontal = 10.dp, vertical = 8.dp)
                                         ) {
                                             BasicTextField(
                                                 value = cityInput,
@@ -875,7 +1287,7 @@ fun PochiIslandBot(
                                                     PochiPrefs.saveCity(context, it)
                                                 },
                                                 textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
-                                                cursorBrush = SolidColor(primaryBlue),
+                                                cursorBrush = SolidColor(primaryAccent),
                                                 singleLine = true,
                                                 decorationBox = { inner ->
                                                     if (cityInput.isEmpty()) {
@@ -886,45 +1298,32 @@ fun PochiIslandBot(
                                             )
                                         }
 
-                                        Row(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(primaryBlue)
-                                                .clickable {
-                                                    bump()
-                                                    val city = cityInput.ifBlank { "Jakarta" }
-                                                    botState = BotState.WORKING
-                                                    coroutineScope.launch {
-                                                        val result = fetchLiveWeather(city)
-                                                        liveWeatherText = result
-                                                        botReply = "Cuaca $city: $result"
-                                                        botState = BotState.DONE
-                                                    }
-                                                }
-                                                .padding(horizontal = 12.dp, vertical = 9.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ActionChipButton(
+                                            modifier = Modifier.width(68.dp),
+                                            label = "Cek",
+                                            bg = primaryAccent,
+                                            textColor = Color.White
                                         ) {
-                                            Icon(Icons.Rounded.WbSunny, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                            Text("Cek", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            bump()
+                                            val city = cityInput.ifBlank { "Jakarta" }
+                                            botState = BotState.WORKING
+                                            coroutineScope.launch {
+                                                val result = fetchLiveWeather(city)
+                                                liveWeatherText = result
+                                                botReply = "Cuaca $city: $result"
+                                                botState = BotState.DONE
+                                            }
                                         }
 
-                                        Row(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(surfaceBg)
-                                                .border(1.dp, borderCol, RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    bump()
-                                                    currentTab = PochiTab.CHAT
-                                                    askAi("Cuaca di ${cityInput.ifBlank { "Jakarta" }} saat ini adalah $liveWeatherText. Berikan saran pakaian dan persiapan singkat dalam 2 kalimat santai.")
-                                                }
-                                                .padding(horizontal = 10.dp, vertical = 9.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ActionChipButton(
+                                            modifier = Modifier.width(72.dp),
+                                            label = "Tips",
+                                            bg = subtleBg,
+                                            textColor = primaryAccent
                                         ) {
-                                            Icon(Icons.Rounded.AutoAwesome, null, tint = primaryBlue, modifier = Modifier.size(14.dp))
-                                            Text("Tips", color = primaryBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            bump()
+                                            currentTab = PochiTab.CHAT
+                                            submitInput("Cuaca di ${cityInput.ifBlank { "Jakarta" }} saat ini $liveWeatherText. Kasih saran persiapan singkat buat keluar rumah.", forceAi = true)
                                         }
                                     }
 
@@ -945,91 +1344,9 @@ fun PochiIslandBot(
                                     }
                                 }
                             }
-
-                            PochiTab.NOTES -> {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(68.dp)
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(surfaceBg)
-                                            .border(1.dp, borderCol, RoundedCornerShape(14.dp))
-                                            .padding(10.dp)
-                                    ) {
-                                        BasicTextField(
-                                            value = noteText,
-                                            onValueChange = {
-                                                noteText = it
-                                                bump()
-                                                PochiPrefs.saveNotes(context, it)
-                                            },
-                                            textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
-                                            cursorBrush = SolidColor(primaryBlue),
-                                            modifier = Modifier.fillMaxSize(),
-                                            decorationBox = { inner ->
-                                                if (noteText.isEmpty()) {
-                                                    Text(
-                                                        "Tulis catatan cepat (tersimpan otomatis)...",
-                                                        color = textSecondary,
-                                                        fontSize = 12.sp
-                                                    )
-                                                }
-                                                inner()
-                                            }
-                                        )
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(primaryBlue)
-                                                .clickable {
-                                                    if (noteText.isNotBlank()) {
-                                                        bump()
-                                                        currentTab = PochiTab.CHAT
-                                                        askAi("Rapikan dan buat daftar to-do singkat dari catatan ini: $noteText")
-                                                    }
-                                                }
-                                                .padding(vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(Icons.Rounded.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Rapikan", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-
-                                        Row(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(surfaceBg)
-                                                .border(1.dp, borderCol, RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    bump()
-                                                    noteText = ""
-                                                    PochiPrefs.saveNotes(context, "")
-                                                }
-                                                .padding(horizontal = 14.dp, vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(Icons.Rounded.DeleteOutline, null, tint = Color(0xFFFF453A), modifier = Modifier.size(15.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Hapus", color = Color(0xFFFF453A), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
-            }
             }
 
             // ================= MINI: lingkaran maskot =================
@@ -1043,7 +1360,7 @@ fun PochiIslandBot(
                 PochiMascot(
                     state = botState,
                     emoteOverride = collapsedEmote,
-                    size = collapsedSize * 0.72f
+                    size = collapsedSize * 0.76f
                 )
             }
 
@@ -1069,6 +1386,68 @@ fun PochiIslandBot(
             }
         }
     }
+}
+
+@Composable
+private fun QuickActionBadge(label: String, accent: Color, onClick: () -> Unit) {
+    Text(
+        text = label,
+        color = accent,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(accent.copy(alpha = 0.14f))
+            .clickable { onClick() }
+            .padding(horizontal = 9.dp, vertical = 4.dp)
+    )
+}
+
+@Composable
+private fun ShortcutChip(label: String, bg: Color, textColor: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun ActionChipButton(
+    modifier: Modifier = Modifier,
+    label: String,
+    bg: Color,
+    textColor: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .clickable { onClick() }
+            .padding(vertical = 7.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}
 
 @Composable
 private fun TorchTile(
@@ -1082,10 +1461,10 @@ private fun TorchTile(
 ) {
     Row(
         modifier = modifier
-            .height(54.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(48.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(surfaceBg)
-            .border(1.dp, borderCol, RoundedCornerShape(16.dp))
+            .border(1.dp, borderCol, RoundedCornerShape(14.dp))
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1094,13 +1473,13 @@ private fun TorchTile(
             imageVector = if (isTorchOn) Icons.Rounded.FlashlightOn else Icons.Rounded.FlashlightOff,
             contentDescription = null,
             tint = primaryBlue,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(17.dp)
         )
-        Text("Senter", color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text("Senter", color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         Switch(
             checked = isTorchOn,
             onCheckedChange = onToggle,
-            modifier = Modifier.height(24.dp),
+            modifier = Modifier.height(22.dp),
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = primaryBlue
@@ -1121,10 +1500,10 @@ private fun DarkModeTile(
 ) {
     Row(
         modifier = modifier
-            .height(54.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(48.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(surfaceBg)
-            .border(1.dp, borderCol, RoundedCornerShape(16.dp))
+            .border(1.dp, borderCol, RoundedCornerShape(14.dp))
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1133,13 +1512,13 @@ private fun DarkModeTile(
             imageVector = Icons.Rounded.DarkMode,
             contentDescription = null,
             tint = textPrimary,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(17.dp)
         )
-        Text("Gelap", color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text("Gelap", color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         Switch(
             checked = isDarkMode,
             onCheckedChange = onToggle,
-            modifier = Modifier.height(24.dp),
+            modifier = Modifier.height(22.dp),
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = primaryBlue
@@ -1160,12 +1539,12 @@ private fun ControlTile(
 ) {
     Row(
         modifier = modifier
-            .height(54.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(48.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(surfaceBg)
-            .border(1.dp, borderCol, RoundedCornerShape(16.dp))
+            .border(1.dp, borderCol, RoundedCornerShape(14.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -1173,14 +1552,14 @@ private fun ControlTile(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(imageVector = icon, contentDescription = title, tint = textPrimary, modifier = Modifier.size(18.dp))
-            Text(text = title, color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Icon(imageVector = icon, contentDescription = title, tint = textPrimary, modifier = Modifier.size(17.dp))
+            Text(text = title, color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
         Icon(
             imageVector = Icons.Rounded.ChevronRight,
             contentDescription = null,
-            tint = Color(0xFF8E8E93),
-            modifier = Modifier.size(18.dp)
+            tint = Color(0xFF94A3B8),
+            modifier = Modifier.size(16.dp)
         )
     }
 }
@@ -1219,7 +1598,7 @@ suspend fun fetchLiveWeather(city: String): String = withContext(Dispatchers.IO)
             setRequestProperty("User-Agent", "curl/7.68.0")
         }
         conn.inputStream.bufferedReader().use { it.readText().trim() }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         "Gagal memuat cuaca langsung, periksa koneksi internet."
     }
 }

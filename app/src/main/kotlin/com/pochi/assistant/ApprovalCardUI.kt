@@ -31,7 +31,7 @@ fun PochiApprovalCard(
 
     LaunchedEffect(request.id) {
         isTapGuardActive = true
-        delay(600)
+        delay(500)
         isTapGuardActive = false
     }
 
@@ -40,20 +40,21 @@ fun PochiApprovalCard(
             delay(1000)
             remainingSeconds--
         }
-        ApprovalManager.confirmDeny("Kedaluwarsa (120 dtk habis)")
+        ApprovalManager.confirmDeny("Waktu habis")
     }
 
-    val cardBg = if (isDark) Color(0xFF18181B) else Color.White
-    val borderCol = if (isDark) Color(0xFF27272A) else Color(0xFFE5E7EB)
-    val titleCol = if (isDark) Color.White else Color(0xFF111827)
+    val cardBg = if (isDark) Color(0xFF1C1C22) else Color(0xFFFFFBEB)
+    val borderCol = if (isDark) Color(0xFF3F3F46) else Color(0xFFFDE68A)
+    val titleCol = if (isDark) Color(0xFFF9FAFB) else Color(0xFF111827)
+    val subCol = if (isDark) Color(0xFFA1A1AA) else Color(0xFF6B7280)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(cardBg)
-            .border(1.dp, borderCol, RoundedCornerShape(20.dp))
-            .padding(14.dp),
+            .border(1.dp, borderCol, RoundedCornerShape(18.dp))
+            .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
@@ -61,7 +62,7 @@ fun PochiApprovalCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PochiMascot(state = BotState.APPROVAL, emoteOverride = PochiEmote.SURPRISED, size = 38.dp)
+            PochiMascot(state = BotState.APPROVAL, emoteOverride = PochiEmote.SURPRISED, size = 34.dp)
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
@@ -70,16 +71,16 @@ fun PochiApprovalCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Pochi Butuh Persetujuan",
+                        text = "Konfirmasi Tindakan",
                         color = Color(0xFFD97706),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${remainingSeconds}s",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
+                        text = "${remainingSeconds}d",
+                        color = subCol,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
                 Spacer(modifier = Modifier.height(2.dp))
@@ -87,29 +88,31 @@ fun PochiApprovalCard(
                     text = request.friendlyTitle,
                     color = titleCol,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF18181B))
-                .padding(horizontal = 12.dp, vertical = 9.dp)
-        ) {
-            Text(
-                text = request.rawCommand,
-                color = Color(0xFFE5E7EB),
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace
-            )
+        if (!request.rawCommand.startsWith("pochi-agent ")) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF18181B))
+                    .padding(horizontal = 10.dp, vertical = 7.dp)
+            ) {
+                Text(
+                    text = request.rawCommand,
+                    color = Color(0xFFE5E7EB),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(
                 modifier = Modifier
@@ -117,14 +120,14 @@ fun PochiApprovalCard(
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (isDark) Color(0xFF27272A) else Color(0xFFE5E7EB))
                     .clickable(enabled = !isTapGuardActive) { onDeny() }
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Deny",
+                    text = "Batal",
                     color = if (isTapGuardActive) Color.Gray else titleCol,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
@@ -134,7 +137,7 @@ fun PochiApprovalCard(
                     .clip(RoundedCornerShape(12.dp))
                     .background(
                         if (isTapGuardActive) Color(0xFFF59E0B).copy(alpha = 0.4f)
-                        else Color(0xFFFBBF24)
+                        else Color(0xFFF59E0B)
                     )
                     .clickable(enabled = !isTapGuardActive) {
                         val intent = Intent(context, BiometricGateActivity::class.java).apply {
@@ -142,12 +145,12 @@ fun PochiApprovalCard(
                         }
                         context.startActivity(intent)
                     }
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "🔒 Allow (Biometrik)",
-                    color = Color(0xFF111827),
+                    text = "Lanjutkan",
+                    color = Color.White,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )

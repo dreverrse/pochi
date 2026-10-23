@@ -2,14 +2,11 @@ package com.pochi.assistant
 
 import android.app.DownloadManager
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Environment
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
