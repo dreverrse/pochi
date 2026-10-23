@@ -1,12 +1,18 @@
 package com.pochi.assistant
 
-import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
-import android.os.Environment
+import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -28,8 +34,8 @@ object UpdateChecker {
             connection.connectTimeout = 8000
             connection.readTimeout = 8000
             if (connection.responseCode != 200) throw Exception("HTTP ${connection.responseCode}")
-            val body = connection.inputStream.bufferedReader().readText()
-            val json = org.json.JSONObject(body)
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(body)
             val tag = json.optString("tag_name").removePrefix("v")
             val assets = json.optJSONArray("assets") ?: JSONArray()
             var apkUrl = ""
@@ -48,22 +54,128 @@ object UpdateChecker {
                 downloadUrl = apkUrl,
                 tag = json.optString("tag_name")
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             UpdateInfo(hasUpdate = false, latestVersion = "", downloadUrl = "", tag = "")
         }
     }
 
-    fun download(context: Context, url: String, version: String) {
-        val request = DownloadManager.Request(Uri.parse(url)).apply {
-            setTitle("Pochi $version")
-            setDescription("Mengunduh pembaruan Pochi")
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Pochi-$version.apk")
-            setAllowedOverMetered(true)
-            setAllowedOverRoaming(true)
+    suspend fun downloadAndInstall(
+        context: Context,
+        url: String,
+        version: String,
+        onProgress: (Int) -> Unit
+    ): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = context.externalCacheDir ?: context.cacheDir
+            dir.listFiles()?.forEach { file ->
+                if (file.name.startsWith("Pochi-") && file.name.endsWith(".apk")) {
+                    runCatching { file.delete() }
+                }
+            }
+            val targetFile = File(dir, "Pochi-$version.apk")
+
+            var currentUrl = url
+            var redirects = 0
+            var connection: HttpURLConnection
+            while (true) {
+                connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = true
+                    connectTimeout = 15_000
+                    readTimeout = 30_000
+                    setRequestProperty("User-Agent", "Pochi-Android-Updater")
+                }
+                val code = connection.responseCode
+                if (code in listOf(301, 302, 303, 307, 308)) {
+                    val location = connection.getHeaderField("Location")
+                    connection.disconnect()
+                    if (location.isNullOrBlank() || ++redirects > 5) {
+                        error("Terlalu banyak pengalihan unduhan")
+                    }
+                    currentUrl = location
+                } else if (code in 200..299) {
+                    break
+                } else {
+                    connection.disconnect()
+                    error("Gagal mengunduh APK (HTTP $code)")
+                }
+            }
+
+            try {
+                val totalBytes = connection.contentLengthLong
+                connection.inputStream.use { input ->
+                    FileOutputStream(targetFile).use { output ->
+                        val buffer = ByteArray(8 * 1024)
+                        var downloaded = 0L
+                        var lastReported = -1
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            downloaded += read
+                            if (totalBytes > 0) {
+                                val pct = ((downloaded * 100) / totalBytes).toInt().coerceIn(0, 100)
+                                if (pct != lastReported) {
+                                    lastReported = pct
+                                    withContext(Dispatchers.Main) { onProgress(pct) }
+                                }
+                            }
+                        }
+                        output.flush()
+                    }
+                }
+            } finally {
+                connection.disconnect()
+            }
+
+            withContext(Dispatchers.Main) {
+                onProgress(100)
+                installApk(context, targetFile)
+            }
+            targetFile
         }
-        val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        manager.enqueue(request)
+    }
+
+    fun installApk(context: Context, apkFile: File) {
+        if (!apkFile.exists()) {
+            Toast.makeText(context, "File pembaruan tidak ditemukan.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            Toast.makeText(
+                context,
+                "Izinkan 'Instal aplikasi tidak dikenal' untuk Pochi, lalu ketuk Pasang Sekarang",
+                Toast.LENGTH_LONG
+            ).show()
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${context.packageName}")
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            return
+        }
+
+        runCatching {
+            val apkUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.provider",
+                apkFile
+            )
+            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(installIntent)
+        }.onFailure { e ->
+            Toast.makeText(
+                context,
+                "Gagal membuka pemasang paket: ${e.localizedMessage}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun compareVersions(a: String, b: String): Int {

@@ -589,9 +589,17 @@ class MainActivity : ComponentActivity() {
                 ) {
                     var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
                     var checking by remember { mutableStateOf(false) }
+                    var downloading by remember { mutableStateOf(false) }
+                    var downloadProgress by remember { mutableIntStateOf(0) }
+                    var downloadedApk by remember { mutableStateOf<File?>(null) }
+                    var updateError by remember { mutableStateOf<String?>(null) }
                     val scope = rememberCoroutineScope()
                     val currentVersion = remember {
                         runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("5.9.0")
+                    }
+
+                    LaunchedEffect(Unit) {
+                        updateInfo = UpdateChecker.check(this@MainActivity)
                     }
 
                     Row(
@@ -606,30 +614,90 @@ class MainActivity : ComponentActivity() {
                         OutlinedButton(
                             onClick = {
                                 checking = true
+                                updateError = null
                                 scope.launch {
                                     updateInfo = UpdateChecker.check(this@MainActivity)
                                     checking = false
                                 }
                             },
-                            enabled = !checking,
+                            enabled = !checking && !downloading,
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(if (checking) "Mengecek..." else "Cek Update", fontSize = 11.sp, color = accentBlue)
                         }
                     }
 
+                    if (downloading) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Mengunduh pembaruan... ${downloadProgress}%",
+                                color = accentBlue,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            LinearProgressIndicator(
+                                progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(50)),
+                                color = accentBlue,
+                                trackColor = subtleBg
+                            )
+                        }
+                    }
+
+                    updateError?.let { err ->
+                        Text(err, color = Color(0xFFFF453A), fontSize = 11.sp)
+                    }
+
                     updateInfo?.let { info ->
                         if (info.hasUpdate && info.downloadUrl.isNotBlank()) {
-                            Button(
-                                onClick = {
-                                    UpdateChecker.download(this@MainActivity, info.downloadUrl, info.latestVersion)
-                                    Toast.makeText(this@MainActivity, "Mengunduh Pochi v${info.latestVersion}...", Toast.LENGTH_SHORT).show()
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30D158)),
-                                modifier = Modifier.fillMaxWidth()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("Unduh Versi Baru v${info.latestVersion}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Button(
+                                    onClick = {
+                                        downloading = true
+                                        downloadProgress = 0
+                                        updateError = null
+                                        scope.launch {
+                                            val res = UpdateChecker.downloadAndInstall(
+                                                context = this@MainActivity,
+                                                url = info.downloadUrl,
+                                                version = info.latestVersion,
+                                                onProgress = { pct -> downloadProgress = pct }
+                                            )
+                                            downloading = false
+                                            res.onSuccess { file ->
+                                                downloadedApk = file
+                                            }.onFailure { e ->
+                                                updateError = "Gagal update: ${e.localizedMessage}"
+                                            }
+                                        }
+                                    },
+                                    enabled = !downloading,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30D158)),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = if (downloading) "Mengunduh..." else "Update Langsung v${info.latestVersion}",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                downloadedApk?.takeIf { it.exists() }?.let { apkFile ->
+                                    OutlinedButton(
+                                        onClick = { UpdateChecker.installApk(this@MainActivity, apkFile) },
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Pasang", color = accentBlue, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                         } else if (info.latestVersion.isNotBlank()) {
                             Text("Sudah menggunakan versi terbaru.", color = textSecondary, fontSize = 11.sp)
