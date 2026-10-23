@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
@@ -63,10 +64,24 @@ class MainActivity : ComponentActivity() {
             var model by remember { mutableStateOf(PochiPrefs.getModel(this, provider)) }
             var showApiKey by remember { mutableStateOf(false) }
             var showAdvancedBrain by remember { mutableStateOf(false) }
-            var showEmoteGallery by remember { mutableStateOf(false) }
             var previewEmote by remember { mutableStateOf(PochiEmote.SMILING) }
+            var heroState by remember { mutableStateOf(BotState.IDLE) }
+            var heroPokeCount by remember { mutableIntStateOf(0) }
+            var heroMoodText by remember {
+                mutableStateOf("Pintasan harian, catatan cepat, kalkulator & kendali layar")
+            }
+            val heroScope = rememberCoroutineScope()
             val offsetX by PochiPrefs.offsetXFlow.collectAsState()
             val offsetY by PochiPrefs.offsetYFlow.collectAsState()
+
+            LaunchedEffect(Unit) {
+                while (true) {
+                    delay((4500..7800).random().toLong())
+                    if (heroPokeCount == 0) {
+                        previewEmote = PochiMood.nextAutonomousMood(0L, false)
+                    }
+                }
+            }
 
             val bgPage = if (isDark) Color(0xFF0B0C10) else Color(0xFFF8FAFC)
             val cardBg = if (isDark) Color(0xFF15171E) else Color.White
@@ -148,22 +163,48 @@ class MainActivity : ComponentActivity() {
                     }
 
                     PochiMascot(
-                        state = if (isRunning) BotState.DONE else BotState.IDLE,
+                        state = if (heroState != BotState.IDLE) heroState else if (isRunning) BotState.DONE else BotState.IDLE,
                         emoteOverride = previewEmote,
                         size = 76.dp,
                         onPoke = {
-                            previewEmote = PochiEmote.entries.random()
+                            heroPokeCount++
+                            val (emote, state, text) = PochiMood.onPokeReaction(heroPokeCount)
+                            previewEmote = emote
+                            heroState = state
+                            heroMoodText = text
+                            heroScope.launch {
+                                val current = heroPokeCount
+                                delay(3600)
+                                if (heroPokeCount == current) {
+                                    if (heroPokeCount >= 5) heroPokeCount = 0
+                                    heroState = BotState.IDLE
+                                    heroMoodText = "Pintasan harian, catatan cepat, kalkulator & kendali layar"
+                                }
+                            }
+                        },
+                        onPet = {
+                            val wasUpset = heroPokeCount >= 3 || heroState == BotState.ANNOYED
+                            heroPokeCount = 0
+                            val (emote, state, text) = PochiMood.onPetReaction(wasUpset)
+                            previewEmote = emote
+                            heroState = state
+                            heroMoodText = text
+                            heroScope.launch {
+                                delay(3600)
+                                heroState = BotState.IDLE
+                                heroMoodText = "Pintasan harian, catatan cepat, kalkulator & kendali layar"
+                            }
                         }
                     )
 
                     Text(
-                        text = "Pochi",
+                        text = "Pochi • ${previewEmote.title}",
                         color = textPrimary,
-                        fontSize = 22.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Pintasan harian, catatan cepat, kalkulator & kendali layar",
+                        text = heroMoodText,
                         color = textSecondary,
                         fontSize = 12.sp
                     )
@@ -701,68 +742,6 @@ class MainActivity : ComponentActivity() {
                             }
                         } else if (info.latestVersion.isNotBlank()) {
                             Text("Sudah menggunakan versi terbaru.", color = textSecondary, fontSize = 11.sp)
-                        }
-                    }
-
-                    HorizontalDivider(color = borderCol)
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showEmoteGallery = !showEmoteGallery },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Galeri 36 Ekspresi Pochi",
-                            color = textPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Icon(
-                            imageVector = if (showEmoteGallery) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                            contentDescription = null,
-                            tint = textSecondary
-                        )
-                    }
-
-                    if (showEmoteGallery) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val rows = PochiEmote.entries.chunked(4)
-                            rows.forEach { rowEmotes ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    rowEmotes.forEach { emote ->
-                                        val isSelected = previewEmote == emote
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(if (isSelected) accentBlue.copy(alpha = 0.14f) else subtleBg)
-                                                .border(
-                                                    1.dp,
-                                                    if (isSelected) accentBlue else borderCol,
-                                                    RoundedCornerShape(12.dp)
-                                                )
-                                                .clickable { previewEmote = emote }
-                                                .padding(vertical = 8.dp, horizontal = 4.dp)
-                                        ) {
-                                            PochiMascot(state = BotState.IDLE, emoteOverride = emote, size = 34.dp)
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = emote.title,
-                                                color = textPrimary,
-                                                fontSize = 9.sp,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }

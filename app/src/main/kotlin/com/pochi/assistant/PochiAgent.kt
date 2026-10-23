@@ -21,6 +21,7 @@ data class AgentAction(val type: String, val argument: String)
 
 object PochiAgent {
     private val actionPattern = Regex("""\[ACTION:([A-Z_]+)(?::([^\]]*))?]""")
+    private val emotePattern = Regex("""\[EMOTE:([A-Z_]+)]""", RegexOption.IGNORE_CASE)
 
     private val appAliases = mapOf(
         "wa" to "com.whatsapp",
@@ -56,6 +57,20 @@ object PochiAgent {
         val type = match.groupValues[1]
         val argument = match.groupValues[2].trim()
         return cleaned.ifBlank { "Oke, langsung disiapkan." } to AgentAction(type, argument)
+    }
+
+    fun extractEmote(reply: String, userPrompt: String = ""): Pair<String, PochiEmote> {
+        val match = emotePattern.find(reply)
+        val cleaned = if (match != null) {
+            reply.replace(match.value, "").trim()
+        } else {
+            reply.trim()
+        }
+        val explicitEmote = match?.groupValues?.getOrNull(1)?.uppercase(Locale.US)?.let { name ->
+            PochiEmote.entries.firstOrNull { it.name == name }
+        }
+        val finalEmote = explicitEmote ?: PochiMood.inferEmoteFromText(userPrompt, cleaned)
+        return cleaned.ifBlank { "Oke, beres!" } to finalEmote
     }
 
     /**

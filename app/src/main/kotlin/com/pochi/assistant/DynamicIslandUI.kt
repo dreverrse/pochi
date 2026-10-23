@@ -128,9 +128,10 @@ fun PochiIslandBot(
     var isExpanded by remember { mutableStateOf(false) }
     var botState by remember { mutableStateOf(BotState.IDLE) }
     var customEmote by remember { mutableStateOf<PochiEmote?>(null) }
-    var idleEmote by remember { mutableStateOf<PochiEmote?>(null) }
+    var idleEmote by remember { mutableStateOf<PochiEmote?>(PochiEmote.SMILING) }
     var currentTab by remember { mutableStateOf(PochiTab.CHAT) }
     var interactionTick by remember { mutableIntStateOf(0) }
+    var lastActiveTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     var prompt by remember { mutableStateOf("") }
     var botReply by remember { mutableStateOf(naturalGreeting()) }
@@ -160,15 +161,21 @@ fun PochiIslandBot(
 
     fun bump() {
         interactionTick++
+        lastActiveTime = System.currentTimeMillis()
     }
 
     fun expand() {
         if (!isExpanded) {
             bump()
             isExpanded = true
-            customEmote = null
-            idleEmote = null
+            customEmote = PochiEmote.HAPPY
             onExpandChange(true)
+            coroutineScope.launch {
+                delay(1600)
+                if (customEmote == PochiEmote.HAPPY && botState == BotState.IDLE) {
+                    customEmote = null
+                }
+            }
         }
     }
 
@@ -188,6 +195,7 @@ fun PochiIslandBot(
     LaunchedEffect(activeApproval) {
         if (activeApproval != null) {
             botState = BotState.APPROVAL
+            customEmote = PochiEmote.SURPRISED
             expand()
         }
     }
@@ -195,7 +203,9 @@ fun PochiIslandBot(
     LaunchedEffect(lastDecision) {
         lastDecision?.let { decision ->
             botReply = decision
-            botState = if (decision.startsWith("Diizinkan")) BotState.DONE else BotState.IDLE
+            val approved = decision.startsWith("Diizinkan")
+            botState = if (approved) BotState.DONE else BotState.IDLE
+            customEmote = if (approved) PochiEmote.SUCCESS else PochiEmote.SAD
         }
     }
 
@@ -209,21 +219,36 @@ fun PochiIslandBot(
         }
     }
 
-    // Ekspresi hidup saat minimized
-    LaunchedEffect(isExpanded, botState) {
-        if (!isExpanded && botState == BotState.IDLE) {
+    // Mood otonom Pochi (berganti-ganti dari 36 ekspresi sesuai situasi, waktu, & lama dianggurin)
+    LaunchedEffect(botState, isHidden, peekMode) {
+        if (botState == BotState.IDLE) {
             while (true) {
-                delay((5000..9000).random().toLong())
-                idleEmote = listOf(
-                    PochiEmote.CALM,
-                    PochiEmote.SMILING,
-                    PochiEmote.HAPPY,
-                    PochiEmote.SLEEPY,
-                    PochiEmote.NORMAL
-                ).random()
+                delay((4200..7500).random().toLong())
+                val idleDuration = System.currentTimeMillis() - lastActiveTime
+                idleEmote = PochiMood.nextAutonomousMood(
+                    idleMillis = idleDuration,
+                    isPeeking = isHidden && peekMode
+                )
             }
-        } else if (isExpanded) {
-            idleEmote = null
+        }
+    }
+
+    // Siklus ekspresi berpikir saat sedang memproses jawaban
+    LaunchedEffect(botState) {
+        if (botState == BotState.WORKING) {
+            val thinkingCycle = listOf(
+                PochiEmote.THINKING,
+                PochiEmote.WORKING,
+                PochiEmote.HMM,
+                PochiEmote.LOADING,
+                PochiEmote.IDEA
+            )
+            var idx = 0
+            while (botState == BotState.WORKING) {
+                customEmote = thinkingCycle[idx % thinkingCycle.size]
+                idx++
+                delay(1100)
+            }
         }
     }
 
@@ -254,14 +279,19 @@ fun PochiIslandBot(
             if (localMatch != null) {
                 val (replyText, localAction) = localMatch
                 botReply = replyText
-                customEmote = PochiEmote.SUCCESS
-                botState = BotState.DONE
+                val moodEmote = PochiMood.inferEmoteFromText(trimmed, replyText)
+                customEmote = moodEmote
+                botState = if (moodEmote in setOf(PochiEmote.ANGRY, PochiEmote.CRYING, PochiEmote.SAD)) {
+                    BotState.ANNOYED
+                } else {
+                    BotState.DONE
+                }
                 if (localAction != null) {
                     handleAction(localAction)
                 }
                 coroutineScope.launch {
-                    delay(2200)
-                    if (botState == BotState.DONE) {
+                    delay(3500)
+                    if (botState != BotState.WORKING) {
                         botState = BotState.IDLE
                         customEmote = null
                     }
@@ -274,9 +304,9 @@ fun PochiIslandBot(
         val currentProvider = PochiPrefs.getProvider(context)
         val apiKey = PochiPrefs.getApiKey(context, currentProvider)
         if (apiKey.isBlank()) {
-            botReply = "Untuk pertanyaan bebas, isi kunci ${currentProvider.label} di aplikasi Pochi dulu ya. (Perintah seperti 'timer 5 menit', '45rb * 3', 'catat ...', 'buka wa' tetap bisa langsung dipakai!)"
+            botReply = "Untuk ngobrol bebas, isi kunci ${currentProvider.label} di aplikasi Pochi dulu ya. (Perintah seperti 'timer 5 menit', '45rb * 3', 'catat ...', 'buka wa' tetap bisa langsung dipakai!)"
             botState = BotState.ANNOYED
-            customEmote = PochiEmote.THINKING
+            customEmote = PochiEmote.SAD
             return
         }
 
@@ -298,7 +328,7 @@ fun PochiIslandBot(
             }
         }
 
-        customEmote = PochiEmote.WORKING
+        customEmote = PochiEmote.THINKING
         botState = BotState.WORKING
         coroutineScope.launch {
             try {
@@ -309,21 +339,26 @@ fun PochiIslandBot(
                     prompt = trimmed,
                     contextNote = contextBuilder
                 )
-                val (cleanReply, action) = PochiAgent.extract(rawResponse)
+                val (replyAfterAction, action) = PochiAgent.extract(rawResponse)
+                val (cleanReply, chosenEmote) = PochiAgent.extractEmote(replyAfterAction, trimmed)
                 botReply = cleanReply
                 if (action != null) {
                     handleAction(action)
                 }
-                customEmote = PochiEmote.SUCCESS
-                botState = BotState.DONE
-                delay(2500)
-                if (botState == BotState.DONE) {
+                customEmote = chosenEmote
+                botState = when (chosenEmote) {
+                    PochiEmote.ANGRY, PochiEmote.CRYING, PochiEmote.SAD,
+                    PochiEmote.SUSPICIOUS, PochiEmote.SCARED, PochiEmote.ERROR -> BotState.ANNOYED
+                    else -> BotState.DONE
+                }
+                delay(4500)
+                if (botState != BotState.WORKING) {
                     botState = BotState.IDLE
                     customEmote = null
                 }
             } catch (e: Exception) {
-                botReply = "Koneksi lagi bermasalah: ${e.localizedMessage?.take(100)}"
-                customEmote = PochiEmote.ERROR
+                botReply = "Aduh, koneksiku lagi gangguan nih: ${e.localizedMessage?.take(100)}"
+                customEmote = PochiEmote.DIZZY
                 botState = BotState.ANNOYED
             }
         }
@@ -492,12 +527,12 @@ fun PochiIslandBot(
                     ) {
                         PochiMascot(
                             state = botState,
-                            emoteOverride = customEmote,
+                            emoteOverride = collapsedEmote,
                             size = 26.dp
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = botState.statusLabel,
+                                text = "Pochi • ${collapsedEmote.title}",
                                 color = textPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
@@ -549,6 +584,13 @@ fun PochiIslandBot(
                                     .clickable {
                                         bump()
                                         currentTab = tab
+                                        customEmote = when (tab) {
+                                            PochiTab.MUSIC -> PochiEmote.SINGING
+                                            PochiTab.NOTES -> PochiEmote.FOCUS
+                                            PochiTab.WEATHER -> PochiEmote.CURIOUS
+                                            PochiTab.CONTROLS -> PochiEmote.COOL
+                                            PochiTab.CHAT -> null
+                                        }
                                     }
                                     .padding(vertical = 6.dp),
                                 horizontalArrangement = Arrangement.Center,
@@ -653,31 +695,46 @@ fun PochiIslandBot(
                                     ) {
                                         PochiMascot(
                                             state = botState,
-                                            emoteOverride = customEmote ?: PochiEmote.NORMAL,
+                                            emoteOverride = customEmote ?: idleEmote ?: botState.defaultEmote,
                                             size = 54.dp,
                                             onPoke = {
                                                 bump()
                                                 pokeCount++
-                                                if (pokeCount >= 3) {
-                                                    botState = BotState.ANNOYED
-                                                    customEmote = PochiEmote.ANGRY
-                                                    botReply = "Jangan dicolek terus dong, lagi siap-siap bantu nih."
-                                                    coroutineScope.launch {
-                                                        delay(2000)
-                                                        pokeCount = 0
+                                                val (emote, state, text) = PochiMood.onPokeReaction(pokeCount)
+                                                botState = state
+                                                customEmote = emote
+                                                botReply = text
+                                                coroutineScope.launch {
+                                                    val currentPoke = pokeCount
+                                                    delay(3800)
+                                                    if (pokeCount == currentPoke && botState != BotState.WORKING) {
+                                                        if (pokeCount >= 5) pokeCount = 0
                                                         botState = BotState.IDLE
                                                         customEmote = null
                                                     }
-                                                } else {
-                                                    customEmote = PochiEmote.WINK_LEFT
-                                                    botReply = "Tahan sebentar di kepala Pochi kalau mau ngelus ya!"
                                                 }
                                             },
                                             onPet = {
                                                 bump()
-                                                botState = BotState.DONE
-                                                customEmote = PochiEmote.PET_POKE
-                                                botReply = "Makasih! Jadi makin semangat bantuin kamu."
+                                                val wasUpset = pokeCount >= 3 || botState == BotState.ANNOYED ||
+                                                    customEmote in setOf(
+                                                        PochiEmote.ANGRY,
+                                                        PochiEmote.CRYING,
+                                                        PochiEmote.SAD,
+                                                        PochiEmote.SCARED
+                                                    )
+                                                pokeCount = 0
+                                                val (emote, state, text) = PochiMood.onPetReaction(wasUpset)
+                                                botState = state
+                                                customEmote = emote
+                                                botReply = text
+                                                coroutineScope.launch {
+                                                    delay(3800)
+                                                    if (botState == BotState.DONE) {
+                                                        botState = BotState.IDLE
+                                                        customEmote = null
+                                                    }
+                                                }
                                             }
                                         )
 
@@ -856,7 +913,15 @@ fun PochiIslandBot(
                                             onValueChange = {
                                                 prompt = it
                                                 bump()
-                                                if (botState != BotState.WORKING) botState = BotState.WAITING
+                                                if (botState != BotState.WORKING) {
+                                                    botState = if (it.isBlank()) BotState.IDLE else BotState.WAITING
+                                                    customEmote = when {
+                                                        it.isBlank() -> null
+                                                        it.endsWith("?") -> PochiEmote.HMM
+                                                        it.endsWith("!") -> PochiEmote.SURPRISED
+                                                        else -> PochiEmote.FOCUS
+                                                    }
+                                                }
                                             },
                                             textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
                                             cursorBrush = SolidColor(primaryAccent),

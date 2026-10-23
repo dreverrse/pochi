@@ -15,11 +15,15 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import java.util.Calendar
+import java.util.Locale
 
 // 36 Ekspresi Lengkap Pochi (1 - 36)
 enum class PochiEmote(val number: Int, val title: String) {
@@ -87,19 +91,51 @@ fun PochiMascot(
 
     val infiniteTransition = rememberInfiniteTransition(label = "pochiBreath")
     val breathScale by infiniteTransition.animateFloat(
-        initialValue = 0.97f,
-        targetValue = 1.03f,
+        initialValue = 0.96f,
+        targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = FastOutSlowInEasing),
+            animation = tween(1400, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "breath"
     )
+    val microTilt by infiniteTransition.animateFloat(
+        initialValue = -1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "tilt"
+    )
+
+    val targetAngle = when (activeEmote) {
+        PochiEmote.CONFUSED, PochiEmote.THINKING, PochiEmote.HMM -> -8f
+        PochiEmote.SUSPICIOUS -> 6f
+        PochiEmote.WINK_LEFT, PochiEmote.CUTE, PochiEmote.HI, PochiEmote.BYE -> 7f
+        PochiEmote.LOVE, PochiEmote.PET_POKE, PochiEmote.BLUSH, PochiEmote.HAPPY_TEARS -> microTilt * 6f
+        PochiEmote.ANGRY, PochiEmote.ANNOYED, PochiEmote.SCARED, PochiEmote.SHOCK, PochiEmote.CRYING -> microTilt * 4f
+        PochiEmote.SLEEPY, PochiEmote.TIRED, PochiEmote.GOOD_NIGHT -> -5f
+        else -> microTilt * 2f
+    }
+    val animatedAngle by animateFloatAsState(
+        targetValue = targetAngle,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 260f),
+        label = "emoteAngle"
+    )
+
+    val bobOffsetFactor = when (activeEmote) {
+        PochiEmote.LAUGHING, PochiEmote.EXCITED, PochiEmote.HAPPY, PochiEmote.SUCCESS, PochiEmote.GOOD_MORNING ->
+            (breathScale - 1f) * -65f
+        PochiEmote.CRYING, PochiEmote.TIRED, PochiEmote.SLEEPY, PochiEmote.EMBARRASSED ->
+            2.5f
+        else -> 0f
+    }
 
     var isBlinking by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay((2800..4500).random().toLong())
+            delay((2600..4400).random().toLong())
             isBlinking = true
             delay(130)
             isBlinking = false
@@ -127,53 +163,257 @@ fun PochiMascot(
         val lineColor = Color(0xFF111827)
         val strokeW = (w * 0.055f).coerceAtLeast(2.2f)
 
-        scale(scaleX = breathScale, scaleY = 1f / breathScale) {
-            val catPath = Path().apply {
-                moveTo(w * 0.36f, h * 0.28f)
-                lineTo(w * 0.20f, h * 0.12f)
-                quadraticBezierTo(w * 0.16f, h * 0.10f, w * 0.16f, h * 0.17f)
-                lineTo(w * 0.14f, h * 0.44f)
-                cubicTo(
-                    w * 0.10f, h * 0.74f,
-                    w * 0.22f, h * 0.88f,
-                    w * 0.50f, h * 0.88f
-                )
-                cubicTo(
-                    w * 0.78f, h * 0.88f,
-                    w * 0.90f, h * 0.74f,
-                    w * 0.86f, h * 0.44f
-                )
-                lineTo(w * 0.84f, h * 0.17f)
-                quadraticBezierTo(w * 0.84f, h * 0.10f, w * 0.80f, h * 0.12f)
-                lineTo(w * 0.64f, h * 0.28f)
-                quadraticBezierTo(w * 0.50f, h * 0.26f, w * 0.36f, h * 0.28f)
-                close()
+        translate(top = bobOffsetFactor) {
+            rotate(degrees = animatedAngle) {
+                scale(scaleX = breathScale, scaleY = 1f / breathScale) {
+                    val catPath = Path().apply {
+                        moveTo(w * 0.36f, h * 0.28f)
+                        lineTo(w * 0.20f, h * 0.12f)
+                        quadraticBezierTo(w * 0.16f, h * 0.10f, w * 0.16f, h * 0.17f)
+                        lineTo(w * 0.14f, h * 0.44f)
+                        cubicTo(
+                            w * 0.10f, h * 0.74f,
+                            w * 0.22f, h * 0.88f,
+                            w * 0.50f, h * 0.88f
+                        )
+                        cubicTo(
+                            w * 0.78f, h * 0.88f,
+                            w * 0.90f, h * 0.74f,
+                            w * 0.86f, h * 0.44f
+                        )
+                        lineTo(w * 0.84f, h * 0.17f)
+                        quadraticBezierTo(w * 0.84f, h * 0.10f, w * 0.80f, h * 0.12f)
+                        lineTo(w * 0.64f, h * 0.28f)
+                        quadraticBezierTo(w * 0.50f, h * 0.26f, w * 0.36f, h * 0.28f)
+                        close()
+                    }
+
+                    drawPath(path = catPath, color = Color.White, style = Fill)
+                    drawPath(
+                        path = catPath,
+                        color = lineColor,
+                        style = Stroke(width = strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+
+                    val leftX = w * 0.35f
+                    val rightX = w * 0.65f
+                    val eyeY = h * 0.54f
+
+                    val canBlink = activeEmote in setOf(
+                        PochiEmote.NORMAL,
+                        PochiEmote.SMILING,
+                        PochiEmote.HAPPY,
+                        PochiEmote.HI,
+                        PochiEmote.EXCITED,
+                        PochiEmote.FOCUS
+                    )
+                    if (isBlinking && canBlink) {
+                        drawClosedLineEye(leftX, eyeY, w, lineColor, strokeW)
+                        drawClosedLineEye(rightX, eyeY, w, lineColor, strokeW)
+                    } else {
+                        drawPochiExpression(activeEmote, leftX, rightX, eyeY, w, h, lineColor, strokeW)
+                    }
+                }
             }
+        }
+    }
+}
 
-            drawPath(path = catPath, color = Color.White, style = Fill)
-            drawPath(
-                path = catPath,
-                color = lineColor,
-                style = Stroke(width = strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
-
-            val leftX = w * 0.35f
-            val rightX = w * 0.65f
-            val eyeY = h * 0.54f
-
-            val canBlink = activeEmote in setOf(
+object PochiMood {
+    /**
+     * Menghasilkan ekspresi otonom berdasarkan jam dan seberapa lama Pochi didiamkan,
+     * sehingga seluruh 36 ekspresi Pochi hidup dan terasa punya mood sendiri.
+     */
+    fun nextAutonomousMood(idleMillis: Long, isPeeking: Boolean): PochiEmote {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        if (isPeeking) {
+            return listOf(
+                PochiEmote.SUSPICIOUS,
+                PochiEmote.WINK_LEFT,
+                PochiEmote.CUTE,
+                PochiEmote.SURPRISED,
+                PochiEmote.HMM,
+                PochiEmote.SLEEPY,
+                PochiEmote.HI
+            ).random()
+        }
+        // Jika didiamkan cukup lama (> 2 menit), Pochi bisa merasa bosan, ngantuk, atau manja
+        if (idleMillis > 120_000L) {
+            return listOf(
+                PochiEmote.SLEEPY,
+                PochiEmote.TIRED,
+                PochiEmote.ANNOYED,
+                PochiEmote.CRYING,
+                PochiEmote.SUSPICIOUS,
+                PochiEmote.HMM
+            ).random()
+        }
+        return when (hour) {
+            in 5..9 -> listOf(
+                PochiEmote.GOOD_MORNING,
+                PochiEmote.HI,
+                PochiEmote.EXCITED,
+                PochiEmote.HAPPY,
+                PochiEmote.SMILING,
+                PochiEmote.CUTE
+            ).random()
+            in 10..16 -> listOf(
                 PochiEmote.NORMAL,
                 PochiEmote.SMILING,
                 PochiEmote.HAPPY,
-                PochiEmote.HI,
-                PochiEmote.EXCITED
+                PochiEmote.WINK_LEFT,
+                PochiEmote.THINKING,
+                PochiEmote.HMM,
+                PochiEmote.FOCUS,
+                PochiEmote.OK,
+                PochiEmote.CUTE,
+                PochiEmote.SUSPICIOUS
+            ).random()
+            in 17..21 -> listOf(
+                PochiEmote.CALM,
+                PochiEmote.SMILING,
+                PochiEmote.BLUSH,
+                PochiEmote.LOVE,
+                PochiEmote.HAPPY,
+                PochiEmote.LAUGHING,
+                PochiEmote.TIRED
+            ).random()
+            else -> listOf(
+                PochiEmote.SLEEPY,
+                PochiEmote.GOOD_NIGHT,
+                PochiEmote.CALM,
+                PochiEmote.TIRED,
+                PochiEmote.BLUSH
+            ).random()
+        }
+    }
+
+    /**
+     * Reaksi bertahap saat Pochi dicolek (poke) berulang kali.
+     */
+    fun onPokeReaction(pokeCount: Int): Triple<PochiEmote, BotState, String> {
+        return when (pokeCount) {
+            1 -> Triple(
+                listOf(PochiEmote.SURPRISED, PochiEmote.HI, PochiEmote.WINK_LEFT, PochiEmote.CUTE).random(),
+                BotState.IDLE,
+                listOf(
+                    "Eh, iya Dre? Ada yang perlu kubantu?",
+                    "Hadir! Mau cari atau catat sesuatu?",
+                    "Hehe, kaget tahu tiba-tiba dicolek!"
+                ).random()
             )
-            if (isBlinking && canBlink) {
-                drawClosedLineEye(leftX, eyeY, w, lineColor, strokeW)
-                drawClosedLineEye(rightX, eyeY, w, lineColor, strokeW)
-            } else {
-                drawPochiExpression(activeEmote, leftX, rightX, eyeY, w, h, lineColor, strokeW)
-            }
+            2 -> Triple(
+                listOf(PochiEmote.BLUSH, PochiEmote.EMBARRASSED, PochiEmote.LAUGHING).random(),
+                BotState.IDLE,
+                listOf(
+                    "Hehe geli tahu kalau dicolek terus... elus aja (tahan sebentar)!",
+                    "Jangan iseng ih, jadi malu nih.",
+                    "Hahaha geli Dre!"
+                ).random()
+            )
+            3 -> Triple(
+                listOf(PochiEmote.SUSPICIOUS, PochiEmote.ANNOYED, PochiEmote.CONFUSED).random(),
+                BotState.ANNOYED,
+                listOf(
+                    "Hmm... kamu lagi gabut ya nyolek-nyolek aku terus?",
+                    "Loh kok dicolek mulu sih dari tadi?",
+                    "Awas ya kalau dicolek sekali lagi..."
+                ).random()
+            )
+            4 -> Triple(
+                PochiEmote.ANGRY,
+                BotState.ANNOYED,
+                listOf(
+                    "Ih jangan dicolek terus dong! Aku ngambek nih!",
+                    "Tuh kan dibilangin jangan dicolek terus!",
+                    "Hmph! Lagi ngambek, elus dulu baru mau baikan!"
+                ).random()
+            )
+            else -> Triple(
+                listOf(PochiEmote.CRYING, PochiEmote.SCARED, PochiEmote.SHOCK).random(),
+                BotState.ANNOYED,
+                listOf(
+                    "Huhuhu ampun Dre, jangan dijahilin terus... elus kepalaku dong biar baikan.",
+                    "Aduh pusing dicolek mulu dari tadi...",
+                    "Hiks... kamu jahat banget isengin aku terus."
+                ).random()
+            )
+        }
+    }
+
+    /**
+     * Reaksi saat Pochi dielus (long-press), termasuk luluh jika sebelumnya sedang marah/nangis.
+     */
+    fun onPetReaction(wasUpset: Boolean): Triple<PochiEmote, BotState, String> {
+        return if (wasUpset) {
+            Triple(
+                listOf(PochiEmote.HAPPY_TEARS, PochiEmote.BLUSH, PochiEmote.LOVE).random(),
+                BotState.DONE,
+                listOf(
+                    "Nah gitu dong dielus... oke deh kita baikan lagi!",
+                    "Huhuhu makasih udah dielus, gak jadi ngambek deh.",
+                    "Hehe iya-iya dimaafin, abis nyaman banget kalau dielus."
+                ).random()
+            )
+        } else {
+            Triple(
+                listOf(PochiEmote.PET_POKE, PochiEmote.LOVE, PochiEmote.CUTE, PochiEmote.BLUSH, PochiEmote.HAPPY).random(),
+                BotState.DONE,
+                listOf(
+                    "Nyaman banget dielus gini, makasih ya Dre!",
+                    "Hehe seneng deh, jadi makin semangat bantuin kamu!",
+                    "Asik dielus! Kabarin aja kalau butuh apa-apa ya."
+                ).random()
+            )
+        }
+    }
+
+    /**
+     * Mendeteksi ekspresi yang paling cocok dari kalimat pengguna + balasan Pochi.
+     */
+    fun inferEmoteFromText(userText: String, replyText: String): PochiEmote {
+        val combined = "$userText $replyText".lowercase(Locale.getDefault())
+        return when {
+            combined.contains("selamat pagi") || combined.contains("pagi!") -> PochiEmote.GOOD_MORNING
+            combined.contains("selamat malam") || combined.contains("tidur dulu") || combined.contains("mimpi indah") -> PochiEmote.GOOD_NIGHT
+            combined.contains("dadah") || combined.contains("sampai jumpa") || combined.contains("bye") -> PochiEmote.BYE
+            combined.contains("halo") || combined.contains("hai ") || combined.startsWith("hai") -> PochiEmote.HI
+            combined.contains("wkwk") || combined.contains("haha") || combined.contains("lucu") || combined.contains("kocak") -> PochiEmote.LAUGHING
+            combined.contains("sayang") || combined.contains("cinta") || combined.contains("love") -> PochiEmote.LOVE
+            combined.contains("terima kasih") || combined.contains("makasih") || combined.contains("keren") || combined.contains("hebat") || combined.contains("pintar") ->
+                listOf(PochiEmote.BLUSH, PochiEmote.HAPPY_TEARS, PochiEmote.CUTE, PochiEmote.EXCITED).random()
+            combined.contains("sedih") || combined.contains("nangis") || combined.contains("kecewa") || combined.contains("galau") || combined.contains("patah hati") ->
+                PochiEmote.CRYING
+            combined.contains("capek") || combined.contains("lelah") || combined.contains("ngantuk") || combined.contains("pegel") ->
+                listOf(PochiEmote.TIRED, PochiEmote.SLEEPY).random()
+            combined.contains("marah") || combined.contains("kesel") || combined.contains("benci") || combined.contains("sebal") ->
+                listOf(PochiEmote.ANGRY, PochiEmote.ANNOYED).random()
+            combined.contains("takut") || combined.contains("serem") || combined.contains("horor") || combined.contains("bahaya") ->
+                PochiEmote.SCARED
+            combined.contains("kaget") || combined.contains("serius?") || combined.contains("astaga") || combined.contains("waduh") || combined.contains("gawat") ->
+                listOf(PochiEmote.SHOCK, PochiEmote.SURPRISED).random()
+            combined.contains("malu") || combined.contains("canggung") || combined.contains("salah tingkah") ->
+                PochiEmote.EMBARRASSED
+            combined.contains("curiga") || combined.contains("bohong") || combined.contains("yakin?") || combined.contains("masa sih") ->
+                PochiEmote.SUSPICIOUS
+            combined.contains("bingung") || combined.contains("gimana ya") || combined.contains("entahlah") || combined.contains("kurang paham") ->
+                PochiEmote.CONFUSED
+            combined.contains("hmm") || combined.contains("mikir") || combined.contains("kira-kira") ->
+                listOf(PochiEmote.THINKING, PochiEmote.HMM).random()
+            combined.contains("tidak bisa") || combined.contains("ditolak") || combined.contains("jangan") || combined.contains("batal") ->
+                PochiEmote.NO
+            combined.contains("beres") || combined.contains("selesai") || combined.contains("berhasil") || combined.contains("sudah dipasang") || combined.contains("sudah masuk") ->
+                listOf(PochiEmote.SUCCESS, PochiEmote.OK, PochiEmote.WINK_LEFT).random()
+            combined.contains("tenang") || combined.contains("santai") || combined.contains("rileks") ->
+                PochiEmote.CALM
+            else -> listOf(
+                PochiEmote.HAPPY,
+                PochiEmote.SMILING,
+                PochiEmote.EXCITED,
+                PochiEmote.WINK_LEFT,
+                PochiEmote.CUTE,
+                PochiEmote.OK
+            ).random()
         }
     }
 }
