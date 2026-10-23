@@ -119,7 +119,13 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         isIslandExpanded = expanded
                         params.flags = if (expanded) expandedFlags else collapsedFlags
                         val targetX = if (expanded) 0 else (PochiPrefs.offsetXFlow.value * density).toInt()
-                        animateXTo(targetX)
+                        if (params.x == targetX) {
+                            try {
+                                windowManager.updateViewLayout(composeView, params)
+                            } catch (_: Exception) {}
+                        } else {
+                            animateXTo(targetX)
+                        }
                     },
                     onPowerOffService = {
                         turnOffTorch()
@@ -191,10 +197,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         xAnimation = serviceScope.launch {
             val start = params.x
             val startTime = SystemClock.uptimeMillis()
-            val duration = 260L
+            val duration = 240L
             while (true) {
                 val progress = ((SystemClock.uptimeMillis() - startTime).toFloat() / duration).coerceIn(0f, 1f)
-                val eased = 1f - (1f - progress) * (1f - progress)
+                val eased = progress * progress * (3f - 2f * progress)
                 params.x = (start + (target - start) * eased).toInt()
                 try {
                     windowManager.updateViewLayout(composeView, params)

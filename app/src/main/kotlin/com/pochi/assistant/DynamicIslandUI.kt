@@ -8,16 +8,15 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import android.view.KeyEvent
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.animateColor
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -200,27 +200,30 @@ fun PochiIslandBot(
     val transition = updateTransition(targetState = isExpanded, label = "islandMorph")
 
     val islandWidth by transition.animateDp(
-        transitionSpec = { spring(dampingRatio = 0.86f, stiffness = 560f) },
+        transitionSpec = { tween(220, easing = FastOutSlowInEasing) },
         label = "islandWidth"
     ) { expanded -> if (expanded) expandedWidth else collapsedSize }
 
     val cornerRadius by transition.animateDp(
-        transitionSpec = { spring(dampingRatio = 0.9f, stiffness = 560f) },
+        transitionSpec = { tween(220, easing = FastOutSlowInEasing) },
         label = "cornerRadius"
     ) { expanded -> if (expanded) 30.dp else collapsedSize / 2f }
 
-    val panelBg by transition.animateColor(
-        transitionSpec = { tween(240) },
-        label = "panelBg"
-    ) { expanded ->
-        if (!expanded) Color(0xFF09090B)
+    val panelBg by animateColorAsState(
+        targetValue = if (!isExpanded) Color(0xFF09090B)
         else if (isDarkMode) Color(0xFF121215)
-        else Color(0xFFFAFBFC)
-    }
+        else Color(0xFFFAFBFC),
+        animationSpec = tween(180),
+        label = "panelBg"
+    )
 
     val surfaceBg = if (isDarkMode) Color(0xFF1E1E24) else Color(0xFFFFFFFF)
-    val borderCol = if (!isExpanded) Color(0xFF27272A)
-    else if (isDarkMode) Color(0xFF2E2E36) else Color(0xFFE5E7EB)
+    val borderCol by animateColorAsState(
+        targetValue = if (!isExpanded) Color(0xFF27272A)
+        else if (isDarkMode) Color(0xFF2E2E36) else Color(0xFFE5E7EB),
+        animationSpec = tween(220),
+        label = "borderCol"
+    )
     val textPrimary = if (isDarkMode) Color(0xFFF9FAFB) else Color(0xFF111827)
     val textSecondary = Color(0xFF8E8E93)
     val primaryBlue = Color(0xFF0A84FF)
@@ -234,9 +237,6 @@ fun PochiIslandBot(
         Box(
             modifier = Modifier
                 .width(islandWidth)
-                .animateContentSize(
-                    animationSpec = spring(dampingRatio = 0.92f, stiffness = 520f)
-                )
                 .clip(RoundedCornerShape(cornerRadius))
                 .background(panelBg)
                 .border(1.dp, borderCol, RoundedCornerShape(cornerRadius))
@@ -250,9 +250,16 @@ fun PochiIslandBot(
                 targetState = isExpanded,
                 contentAlignment = Alignment.TopCenter,
                 transitionSpec = {
-                    (fadeIn(animationSpec = tween(220)) +
-                            scaleIn(initialScale = 0.92f, animationSpec = tween(260)))
+                    fadeIn(animationSpec = tween(180))
                         .togetherWith(fadeOut(animationSpec = tween(140)))
+                        .using(
+                            SizeTransform(
+                                clip = false,
+                                sizeAnimationSpec = { _, _ ->
+                                    tween<IntSize>(200, easing = FastOutSlowInEasing)
+                                }
+                            )
+                        )
                 },
                 label = "islandBody"
             ) { expandedState ->
