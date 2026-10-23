@@ -393,24 +393,27 @@ fun PochiIslandBot(
     val collapsedEmote = customEmote ?: idleEmote ?: botState.defaultEmote
 
     if (isHidden) {
+        val restShift = with(density) { (if (peekSide == "left") (-14).dp else 14.dp).toPx() }
+        val peekShift = with(density) { (if (peekSide == "left") (-6).dp else 6.dp).toPx() }
         val peekOffset = remember(peekMode, peekSide) {
-            Animatable(if (peekMode) if (peekSide == "left") -10f else 10f else 0f)
+            Animatable(restShift)
         }
         LaunchedEffect(peekMode, peekSide) {
             if (peekMode) {
                 while (true) {
                     peekOffset.animateTo(
-                        targetValue = if (peekSide == "left") -16f else 16f,
-                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 340f)
+                        targetValue = peekShift,
+                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 300f)
                     )
+                    delay(1200)
                     peekOffset.animateTo(
-                        targetValue = if (peekSide == "left") -10f else 10f,
-                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 240f)
+                        targetValue = restShift,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 220f)
                     )
-                    delay(4800)
+                    delay(4200)
                 }
             } else {
-                peekOffset.snapTo(0f)
+                peekOffset.snapTo(restShift)
             }
         }
         Box(
@@ -419,21 +422,23 @@ fun PochiIslandBot(
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
-                ) { onRestoreFromHidden() },
-            contentAlignment = Alignment.Center
+                ) {
+                    onRestoreFromHidden()
+                },
+            contentAlignment = if (peekSide == "left") Alignment.CenterStart else Alignment.CenterEnd
         ) {
             Box(
                 modifier = Modifier
                     .graphicsLayer {
                         translationX = peekOffset.value
-                        rotationZ = if (peekSide == "left") -15f else 15f
+                        rotationZ = if (peekSide == "left") 16f else -16f
                     },
                 contentAlignment = Alignment.Center
             ) {
                 PochiMascot(
                     state = botState,
                     emoteOverride = collapsedEmote,
-                    size = 48.dp
+                    size = 50.dp
                 )
             }
         }

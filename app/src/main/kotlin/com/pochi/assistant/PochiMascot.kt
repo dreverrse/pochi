@@ -80,8 +80,8 @@ fun PochiMascot(
     state: BotState,
     emoteOverride: PochiEmote? = null,
     size: Dp = 44.dp,
-    onPoke: () -> Unit = {},
-    onPet: () -> Unit = {}
+    onPoke: (() -> Unit)? = null,
+    onPet: (() -> Unit)? = null
 ) {
     val activeEmote = emoteOverride ?: state.defaultEmote
 
@@ -106,15 +106,21 @@ fun PochiMascot(
         }
     }
 
+    val gestureModifier = if (onPoke != null || onPet != null) {
+        Modifier.pointerInput(onPoke, onPet) {
+            detectTapGestures(
+                onTap = { onPoke?.invoke() },
+                onLongPress = { onPet?.invoke() }
+            )
+        }
+    } else {
+        Modifier
+    }
+
     Canvas(
         modifier = Modifier
             .size(size)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { onPoke() },
-                    onLongPress = { onPet() }
-                )
-            }
+            .then(gestureModifier)
     ) {
         val w = this.size.width
         val h = this.size.height

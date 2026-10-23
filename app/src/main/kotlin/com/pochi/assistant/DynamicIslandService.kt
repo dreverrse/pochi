@@ -290,17 +290,17 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
     private fun hideAtEdgeForPeek(side: String, density: Float) {
         hiddenState.value = true
-        val peekWidthPx = (56 * density).toInt()
-        val peekHeightPx = (56 * density).toInt()
+        val peekWidthPx = (64 * density).toInt()
+        val peekHeightPx = (64 * density).toInt()
         val screenWidthPx = resources.displayMetrics.widthPixels
         val screenHeightPx = resources.displayMetrics.heightPixels
         params.flags = collapsedFlags
         params.width = peekWidthPx
         params.height = peekHeightPx
         params.x = if (side == "right") {
-            screenWidthPx / 2 - peekWidthPx / 3
+            screenWidthPx / 2 - peekWidthPx / 2
         } else {
-            -(screenWidthPx / 2 - peekWidthPx / 3)
+            -(screenWidthPx / 2 - peekWidthPx / 2)
         }
         val baseY = (PochiPrefs.offsetYFlow.value * density).toInt()
         params.y = (baseY + screenHeightPx / 7)
@@ -313,17 +313,17 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         peekSideState.value = side
         hiddenState.value = true
         peekState.value = true
-        val tabWidthPx = (56 * density).toInt()
-        val tabHeightPx = (56 * density).toInt()
+        val tabWidthPx = (64 * density).toInt()
+        val tabHeightPx = (64 * density).toInt()
         val screenWidthPx = resources.displayMetrics.widthPixels
         val screenHeightPx = resources.displayMetrics.heightPixels
         params.flags = collapsedFlags
         params.width = tabWidthPx
         params.height = tabHeightPx
         params.x = if (right) {
-            screenWidthPx / 2 - tabWidthPx / 3
+            screenWidthPx / 2 - tabWidthPx / 2
         } else {
-            -(screenWidthPx / 2 - tabWidthPx / 3)
+            -(screenWidthPx / 2 - tabWidthPx / 2)
         }
         params.y = params.y.coerceIn(
             (24 * density).toInt(),
