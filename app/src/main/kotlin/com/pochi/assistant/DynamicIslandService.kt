@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -47,6 +48,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var isIslandExpanded = false
     private var collapseJob: Job? = null
+    private var heightJob: Job? = null
     private var expandedHeightPx = 0
 
     private val collapsedFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -76,10 +78,11 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val density = resources.displayMetrics.density
+        val collapsedPx = (62 * density).toInt()
 
         params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            collapsedPx,
+            collapsedPx,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             collapsedFlags,
             PixelFormat.TRANSLUCENT
@@ -99,7 +102,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         }
 
         val screenWidthPx = resources.displayMetrics.widthPixels
-        val expandedWidthPx = ((screenWidthPx - (28 * density)).toInt())
+        val expandedWidthPx = (screenWidthPx - (28 * density).toInt())
             .coerceIn((300 * density).toInt(), (372 * density).toInt())
 
         composeView = ComposeView(this).apply {
@@ -121,6 +124,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                     onExpandChange = { expanded ->
                         isIslandExpanded = expanded
                         collapseJob?.cancel()
+                        heightJob?.cancel()
                         if (expanded) {
                             params.flags = expandedFlags
                             params.x = 0
@@ -128,25 +132,38 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                             params.height = if (expandedHeightPx > 0) {
                                 expandedHeightPx
                             } else {
-                                WindowManager.LayoutParams.WRAP_CONTENT
+                                (250 * density).toInt()
                             }
+                            applyLayout()
                         } else {
                             params.flags = collapsedFlags
-                            params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
-                            params.width = WindowManager.LayoutParams.WRAP_CONTENT
-                            params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                            applyLayout()
+                            collapseJob = serviceScope.launch {
+                                delay(260)
+                                params.width = collapsedPx
+                                params.height = collapsedPx
+                                params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
+                                params.y = (PochiPrefs.offsetYFlow.value * density).toInt()
+                                applyLayout()
+                            }
                         }
-                        try {
-                            windowManager.updateViewLayout(composeView, params)
-                        } catch (_: Exception) {}
                     },
                     onExpandedHeightChange = { heightPx ->
                         expandedHeightPx = heightPx
-                        if (isIslandExpanded && params.height != heightPx) {
-                            params.height = heightPx
-                            try {
-                                windowManager.updateViewLayout(composeView, params)
-                            } catch (_: Exception) {}
+                        if (isIslandExpanded) {
+                            if (heightPx > params.height) {
+                                params.height = heightPx
+                                composeView.post { applyLayout() }
+                            }
+                            heightJob?.cancel()
+                            heightJob = serviceScope.launch {
+                                delay(280)
+                                if (isIslandExpanded) {
+                                    params.width = expandedWidthPx
+                                    params.height = expandedHeightPx
+                                    applyLayout()
+                                }
+                            }
                         }
                     },
                     onPowerOffService = {
@@ -168,12 +185,17 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                     if (!isIslandExpanded) {
                         params.x = (xDp * density).toInt()
                     }
-                    try {
-                        windowManager.updateViewLayout(composeView, params)
-                    } catch (_: Exception) {}
+                    applyLayout()
                 }
             }
         }
+    }
+
+    private fun applyLayout() {
+        if (!::composeView.isInitialized) return
+        try {
+            windowManager.updateViewLayout(composeView, params)
+        } catch (_: Exception) {}
     }
 
     private fun startAsForeground() {
@@ -224,6 +246,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     override fun onDestroy() {
         super.onDestroy()
         collapseJob?.cancel()
+        heightJob?.cancel()
         serviceScope.cancel()
         turnOffTorch()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
