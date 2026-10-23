@@ -330,13 +330,25 @@ private fun DrawScope.drawPochiExpression(
         PochiEmote.CONFUSED, PochiEmote.THINKING, PochiEmote.HMM -> {
             drawHappyArcEye(leftX, eyeY, w, lineColor, strokeW)
             drawOvalEye(rightX, eyeY, w, lineColor)
-            drawClosedLineEye(w * 0.5f, mouthY + w * 0.02f, w * 0.5f, lineColor, strokeW * 0.8f)
+            drawLine(
+                color = lineColor,
+                start = Offset(w * 0.43f, mouthY + w * 0.02f),
+                end = Offset(w * 0.57f, mouthY + w * 0.02f),
+                strokeWidth = strokeW * 0.8f,
+                cap = StrokeCap.Round
+            )
             if (emote == PochiEmote.HMM) drawThreeTopDots(w, h, lineColor)
         }
         PochiEmote.SUSPICIOUS, PochiEmote.ANNOYED, PochiEmote.TIRED -> {
             drawClosedLineEye(leftX, eyeY, w, lineColor, strokeW)
             drawClosedLineEye(rightX, eyeY, w, lineColor, strokeW)
-            drawClosedLineEye(w * 0.5f, mouthY + w * 0.03f, w * 0.45f, lineColor, strokeW * 0.8f)
+            drawLine(
+                color = lineColor,
+                start = Offset(w * 0.43f, mouthY + w * 0.03f),
+                end = Offset(w * 0.57f, mouthY + w * 0.03f),
+                strokeWidth = strokeW * 0.8f,
+                cap = StrokeCap.Round
+            )
         }
         PochiEmote.ANGRY, PochiEmote.FOCUS, PochiEmote.ERROR -> {
             drawLine(lineColor, Offset(leftX - w * 0.06f, eyeY - w * 0.08f), Offset(leftX + w * 0.06f, eyeY - w * 0.03f), strokeW, StrokeCap.Round)

@@ -1,7 +1,10 @@
 package com.pochi.assistant
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
@@ -31,11 +34,24 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         PochiPrefs.init(this)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
+
         setContent {
-            var apiKey by remember { mutableStateOf(PochiPrefs.getApiKey(this)) }
+            var provider by remember { mutableStateOf(PochiPrefs.getProvider(this)) }
+            var apiKey by remember { mutableStateOf(PochiPrefs.getApiKey(this, provider)) }
+            var model by remember { mutableStateOf(PochiPrefs.getModel(this, provider)) }
             var previewEmote by remember { mutableStateOf(PochiEmote.NORMAL) }
             val offsetX by PochiPrefs.offsetXFlow.collectAsState()
             val offsetY by PochiPrefs.offsetYFlow.collectAsState()
+
+            LaunchedEffect(provider) {
+                apiKey = PochiPrefs.getApiKey(this@MainActivity, provider)
+                model = PochiPrefs.getModel(this@MainActivity, provider)
+            }
 
             Column(
                 modifier = Modifier
@@ -58,25 +74,58 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "Pochi 5.1",
+                    text = "Pochi 5.2",
                     color = Color(0xFF111827),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Minimalis • 2D • 36 Ekspresi • Tema Putih + Silver",
+                    text = "Minimalis • 2D • 36 Ekspresi • Multi-Provider AI",
                     color = Color(0xFF8E8E93),
                     fontSize = 12.sp
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AiProvider.entries.forEach { entry ->
+                        val active = entry == provider
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (active) Color(0xFF0A84FF) else Color.White)
+                                .border(
+                                    1.dp,
+                                    if (active) Color(0xFF0A84FF) else Color(0xFFE5E7EB),
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable {
+                                    provider = entry
+                                    PochiPrefs.setProvider(this@MainActivity, entry)
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = entry.label,
+                                color = if (active) Color.White else Color(0xFF111827),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = {
                         apiKey = it
-                        PochiPrefs.saveApiKey(this@MainActivity, it)
+                        PochiPrefs.saveApiKey(this@MainActivity, provider, it)
                     },
-                    label = { Text("Gemini API Key") },
-                    placeholder = { Text("Tempel API Key di sini...") },
+                    label = { Text("${provider.label} API Key") },
+                    placeholder = { Text(provider.keyHint) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
@@ -89,6 +138,36 @@ class MainActivity : ComponentActivity() {
                         unfocusedBorderColor = Color(0xFFE5E7EB)
                     )
                 )
+
+                OutlinedTextField(
+                    value = model,
+                    onValueChange = {
+                        model = it
+                        PochiPrefs.saveModel(this@MainActivity, provider, it)
+                    },
+                    label = { Text("Model ${provider.label}") },
+                    placeholder = { Text(provider.defaultModel) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color(0xFF111827),
+                        unfocusedTextColor = Color(0xFF111827),
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedBorderColor = Color(0xFF0A84FF),
+                        unfocusedBorderColor = Color(0xFFE5E7EB)
+                    )
+                )
+
+                if (provider == AiProvider.OPENCODE) {
+                    Text(
+                        text = "Catatan: model gratis OpenCode (mis. big-pickle) hanya bisa dipakai dari dalam OpenCode. Gunakan model berbayar + kredit.",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp
+                    )
+                }
 
                 Button(
                     onClick = {
@@ -105,8 +184,8 @@ class MainActivity : ComponentActivity() {
                             startActivity(intent)
                         } else {
                             stopService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            startService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                            Toast.makeText(this@MainActivity, "Pochi Island 5.1 Aktif!", Toast.LENGTH_SHORT).show()
+                            startForegroundService(Intent(this@MainActivity, DynamicIslandService::class.java))
+                            Toast.makeText(this@MainActivity, "Pochi Island 5.2 Aktif!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -161,7 +240,7 @@ class MainActivity : ComponentActivity() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "🎯 Kalibrasi Posisi Kamera Depan",
+                            text = "🎯 Kalibrasi Posisi Island",
                             color = Color(0xFF111827),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold

@@ -1,14 +1,23 @@
 package com.pochi.assistant
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
+import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.lifecycle.*
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
@@ -16,11 +25,19 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+
+    private companion object {
+        const val CHANNEL_ID = "pochi_island"
+        const val NOTIFICATION_ID = 1001
+    }
 
     private lateinit var windowManager: WindowManager
     private lateinit var composeView: ComposeView
@@ -29,8 +46,21 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
-    private val serviceScope = CoroutineScope(Dispatchers.Main)
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var isIslandExpanded = false
+    private var xAnimation: Job? = null
+
+    private val collapsedFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+
+    private val expandedFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore: ViewModelStore get() = store
@@ -38,6 +68,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
     override fun onCreate() {
         super.onCreate()
+        startAsForeground()
         PochiPrefs.init(this)
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -45,24 +76,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-
         val density = resources.displayMetrics.density
-        val collapsedWidthPx = (180 * density).toInt()
-
-        val collapsedFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
-
-        val expandedFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
 
         params = WindowManager.LayoutParams(
-            collapsedWidthPx,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             collapsedFlags,
@@ -100,22 +117,12 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                 PochiIslandBot(
                     onExpandChange = { expanded ->
                         isIslandExpanded = expanded
-                        serviceScope.launch {
-                            if (expanded) {
-                                params.width = WindowManager.LayoutParams.MATCH_PARENT
-                                params.x = 0
-                                params.flags = expandedFlags
-                                windowManager.updateViewLayout(this@apply, params)
-                            } else {
-                                delay(230)
-                                params.width = collapsedWidthPx
-                                params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
-                                params.flags = collapsedFlags
-                                windowManager.updateViewLayout(this@apply, params)
-                            }
-                        }
+                        params.flags = if (expanded) expandedFlags else collapsedFlags
+                        val targetX = if (expanded) 0 else (PochiPrefs.offsetXFlow.value * density).toInt()
+                        animateXTo(targetX)
                     },
                     onPowerOffService = {
+                        turnOffTorch()
                         stopSelf()
                     }
                 )
@@ -129,8 +136,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                 Pair(xDp, yDp)
             }.collect { (xDp, yDp) ->
                 if (::composeView.isInitialized) {
-                    params.x = if (isIslandExpanded) 0 else (xDp * density).toInt()
                     params.y = (yDp * density).toInt()
+                    if (!isIslandExpanded && xAnimation?.isActive != true) {
+                        params.x = (xDp * density).toInt()
+                    }
                     try {
                         windowManager.updateViewLayout(composeView, params)
                     } catch (_: Exception) {}
@@ -139,11 +148,80 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         }
     }
 
+    private fun startAsForeground() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Pochi Island",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Menjaga asisten mengambang Pochi tetap aktif"
+                setShowBadge(false)
+            }
+            manager.createNotificationChannel(channel)
+        }
+
+        val openIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Pochi aktif")
+            .setContentText("Asisten mengambang sedang berjalan. Ketuk untuk membuka pengaturan.")
+            .setSmallIcon(R.drawable.ic_pochi_notification)
+            .setContentIntent(openIntent)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
+    }
+
+    private fun animateXTo(target: Int) {
+        xAnimation?.cancel()
+        xAnimation = serviceScope.launch {
+            val start = params.x
+            val startTime = SystemClock.uptimeMillis()
+            val duration = 260L
+            while (true) {
+                val progress = ((SystemClock.uptimeMillis() - startTime).toFloat() / duration).coerceIn(0f, 1f)
+                val eased = 1f - (1f - progress) * (1f - progress)
+                params.x = (start + (target - start) * eased).toInt()
+                try {
+                    windowManager.updateViewLayout(composeView, params)
+                } catch (_: Exception) {}
+                if (progress >= 1f) break
+                delay(16)
+            }
+        }
+    }
+
+    private fun turnOffTorch() {
+        try {
+            val manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            manager.cameraIdList.firstOrNull()?.let { manager.setTorchMode(it, false) }
+        } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        xAnimation?.cancel()
+        serviceScope.cancel()
+        turnOffTorch()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         if (::composeView.isInitialized) {
-            windowManager.removeView(composeView)
+            try {
+                windowManager.removeView(composeView)
+            } catch (_: Exception) {}
         }
     }
 
