@@ -11,8 +11,8 @@ android {
         applicationId = "com.pochi.assistant"
         minSdk = 26
         targetSdk = 34
-        versionCode = 14
-        versionName = "5.8.1"
+        versionCode = 15
+        versionName = "5.8.2"
     }
 
     buildFeatures {

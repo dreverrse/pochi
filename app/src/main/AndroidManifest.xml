@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <application
+        android:name=".PochiApp"
         android:label="Pochi"
         android:hardwareAccelerated="true"
         android:icon="@drawable/ic_pochi_launcher"
