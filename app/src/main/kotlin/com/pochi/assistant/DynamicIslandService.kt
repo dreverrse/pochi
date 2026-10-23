@@ -337,4 +337,3 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
-}
