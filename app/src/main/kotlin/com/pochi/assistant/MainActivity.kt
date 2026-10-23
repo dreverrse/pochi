@@ -15,7 +15,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -479,7 +478,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    AnimatedVisibility(visible = showAdvancedBrain) {
+                    if (showAdvancedBrain) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -659,7 +658,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    AnimatedVisibility(visible = showEmoteGallery) {
+                    if (showEmoteGallery) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             val rows = PochiEmote.entries.chunked(4)
                             rows.forEach { rowEmotes ->

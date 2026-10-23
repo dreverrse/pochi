@@ -475,15 +475,24 @@ object PochiAgent {
         }.getOrNull()
     }
 
-    private fun parseAndEval(expr: String): Double? {
-        var pos = -1
-        var ch = 0
+    private fun parseAndEval(expr: String): Double? = MathParser(expr).parse()
 
-        fun nextChar() {
+    private class MathParser(private val expr: String) {
+        private var pos = -1
+        private var ch = 0
+
+        fun parse(): Double? {
+            nextChar()
+            val x = parseExpression()
+            if (pos < expr.length) return null
+            return x
+        }
+
+        private fun nextChar() {
             ch = if (++pos < expr.length) expr[pos].code else -1
         }
 
-        fun eat(charToEat: Int): Boolean {
+        private fun eat(charToEat: Int): Boolean {
             while (ch == ' '.code) nextChar()
             if (ch == charToEat) {
                 nextChar()
@@ -492,7 +501,7 @@ object PochiAgent {
             return false
         }
 
-        fun parseExpression(): Double {
+        private fun parseExpression(): Double {
             var x = parseTerm()
             while (true) {
                 when {
@@ -503,7 +512,7 @@ object PochiAgent {
             }
         }
 
-        fun parseTerm(): Double {
+        private fun parseTerm(): Double {
             var x = parseFactor()
             while (true) {
                 when {
@@ -518,10 +527,10 @@ object PochiAgent {
             }
         }
 
-        fun parseFactor(): Double {
+        private fun parseFactor(): Double {
             if (eat('+'.code)) return parseFactor()
             if (eat('-'.code)) return -parseFactor()
-            var x: Double
+            val x: Double
             val startPos = pos
             if (eat('('.code)) {
                 x = parseExpression()
@@ -534,10 +543,5 @@ object PochiAgent {
             }
             return x
         }
-
-        nextChar()
-        val x = parseExpression()
-        if (pos < expr.length) return null
-        return x
     }
 }
