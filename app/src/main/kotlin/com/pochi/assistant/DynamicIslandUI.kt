@@ -25,8 +25,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.material.icons.Icons
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import kotlin.math.abs
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -73,13 +76,15 @@ fun PochiIslandBot(
     onRestoreFromHidden: () -> Unit = {},
     onDragBubble: (Float, Float) -> Unit = { _, _ -> },
     onDragEnd: () -> Unit = {},
-    onPowerOffService: () -> Unit = {}
+    onPowerOffService: () -> Unit = {},
+    peekMode: Boolean = false,
+    peekSide: String = "right"
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val expandedWidth = (configuration.screenWidthDp - 28).coerceIn(300, 372).dp
-    val collapsedSize = 62.dp
+    val collapsedSize = 56.dp
     var expandedHeightPx by remember { mutableIntStateOf(0) }
     val expandedHeight = with(density) {
         if (expandedHeightPx > 0) expandedHeightPx.toDp() else 250.dp
@@ -280,12 +285,26 @@ fun PochiIslandBot(
     val currentModel = remember(provider, isExpanded) { PochiPrefs.getModel(context, provider) }
 
     if (isHidden) {
+        val peekOffset = remember(peekMode, peekSide) {
+            Animatable(if (peekMode) if (peekSide == "left") -6f else 6f else 0f)
+        }
+        LaunchedEffect(peekMode, peekSide) {
+            if (peekMode) {
+                peekOffset.animateTo(
+                    targetValue = if (peekSide == "left") -10f else 10f,
+                    animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f)
+                )
+                peekOffset.animateTo(
+                    targetValue = if (peekSide == "left") -6f else 6f,
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 300f)
+                )
+            } else {
+                peekOffset.snapTo(0f)
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF09090B))
-                .border(1.dp, Color(0xFF2E2E36), RoundedCornerShape(10.dp))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
@@ -294,11 +313,18 @@ fun PochiIslandBot(
         ) {
             Box(
                 modifier = Modifier
-                    .width(4.dp)
-                    .height(26.dp)
-                    .clip(CircleShape)
-                    .background(botState.accentColor)
-            )
+                    .graphicsLayer {
+                        translationX = peekOffset.value
+                        rotationZ = if (peekSide == "left") -8f else 8f
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                PochiMascot(
+                    state = botState,
+                    emoteOverride = collapsedEmote,
+                    size = 48.dp
+                )
+            }
         }
         return
     }
@@ -1013,7 +1039,7 @@ fun PochiIslandBot(
                 PochiMascot(
                     state = botState,
                     emoteOverride = collapsedEmote,
-                    size = collapsedSize * 0.56f
+                    size = collapsedSize * 0.72f
                 )
             }
 
