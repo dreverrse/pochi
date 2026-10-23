@@ -588,7 +588,6 @@ fun PochiIslandBot(
                                             PochiTab.MUSIC -> PochiEmote.EXCITED
                                             PochiTab.NOTES -> PochiEmote.FOCUS
                                             PochiTab.WEATHER -> PochiEmote.HMM
-                                            PochiTab.CONTROLS -> PochiEmote.WINK_LEFT
                                             PochiTab.TOOLS -> PochiEmote.WINK_LEFT
                                             PochiTab.CHAT -> null
                                         }
