@@ -589,6 +589,7 @@ fun PochiIslandBot(
                                             PochiTab.NOTES -> PochiEmote.FOCUS
                                             PochiTab.WEATHER -> PochiEmote.HMM
                                             PochiTab.CONTROLS -> PochiEmote.WINK_LEFT
+                                            PochiTab.TOOLS -> PochiEmote.WINK_LEFT
                                             PochiTab.CHAT -> null
                                         }
                                     }
