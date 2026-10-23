@@ -42,6 +42,8 @@ jobs:
             tail -120 build.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          grep -E "(^e: |error:|FAILURE:|What went wrong|Unresolved reference|Caused by:)" build.log | head -20 | while IFS= read -r line; do echo "::error::$line"; done || true
+          tail -30 build.log | while IFS= read -r line; do echo "::error::$line"; done || true
 
       - name: Upload Pochi APK
         uses: actions/upload-artifact@v4
