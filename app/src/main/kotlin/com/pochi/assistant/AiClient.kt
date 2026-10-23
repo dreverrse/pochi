@@ -48,7 +48,7 @@ object AiClient {
         }
     }
 
-    private fun askGemini(apiKey: String, modelName: String, prompt: String): String {
+    private suspend fun askGemini(apiKey: String, modelName: String, prompt: String): String {
         val response = GenerativeModel(modelName = modelName, apiKey = apiKey)
             .generateContent(prompt)
         return response.text?.trim().takeUnless { it.isNullOrBlank() } ?: "Tidak ada jawaban."
