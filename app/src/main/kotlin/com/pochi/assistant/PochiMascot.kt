@@ -246,13 +246,12 @@ fun PochiMascot(
     val interactiveModifier = if (onPoke != null || onPet != null || onSwipe != null) {
         Modifier
             .pointerInput(onPoke, onPet) {
+                val halfSizePx = (size.toPx() / 2f).coerceAtLeast(1f)
                 detectTapGestures(
                     onPress = { pressOffset ->
                         isPressed = true
-                        val cx = this.size.width / 2f
-                        val cy = this.size.height / 2f
-                        val nx = ((pressOffset.x - cx) / cx).coerceIn(-1f, 1f)
-                        val ny = ((pressOffset.y - cy) / cy).coerceIn(-1f, 1f)
+                        val nx = ((pressOffset.x - halfSizePx) / halfSizePx).coerceIn(-1f, 1f)
+                        val ny = ((pressOffset.y - halfSizePx) / halfSizePx).coerceIn(-1f, 1f)
                         coroutineScope.launch {
                             touchGazeX.animateTo(nx, spring(stiffness = Spring.StiffnessMedium))
                             touchGazeY.animateTo(ny, spring(stiffness = Spring.StiffnessMedium))

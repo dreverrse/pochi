@@ -431,7 +431,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Pochi Island Active")
             .setContentText("Tap to open Pochi settings")
-            .setSmallIcon(android.R.drawable.ic_Dialog_info)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(openAppIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
