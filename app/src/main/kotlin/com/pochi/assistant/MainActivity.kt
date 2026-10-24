@@ -59,6 +59,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val isDark by PochiPrefs.darkModeFlow.collectAsState()
             val isRunning by DynamicIslandService.isRunning.collectAsState()
+            val lang by PochiPrefs.langFlow.collectAsState()
+            val isFlushStatusBar by PochiPrefs.flushStatusBarFlow.collectAsState()
+            val isId = lang == PochiLang.ID
             var provider by remember { mutableStateOf(PochiPrefs.getProvider(this)) }
             var apiKey by remember { mutableStateOf(PochiPrefs.getApiKey(this, provider)) }
             var model by remember { mutableStateOf(PochiPrefs.getModel(this, provider)) }
@@ -67,9 +70,12 @@ class MainActivity : ComponentActivity() {
             var previewEmote by remember { mutableStateOf(PochiEmote.SMILING) }
             var heroState by remember { mutableStateOf(BotState.IDLE) }
             var heroPokeCount by remember { mutableIntStateOf(0) }
-            var heroMoodText by remember {
-                mutableStateOf("Pintasan harian, catatan cepat, kalkulator & kendali layar")
+            val defaultSubtitle = if (isId) {
+                "Dynamic Island 120fps • Hari Ini, Agen, Fokus & Pintasan"
+            } else {
+                "120fps Dynamic Island • Today, Agent, Focus & Deck"
             }
+            var heroMoodText by remember(isId) { mutableStateOf(defaultSubtitle) }
             val heroScope = rememberCoroutineScope()
             val offsetX by PochiPrefs.offsetXFlow.collectAsState()
             val offsetY by PochiPrefs.offsetYFlow.collectAsState()
@@ -139,26 +145,53 @@ class MainActivity : ComponentActivity() {
                                     .background(if (isRunning) Color(0xFF30D158) else textSecondary)
                             )
                             Text(
-                                text = if (isRunning) "Aktif di Layar" else "Nonaktif",
+                                text = if (isRunning) {
+                                    if (isId) "Aktif di Status Bar" else "Active on Status Bar"
+                                } else {
+                                    if (isId) "Nonaktif" else "Inactive"
+                                },
                                 color = if (isRunning) Color(0xFF30D158) else textSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
-                        IconButton(
-                            onClick = { PochiPrefs.setDarkMode(this@MainActivity, !isDark) },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(subtleBg)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                                contentDescription = "Tema",
-                                tint = textPrimary,
-                                modifier = Modifier.size(17.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .height(34.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(subtleBg)
+                                    .border(1.dp, borderCol, RoundedCornerShape(50))
+                                    .clickable { PochiPrefs.toggleLanguage(this@MainActivity) }
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isId) "🇮🇩 ID" else "🇬🇧 EN",
+                                    color = textPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { PochiPrefs.setDarkMode(this@MainActivity, !isDark) },
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(subtleBg)
+                            ) {
+                                Icon(
+                                    imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                                    contentDescription = "Tema",
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
                         }
                     }
 
@@ -178,7 +211,7 @@ class MainActivity : ComponentActivity() {
                                 if (heroPokeCount == current) {
                                     if (heroPokeCount >= 5) heroPokeCount = 0
                                     heroState = BotState.IDLE
-                                    heroMoodText = "Pintasan harian, catatan cepat, kalkulator & kendali layar"
+                                    heroMoodText = defaultSubtitle
                                 }
                             }
                         },
@@ -192,7 +225,7 @@ class MainActivity : ComponentActivity() {
                             heroScope.launch {
                                 delay(3600)
                                 heroState = BotState.IDLE
-                                heroMoodText = "Pintasan harian, catatan cepat, kalkulator & kendali layar"
+                                heroMoodText = defaultSubtitle
                             }
                         }
                     )
@@ -220,7 +253,8 @@ class MainActivity : ComponentActivity() {
                                 if (!Settings.canDrawOverlays(this@MainActivity)) {
                                     Toast.makeText(
                                         this@MainActivity,
-                                        "Izinkan 'Tampilkan di atas aplikasi lain' untuk Pochi",
+                                        if (isId) "Izinkan 'Tampilkan di atas aplikasi lain' untuk Pochi"
+                                        else "Grant 'Display over other apps' permission for Pochi",
                                         Toast.LENGTH_LONG
                                     ).show()
                                     startActivity(
@@ -232,7 +266,11 @@ class MainActivity : ComponentActivity() {
                                 } else {
                                     stopService(Intent(this@MainActivity, DynamicIslandService::class.java))
                                     startForegroundService(Intent(this@MainActivity, DynamicIslandService::class.java))
-                                    Toast.makeText(this@MainActivity, "Pochi aktif di atas layar", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        if (isId) "Pochi aktif menempel di status bar" else "Pochi active on status bar",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             },
                             shape = RoundedCornerShape(14.dp),
@@ -240,7 +278,11 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.weight(1.4f)
                         ) {
                             Text(
-                                text = if (isRunning) "Muat Ulang Island" else "Aktifkan Pochi",
+                                text = if (isRunning) {
+                                    if (isId) "Muat Ulang Island" else "Reload Island"
+                                } else {
+                                    if (isId) "Aktifkan Pochi" else "Start Pochi"
+                                },
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
@@ -439,7 +481,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // ================= KALIBRASI POSISI =================
+                // ================= KALIBRASI POSISI & STATUSBAR DOCK =================
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -447,7 +489,7 @@ class MainActivity : ComponentActivity() {
                         .background(cardBg)
                         .border(1.dp, borderCol, RoundedCornerShape(20.dp))
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -455,25 +497,73 @@ class MainActivity : ComponentActivity() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Posisi Pochi di Layar",
+                            text = if (isId) "Posisi & Mode Status Bar" else "Position & Status Bar Dock",
                             color = textPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        TextButton(onClick = { PochiPrefs.saveOffsets(this@MainActivity, 0, 4) }) {
+                        TextButton(onClick = {
+                            PochiPrefs.setFlushStatusBar(this@MainActivity, true)
+                            PochiPrefs.saveOffsets(this@MainActivity, 0, 0)
+                        }) {
                             Text("Reset", color = accentBlue, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
-                    Text("Atas / Bawah: ${offsetY} dp", color = textSecondary, fontSize = 11.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isId) "Nempel Status Bar" else "Flush with Status Bar",
+                                color = textPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (isId) {
+                                    "Ukuran ringkas tepat di lubang kamera/status bar agar tidak mengganggu pemandangan."
+                                } else {
+                                    "Ultra-slim pill docked inside the top status bar so it never obstructs apps."
+                                },
+                                color = textSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                        Switch(
+                            checked = isFlushStatusBar,
+                            onCheckedChange = { enabled ->
+                                PochiPrefs.setFlushStatusBar(this@MainActivity, enabled)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF10B981)
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = borderCol)
+
+                    Text(
+                        text = if (isId) "Atas / Bawah: ${offsetY} dp" else "Vertical Offset: ${offsetY} dp",
+                        color = textSecondary,
+                        fontSize = 11.sp
+                    )
                     Slider(
                         value = offsetY.toFloat(),
                         onValueChange = { PochiPrefs.saveOffsets(this@MainActivity, offsetX, it.roundToInt()) },
-                        valueRange = -20f..80f,
+                        valueRange = -16f..40f,
                         colors = SliderDefaults.colors(thumbColor = accentBlue, activeTrackColor = accentBlue)
                     )
 
-                    Text("Kiri / Kanan: ${offsetX} dp", color = textSecondary, fontSize = 11.sp)
+                    Text(
+                        text = if (isId) "Kiri / Kanan: ${offsetX} dp" else "Horizontal Offset: ${offsetX} dp",
+                        color = textSecondary,
+                        fontSize = 11.sp
+                    )
                     Slider(
                         value = offsetX.toFloat(),
                         onValueChange = { PochiPrefs.saveOffsets(this@MainActivity, it.roundToInt(), offsetY) },

@@ -712,47 +712,56 @@ object PochiMood {
     }
 
     fun onPokeReaction(pokeCount: Int): Triple<PochiEmote, BotState, String> {
+        val isId = PochiPrefs.langFlow.value == PochiLang.ID
         return when (pokeCount) {
             1 -> Triple(
                 PochiEmote.HAPPY,
                 BotState.IDLE,
-                "Hey! Tap to open your Dynamic Island or hold for Quick Command."
+                if (isId) "Halo! Ketuk untuk buka Dynamic Island atau tahan untuk Perintah Cepat."
+                else "Hey! Tap to open your Dynamic Island or hold for Quick Command."
             )
             2 -> Triple(
                 PochiEmote.WINK_LEFT,
                 BotState.IDLE,
-                "Hehe, squishy blob mode active! (`^ ^`)"
+                if (isId) "Hehe, mode blob kenyal aktif! (`^ ^`)"
+                else "Hehe, squishy blob mode active! (`^ ^`)"
             )
             3 -> Triple(
                 PochiEmote.SUSPICIOUS,
                 BotState.ANNOYED,
-                "Hmm... poking me a lot today?"
+                if (isId) "Hmm... kok dicolek terus hari ini?"
+                else "Hmm... poking me a lot today?"
             )
             4 -> Triple(
                 PochiEmote.ANGRY,
                 BotState.ANNOYED,
-                "Hey, easy on the pokes! Hold to pet me instead."
+                if (isId) "Jangan dicolek terus dong! Tahan di kepala buat ngelus."
+                else "Hey, easy on the pokes! Hold to pet me instead."
             )
             else -> Triple(
                 PochiEmote.CRYING,
                 BotState.ANNOYED,
-                "Dizzy from all the pokes... hold on my head to calm me down."
+                if (isId) "Pusing dicolek mulu... tahan sebentar buat nenangin Pochi."
+                else "Dizzy from all the pokes... hold on my head to calm me down."
             )
         }
     }
 
     fun onPetReaction(wasUpset: Boolean): Triple<PochiEmote, BotState, String> {
+        val isId = PochiPrefs.langFlow.value == PochiLang.ID
         return if (wasUpset) {
             Triple(
                 PochiEmote.HAPPY_TEARS,
                 BotState.DONE,
-                "All forgiven! Ready to help (`^ ^`)."
+                if (isId) "Oke dimaafin! Siap bantu lagi (`^ ^`)."
+                else "All forgiven! Ready to help (`^ ^`)."
             )
         } else {
             Triple(
                 PochiEmote.LOVE,
                 BotState.DONE,
-                "Purr... feeling energized (`^ ^`)!"
+                if (isId) "Nyaman banget dielus, makin semangat (`^ ^`)!"
+                else "Purr... feeling energized (`^ ^`)!"
             )
         }
     }

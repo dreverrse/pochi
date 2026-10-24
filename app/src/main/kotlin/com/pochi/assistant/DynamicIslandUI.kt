@@ -8,7 +8,6 @@ import android.content.Intent
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.os.SystemClock
-import android.provider.Settings
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -17,6 +16,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
@@ -24,6 +24,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -45,7 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -63,24 +63,43 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-enum class PochiTab(val title: String, val icon: ImageVector) {
-    TODAY("Today", Icons.Rounded.CheckCircleOutline),
-    AGENT("Agent", Icons.Rounded.Terminal),
-    FOCUS("Focus", Icons.Rounded.Timer),
-    DECK("Deck", Icons.Rounded.Apps)
+enum class PochiTab(
+    val titleEn: String,
+    val titleId: String,
+    val icon: ImageVector
+) {
+    TODAY("Today", "Hari Ini", Icons.Rounded.CheckCircleOutline),
+    AGENT("Agent", "Agen", Icons.Rounded.Terminal),
+    FOCUS("Focus", "Fokus", Icons.Rounded.Timer),
+    DECK("Deck", "Pintasan", Icons.Rounded.Apps);
+
+    fun label(lang: PochiLang): String = if (lang == PochiLang.ID) titleId else titleEn
+}
+
+enum class TaskFilter {
+    ALL, ACTIVE, DONE
+}
+
+enum class PomodoroPhase(val defaultMinutes: Int) {
+    WORK(25),
+    SHORT_BREAK(5),
+    LONG_BREAK(15);
+
+    fun label(lang: PochiLang): String = when (this) {
+        WORK -> if (lang == PochiLang.ID) "Fokus" else "Focus"
+        SHORT_BREAK -> if (lang == PochiLang.ID) "Rehat 5m" else "Break 5m"
+        LONG_BREAK -> if (lang == PochiLang.ID) "Rehat 15m" else "Long 15m"
+    }
 }
 
 private enum class IslandMode {
@@ -115,7 +134,7 @@ fun PochiIslandBot(
     val islandBlack = Color(0xFF0A0A0A)
     val surfaceDark = Color(0xFF141418)
     val subtleDark = Color(0xFF1E1E24)
-    val borderDark = Color(0xFF27272F)
+    val borderDark = Color(0xFF25252E)
     val textPrimary = Color(0xFFF8FAFC)
     val textSecondary = Color(0xFF94A3B8)
     val accentIndigo = Color(0xFF6366F1)
@@ -123,14 +142,19 @@ fun PochiIslandBot(
     val accentAmber = Color(0xFFF59E0B)
     val accentSky = Color(0xFF38BDF8)
 
+    val lang by PochiPrefs.langFlow.collectAsState()
+    val isFlushStatusBar by PochiPrefs.flushStatusBarFlow.collectAsState()
+    val offsetY by PochiPrefs.offsetYFlow.collectAsState()
+    val isId = lang == PochiLang.ID
+
     var islandMode by remember { mutableStateOf(IslandMode.COLLAPSED) }
-    val isExpanded = islandMode != IslandMode.COLLAPSED
     var currentTab by remember { mutableStateOf(PochiTab.TODAY) }
     var botState by remember { mutableStateOf(BotState.IDLE) }
     var customEmote by remember { mutableStateOf<PochiEmote?>(null) }
     var idleEmote by remember { mutableStateOf<PochiEmote?>(PochiEmote.SMILING) }
     var interactionTick by remember { mutableIntStateOf(0) }
     var lastActiveTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var isIdleDimmed by remember { mutableStateOf(false) }
     var pokeCount by remember { mutableIntStateOf(0) }
     var eyeGazeOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -138,6 +162,7 @@ fun PochiIslandBot(
     val tasks by PochiPrefs.tasksFlow.collectAsState()
     val pinnedPackages by PochiPrefs.pinnedAppsFlow.collectAsState()
     val mcpUrl by PochiPrefs.mcpUrlFlow.collectAsState()
+    val completedFocusSessions by PochiPrefs.focusSessionsFlow.collectAsState()
     val activeApproval by ApprovalManager.activeRequest.collectAsState()
     val lastDecision by ApprovalManager.lastDecision.collectAsState()
     val dismissSignal by ApprovalManager.dismissSignal.collectAsState()
@@ -146,27 +171,28 @@ fun PochiIslandBot(
     val latestScreenshot by PochiSignals.latestScreenshot.collectAsState()
     val agentSession by PochiSignals.agentSession.collectAsState()
 
-    // Today Module State
+    // Phase 2: Today Module State
     var selectedDayOffset by remember { mutableIntStateOf(0) }
+    var taskFilter by remember { mutableStateOf(TaskFilter.ALL) }
     var newTaskInput by remember { mutableStateOf("") }
 
-    // Focus (Pomodoro) Module State
+    // Phase 2: Focus (Pomodoro) Module State
+    var pomodoroPhase by remember { mutableStateOf(PomodoroPhase.WORK) }
     var focusDurationMinutes by remember { mutableIntStateOf(25) }
     var focusRemainingSeconds by remember { mutableIntStateOf(25 * 60) }
     var isFocusRunning by remember { mutableStateOf(false) }
     var linkedTaskId by remember { mutableStateOf<String?>(null) }
 
-    // Quick Command Bar State
+    // Phase 3: Quick Command Bar State
     var commandBarInput by remember { mutableStateOf("") }
-    var commandBarFeedback by remember { mutableStateOf("") }
 
-    // Agent Module State
+    // Phase 4: Agent Module State
     var selectedAgentHost by remember { mutableStateOf("Claude Code") }
     var agentPromptInput by remember { mutableStateOf("") }
     var isEditingMcpUrl by remember { mutableStateOf(false) }
     var mcpUrlDraft by remember(mcpUrl) { mutableStateOf(mcpUrl) }
 
-    // Deck Module State
+    // Phase 3: Deck Module State
     var installedApps by remember { mutableStateOf<List<LaunchableAppInfo>>(emptyList()) }
     var isCustomizingDeck by remember { mutableStateOf(false) }
     var isTorchOn by remember { mutableStateOf(false) }
@@ -174,6 +200,7 @@ fun PochiIslandBot(
     fun bump() {
         interactionTick++
         lastActiveTime = System.currentTimeMillis()
+        isIdleDimmed = false
     }
 
     fun setMode(target: IslandMode) {
@@ -211,6 +238,16 @@ fun PochiIslandBot(
         }
     }
 
+    // Subtle auto-dimming after 6s when collapsed & idle so the status bar pill never distracts
+    LaunchedEffect(islandMode, interactionTick, isFocusRunning, agentSession.isBusy) {
+        if (islandMode == IslandMode.COLLAPSED && !isFocusRunning && !agentSession.isBusy) {
+            delay(6000)
+            isIdleDimmed = true
+        } else {
+            isIdleDimmed = false
+        }
+    }
+
     // Focus Pomodoro countdown ticker
     LaunchedEffect(isFocusRunning) {
         while (isFocusRunning && focusRemainingSeconds > 0) {
@@ -220,10 +257,12 @@ fun PochiIslandBot(
                 isFocusRunning = false
                 botState = BotState.DONE
                 customEmote = PochiEmote.HAPPY
-                // Mark linked task done if present
-                linkedTaskId?.let { id ->
-                    val updated = tasks.map { if (it.id == id) it.copy(isDone = true, isOverdue = false) else it }
-                    PochiPrefs.saveTasks(context, updated)
+                if (pomodoroPhase == PomodoroPhase.WORK) {
+                    PochiPrefs.incrementFocusSessions(context)
+                    linkedTaskId?.let { id ->
+                        val updated = tasks.map { if (it.id == id) it.copy(isDone = true, isOverdue = false) else it }
+                        PochiPrefs.saveTasks(context, updated)
+                    }
                 }
             }
         }
@@ -260,7 +299,11 @@ fun PochiIslandBot(
             customEmote = if (approved) PochiEmote.HAPPY else PochiEmote.NO
             PochiSignals.updateAgentSession {
                 it.copy(
-                    compactStatus = if (approved) "Approved • Executing" else "Rejected command",
+                    compactStatus = if (approved) {
+                        if (isId) "Diizinkan • Jalan" else "Approved • Running"
+                    } else {
+                        if (isId) "Perintah ditolak" else "Command rejected"
+                    },
                     recentLogs = (listOf(if (approved) "✓ $decision" else "✕ $decision") + it.recentLogs).take(8)
                 )
             }
@@ -294,18 +337,19 @@ fun PochiIslandBot(
         }
     }
 
-    // Execute Command Palette or Agent prompt
+    // Execute Command Palette or Agent prompt (supports both Indonesian & English)
     fun executeUnifiedCommand(raw: String) {
         val text = raw.trim()
         if (text.isEmpty()) return
         bump()
 
         val lower = text.lowercase(Locale.getDefault())
-        // 1. Focus Timer shortcut: e.g. "25m review PR" or "focus 45m"
-        val focusRegex = Regex("""^(?:focus\s+)?(\d{1,3})\s*(?:m|min|menit)\s*(.*)$""", RegexOption.IGNORE_CASE)
+        // 1. Focus Timer shortcut: e.g. "25m review PR", "fokus 25m cek PR", "45 menit belajar"
+        val focusRegex = Regex("""^(?:focus\s+|fokus\s+|timer\s+)?(\d{1,3})\s*(?:m|min|menit|mnt)\s*(.*)$""", RegexOption.IGNORE_CASE)
         focusRegex.matchEntire(text)?.let { match ->
             val mins = match.groupValues[1].toIntOrNull()?.coerceIn(1, 180) ?: 25
             val taskTitle = match.groupValues[2].trim()
+            pomodoroPhase = PomodoroPhase.WORK
             focusDurationMinutes = mins
             focusRemainingSeconds = mins * 60
             isFocusRunning = true
@@ -318,14 +362,12 @@ fun PochiIslandBot(
                 }
             }
             customEmote = PochiEmote.HAPPY
-            commandBarFeedback = "Started ${mins}m Focus timer" +
-                if (taskTitle.isNotBlank()) " • $taskTitle" else ""
             currentTab = PochiTab.FOCUS
             setMode(IslandMode.COLLAPSED)
             return
         }
 
-        // 2. Agent prompt: starts with "@agent", ">", "run ", "edit ", "git ", or "claude "
+        // 2. Agent prompt: starts with "@agent", ">", "run ", "edit ", "git ", "claude ", "codex "
         if (lower.startsWith("@agent") || lower.startsWith(">") ||
             lower.startsWith("git ") || lower.startsWith("claude ") || lower.startsWith("codex ")
         ) {
@@ -335,8 +377,8 @@ fun PochiIslandBot(
             PochiSignals.updateAgentSession {
                 it.copy(
                     isBusy = true,
-                    compactStatus = "Working: ${cleanPrompt.take(22)}",
-                    currentFileOrTool = cleanPrompt.take(28),
+                    compactStatus = "Working: ${cleanPrompt.take(20)}",
+                    currentFileOrTool = cleanPrompt.take(24),
                     recentLogs = (listOf("→ Prompt: $cleanPrompt") + it.recentLogs).take(8)
                 )
             }
@@ -353,7 +395,11 @@ fun PochiIslandBot(
                         )
                     }.getOrDefault("Agent processed: $cleanPrompt")
                 } else {
-                    "MCP ($selectedAgentHost): Dispatched '$cleanPrompt' to active workspace."
+                    if (isId) {
+                        "MCP ($selectedAgentHost): Perintah '$cleanPrompt' dikirim ke workspace."
+                    } else {
+                        "MCP ($selectedAgentHost): Dispatched '$cleanPrompt' to active workspace."
+                    }
                 }
                 val (afterAction, action) = PochiAgent.extract(reply)
                 val (cleanReply, emote) = PochiAgent.extractEmote(afterAction, cleanPrompt)
@@ -363,7 +409,7 @@ fun PochiIslandBot(
                 PochiSignals.updateAgentSession {
                     it.copy(
                         isBusy = false,
-                        compactStatus = "Done • ${cleanPrompt.take(18)}",
+                        compactStatus = if (isId) "Selesai • ${cleanPrompt.take(16)}" else "Done • ${cleanPrompt.take(16)}",
                         contextTokensUsed = (it.contextTokensUsed + 1450).coerceAtMost(it.contextTokensMax),
                         recentLogs = (listOf("✓ ${cleanReply.take(90)}") + it.recentLogs).take(8)
                     )
@@ -386,26 +432,25 @@ fun PochiIslandBot(
             PochiPrefs.saveTasks(context, updated)
             customEmote = PochiEmote.HAPPY
             botState = BotState.DONE
-            commandBarFeedback = "Added ${parsedTasks.size} task(s) to Today"
             currentTab = PochiTab.TODAY
             setMode(IslandMode.EXPANDED)
         }
     }
 
-    // 120fps Spring sizing rules (NEVER animate WindowManager.LayoutParams per-frame)
+    // 120fps Spring sizing rules (ultra-slim status-bar hug when collapsed)
     val hasCompactRightStatus = isFocusRunning ||
         agentSession.isBusy ||
         activeDownload != null ||
         mediaPlayback.isPlaying
 
-    val collapsedWidth = if (hasCompactRightStatus) 236.dp else 136.dp
-    val collapsedHeight = 38.dp
+    val collapsedWidth = if (hasCompactRightStatus) 178.dp else 102.dp
+    val collapsedHeight = 26.dp
     val expandedWidth = (configuration.screenWidthDp.dp - 20.dp).coerceIn(320.dp, 388.dp)
     var measuredExpandedHeightPx by remember { mutableIntStateOf(0) }
     val expandedHeight = with(density) {
         when (islandMode) {
-            IslandMode.COMMAND_BAR -> 118.dp
-            IslandMode.EXPANDED -> if (measuredExpandedHeightPx > 0) measuredExpandedHeightPx.toDp() else 356.dp
+            IslandMode.COMMAND_BAR -> 114.dp
+            IslandMode.EXPANDED -> if (measuredExpandedHeightPx > 0) measuredExpandedHeightPx.toDp() else 364.dp
             IslandMode.COLLAPSED -> collapsedHeight
         }
     }
@@ -440,46 +485,60 @@ fun PochiIslandBot(
     ) { mode ->
         when (mode) {
             IslandMode.COLLAPSED -> collapsedHeight
-            IslandMode.COMMAND_BAR -> 116.dp
+            IslandMode.COMMAND_BAR -> 114.dp
             IslandMode.EXPANDED -> expandedHeight
         }
     }
 
-    val islandCornerRadius by transition.animateDp(
+    val bottomCornerRadius by transition.animateDp(
         transitionSpec = {
             spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessMediumLow
             )
         },
-        label = "islandCornerRadius"
+        label = "bottomCornerRadius"
     ) { mode ->
         when (mode) {
-            IslandMode.COLLAPSED -> 24.dp
-            IslandMode.COMMAND_BAR -> 26.dp
-            IslandMode.EXPANDED -> 30.dp
+            IslandMode.COLLAPSED -> 16.dp
+            IslandMode.COMMAND_BAR -> 24.dp
+            IslandMode.EXPANDED -> 28.dp
+        }
+    }
+
+    // When flush with status bar (offsetY <= 1 and isFlushStatusBar), top corners hug the top screen edge
+    // when collapsed, or round smoothly when expanded.
+    val topCornerRadius by transition.animateDp(
+        transitionSpec = {
+            spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
+        label = "topCornerRadius"
+    ) { mode ->
+        when {
+            mode == IslandMode.COLLAPSED && isFlushStatusBar && offsetY <= 1 -> 6.dp
+            mode == IslandMode.COLLAPSED -> 16.dp
+            else -> 26.dp
         }
     }
 
     val expandedContentAlpha by transition.animateFloat(
-        transitionSpec = { tween(durationMillis = 160) },
+        transitionSpec = { tween(durationMillis = 150) },
         label = "expandedContentAlpha"
     ) { mode -> if (mode == IslandMode.COLLAPSED) 0f else 1f }
 
     val collapsedContentAlpha by transition.animateFloat(
-        transitionSpec = { tween(durationMillis = 140) },
+        transitionSpec = { tween(durationMillis = 130) },
         label = "collapsedContentAlpha"
     ) { mode -> if (mode == IslandMode.COLLAPSED) 1f else 0f }
 
-    val islandScale by transition.animateFloat(
-        transitionSpec = {
-            spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            )
-        },
-        label = "islandScale"
-    ) { mode -> if (mode == IslandMode.COLLAPSED) 1f else 1f }
+    val idleDimAlpha by animateFloatAsState(
+        targetValue = if (islandMode == IslandMode.COLLAPSED && isIdleDimmed) 0.85f else 1f,
+        animationSpec = tween(durationMillis = 450),
+        label = "idleDimAlpha"
+    )
 
     val activeEmote = customEmote ?: idleEmote ?: botState.defaultEmote
 
@@ -531,12 +590,19 @@ fun PochiIslandBot(
                 PochiMascot(
                     state = botState,
                     emoteOverride = activeEmote,
-                    size = 44.dp
+                    size = 40.dp
                 )
             }
         }
         return
     }
+
+    val islandShape = RoundedCornerShape(
+        topStart = topCornerRadius,
+        topEnd = topCornerRadius,
+        bottomStart = bottomCornerRadius,
+        bottomEnd = bottomCornerRadius
+    )
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -548,19 +614,18 @@ fun PochiIslandBot(
                 .width(islandWidth)
                 .height(islandHeight)
                 .graphicsLayer {
-                    scaleX = islandScale
-                    scaleY = islandScale
+                    alpha = idleDimAlpha
                     clip = true
-                    shape = RoundedCornerShape(islandCornerRadius)
+                    shape = islandShape
                 }
-                .background(islandBlack, RoundedCornerShape(islandCornerRadius))
+                .background(islandBlack, islandShape)
                 .border(
-                    width = 1.dp,
-                    color = if (activeApproval != null) accentAmber.copy(alpha = 0.6f) else borderDark,
-                    shape = RoundedCornerShape(islandCornerRadius)
+                    width = 0.8.dp,
+                    color = if (activeApproval != null) accentAmber.copy(alpha = 0.65f) else borderDark.copy(alpha = 0.75f),
+                    shape = islandShape
                 )
         ) {
-            // ================= 1. COLLAPSED NOTCH PILL =================
+            // ================= 1. COLLAPSED STATUS-BAR PILL =================
             if (collapsedContentAlpha > 0.01f) {
                 Row(
                     modifier = Modifier
@@ -578,58 +643,49 @@ fun PochiIslandBot(
                                 }
                             )
                         }
-                        .padding(horizontal = 10.dp),
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    onDragBubble(dragAmount.x, dragAmount.y)
+                                },
+                                onDragEnd = { onDragEnd() },
+                                onDragCancel = { onDragEnd() }
+                            )
+                        }
+                        .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     // Left side: Organic blobatar.dev Pochi Mascot with expressive white eyes
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        PochiMascot(
-                            state = botState,
-                            emoteOverride = activeEmote,
-                            size = 26.dp,
-                            eyeTrackerOffset = eyeGazeOffset
-                        )
-                        if (!hasCompactRightStatus) {
-                            Text(
-                                text = "Pochi",
-                                color = textPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1
-                            )
-                        }
-                    }
+                    PochiMascot(
+                        state = botState,
+                        emoteOverride = activeEmote,
+                        size = 20.dp,
+                        eyeTrackerOffset = eyeGazeOffset
+                    )
 
-                    // Center cutout spacing
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                    // Right side: Live compact activity indicator (Focus timer / Agent status / Download / Media)
+                    // Right side: Ultra-compact live status indicator inside the status bar
                     when {
                         isFocusRunning -> {
                             val mins = focusRemainingSeconds / 60
                             val secs = focusRemainingSeconds % 60
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(accentEmerald.copy(alpha = 0.16f))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(6.dp)
+                                        .size(5.dp)
                                         .clip(CircleShape)
                                         .background(accentEmerald)
                                 )
                                 Text(
                                     text = String.format(Locale.US, "%02d:%02d", mins, secs),
                                     color = accentEmerald,
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -639,49 +695,30 @@ fun PochiIslandBot(
                         activeDownload != null -> {
                             val dl = activeDownload!!
                             val pct = (dl.fraction * 100).toInt()
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(accentSky.copy(alpha = 0.16f))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Download,
-                                    contentDescription = null,
-                                    tint = accentSky,
-                                    modifier = Modifier.size(11.dp)
-                                )
-                                Text(
-                                    text = "$pct%",
-                                    color = accentSky,
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Text(
+                                text = "↓ $pct%",
+                                color = accentSky,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
 
                         agentSession.isBusy || agentSession.currentFileOrTool.isNotBlank() -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(accentIndigo.copy(alpha = 0.18f))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(6.dp)
+                                        .size(5.dp)
                                         .clip(CircleShape)
                                         .background(accentSky)
                                 )
                                 Text(
                                     text = agentSession.currentFileOrTool.ifBlank { agentSession.compactStatus },
                                     color = textPrimary,
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -692,22 +729,18 @@ fun PochiIslandBot(
                         mediaPlayback.isPlaying -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(subtleDark)
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.GraphicEq,
                                     contentDescription = null,
                                     tint = accentIndigo,
-                                    modifier = Modifier.size(12.dp)
+                                    modifier = Modifier.size(11.dp)
                                 )
                                 Text(
-                                    text = mediaPlayback.title.take(14),
+                                    text = mediaPlayback.title.take(12),
                                     color = textPrimary,
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -717,11 +750,17 @@ fun PochiIslandBot(
 
                         else -> {
                             val remainingCount = tasks.count { !it.isDone && it.dayIndex == 0 }
+                            val overdueCount = tasks.count { !it.isDone && it.dayIndex == 0 && it.isCurrentlyOverdue() }
                             Text(
-                                text = if (remainingCount > 0) "$remainingCount left" else "Ready",
-                                color = textSecondary,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium
+                                text = when {
+                                    overdueCount > 0 -> if (isId) "$overdueCount telat" else "$overdueCount late"
+                                    remainingCount > 0 -> if (isId) "$remainingCount tugas" else "$remainingCount left"
+                                    else -> "Pochi"
+                                },
+                                color = if (overdueCount > 0) accentAmber else textSecondary,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -745,10 +784,10 @@ fun PochiIslandBot(
                         PochiMascot(
                             state = botState,
                             emoteOverride = PochiEmote.FOCUS,
-                            size = 28.dp
+                            size = 26.dp
                         )
                         Text(
-                            text = "Quick Command Palette",
+                            text = if (isId) "Bar Perintah Cepat" else "Quick Command Palette",
                             color = textPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
@@ -761,7 +800,12 @@ fun PochiIslandBot(
                                 .clickable { setMode(IslandMode.EXPANDED) }
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
-                            Text("Expand Hub", color = accentSky, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = if (isId) "Buka Panel" else "Expand Hub",
+                                color = accentSky,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                         Icon(
                             imageVector = Icons.Rounded.Close,
@@ -814,7 +858,11 @@ fun PochiIslandBot(
                             decorationBox = { inner ->
                                 if (commandBarInput.isEmpty()) {
                                     Text(
-                                        text = "\"25m review PR\", \"review PR, then 2pm sync\", or \"> run tests\"",
+                                        text = if (isId) {
+                                            "\"25m cek PR\", \"cek PR, lalu jam 2 rapat\", atau \"> jalankan tes\""
+                                        } else {
+                                            "\"25m review PR\", \"review PR, then 2pm sync\", or \"> run tests\""
+                                        },
                                         color = textSecondary,
                                         fontSize = 11.sp,
                                         maxLines = 1,
@@ -835,7 +883,12 @@ fun PochiIslandBot(
                                 }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text("Run", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = if (isId) "Jalan" else "Run",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
 
@@ -845,14 +898,18 @@ fun PochiIslandBot(
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        QuickCommandHintChip("⏱ 25m review PR") {
-                            executeUnifiedCommand("25m review PR")
+                        QuickCommandHintChip(if (isId) "⏱ 25m cek PR" else "⏱ 25m review PR") {
+                            executeUnifiedCommand(if (isId) "25m cek PR" else "25m review PR")
                         }
-                        QuickCommandHintChip("📅 review PR, then 2pm team meeting") {
-                            executeUnifiedCommand("review PR, then 2pm team meeting")
+                        QuickCommandHintChip(
+                            if (isId) "📅 cek PR, lalu jam 2 siang rapat tim" else "📅 review PR, then 2pm team meeting"
+                        ) {
+                            executeUnifiedCommand(
+                                if (isId) "cek PR, lalu jam 2 siang rapat tim" else "review PR, then 2pm team meeting"
+                            )
                         }
-                        QuickCommandHintChip("🤖 > run test suite") {
-                            executeUnifiedCommand("> run test suite")
+                        QuickCommandHintChip(if (isId) "🤖 > jalankan unit test" else "🤖 > run test suite") {
+                            executeUnifiedCommand(if (isId) "> jalankan unit test" else "> run test suite")
                         }
                     }
                 }
@@ -879,33 +936,31 @@ fun PochiIslandBot(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Top Header: Interactive Pochi Blob + 4-Module Switcher + Collapse Button
+                        // Top Header: Interactive Pochi Blob + 4-Module Switcher + ID/EN Toggle + Collapse
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             PochiMascot(
                                 state = botState,
                                 emoteOverride = activeEmote,
-                                size = 34.dp,
+                                size = 32.dp,
                                 eyeTrackerOffset = eyeGazeOffset,
                                 onPoke = {
                                     bump()
                                     pokeCount++
-                                    val (emote, state, msg) = PochiMood.onPokeReaction(pokeCount)
+                                    val (emote, state, _) = PochiMood.onPokeReaction(pokeCount)
                                     customEmote = emote
                                     botState = state
-                                    commandBarFeedback = msg
                                 },
                                 onPet = {
                                     bump()
                                     val wasUpset = pokeCount >= 3 || botState == BotState.ANNOYED
                                     pokeCount = 0
-                                    val (emote, state, msg) = PochiMood.onPetReaction(wasUpset)
+                                    val (emote, state, _) = PochiMood.onPetReaction(wasUpset)
                                     customEmote = emote
                                     botState = state
-                                    commandBarFeedback = msg
                                 },
                                 onSwipe = { delta ->
                                     eyeGazeOffset = Offset(
@@ -915,7 +970,7 @@ fun PochiIslandBot(
                                 }
                             )
 
-                            // 4-Tab Pill Switcher (Today, Agent, Focus, Deck)
+                            // 4-Tab Pill Switcher (Today/Hari Ini, Agent/Agen, Focus/Fokus, Deck/Pintasan)
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
@@ -949,26 +1004,49 @@ fun PochiIslandBot(
                                     ) {
                                         Icon(
                                             imageVector = tab.icon,
-                                            contentDescription = tab.title,
+                                            contentDescription = tab.label(lang),
                                             tint = if (selected) accentIndigo else textSecondary,
-                                            modifier = Modifier.size(13.dp)
+                                            modifier = Modifier.size(12.dp)
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
                                         Text(
-                                            text = tab.title,
+                                            text = tab.label(lang),
                                             color = if (selected) textPrimary else textSecondary,
-                                            fontSize = 10.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
                             }
 
+                            // 1-Tap Language Switcher (ID <-> EN)
+                            Box(
+                                modifier = Modifier
+                                    .height(26.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(surfaceDark)
+                                    .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        bump()
+                                        PochiPrefs.toggleLanguage(context)
+                                    }
+                                    .padding(horizontal = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = lang.shortBadge,
+                                    color = accentSky,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+
                             // Command Bar button
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
+                                    .size(26.dp)
                                     .clip(CircleShape)
                                     .background(surfaceDark)
                                     .border(1.dp, borderDark, CircleShape)
@@ -979,14 +1057,14 @@ fun PochiIslandBot(
                                     imageVector = Icons.Rounded.Bolt,
                                     contentDescription = "Command Bar",
                                     tint = accentAmber,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
 
                             // Collapse button
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
+                                    .size(26.dp)
                                     .clip(CircleShape)
                                     .background(surfaceDark)
                                     .border(1.dp, borderDark, CircleShape)
@@ -997,29 +1075,28 @@ fun PochiIslandBot(
                                     imageVector = Icons.Rounded.KeyboardArrowUp,
                                     contentDescription = "Collapse",
                                     tint = textPrimary,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
 
                         // ================= SYSTEM OVERLAYS (Media, Screenshot, Downloads, Approvals) =================
-                        // 1. Top-Bar Command Approval Card
                         activeApproval?.let { req ->
                             PochiApprovalCard(
                                 request = req,
                                 isDark = true,
                                 onDeny = {
                                     bump()
-                                    ApprovalManager.confirmDeny("Rejected from island")
+                                    ApprovalManager.confirmDeny(if (isId) "Ditolak" else "Rejected")
                                     botState = BotState.IDLE
                                 }
                             )
                         }
 
-                        // 2. Instant Screenshot Capture Preview Overlay (Copy, Save, Share)
                         latestScreenshot?.let { shot ->
                             ScreenshotOverlayCard(
                                 screenshot = shot,
+                                isId = isId,
                                 surfaceDark = surfaceDark,
                                 borderDark = borderDark,
                                 textPrimary = textPrimary,
@@ -1028,11 +1105,19 @@ fun PochiIslandBot(
                                 onCopy = {
                                     val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     cb.setPrimaryClip(ClipData.newUri(context.contentResolver, "Screenshot", shot.uri))
-                                    Toast.makeText(context, "Screenshot copied to clipboard", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        if (isId) "Screenshot disalin ke clipboard" else "Screenshot copied to clipboard",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                     PochiSignals.dismissScreenshot()
                                 },
                                 onSave = {
-                                    Toast.makeText(context, "Saved: ${shot.displayName}", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        if (isId) "Tersimpan: ${shot.displayName}" else "Saved: ${shot.displayName}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                     PochiSignals.dismissScreenshot()
                                 },
                                 onShare = {
@@ -1043,7 +1128,7 @@ fun PochiIslandBot(
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                                         }
                                         context.startActivity(
-                                            Intent.createChooser(shareIntent, "Share Screenshot").apply {
+                                            Intent.createChooser(shareIntent, if (isId) "Bagikan Screenshot" else "Share Screenshot").apply {
                                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                             }
                                         )
@@ -1055,19 +1140,16 @@ fun PochiIslandBot(
                             )
                         }
 
-                        // 3. Active File Download Progress Overlay
                         activeDownload?.let { dl ->
                             DownloadOverlayBar(
                                 download = dl,
                                 surfaceDark = surfaceDark,
                                 borderDark = borderDark,
                                 textPrimary = textPrimary,
-                                textSecondary = textSecondary,
                                 accentSky = accentSky
                             )
                         }
 
-                        // 4. Compact Media Controller (Now Playing + Play/Pause/Skip)
                         if (mediaPlayback.hasTrack) {
                             CompactMediaBar(
                                 media = mediaPlayback,
@@ -1098,14 +1180,20 @@ fun PochiIslandBot(
                             label = "moduleCrossfade"
                         ) { tab ->
                             when (tab) {
-                                // ----------------- MODULE 1: TODAY (Task Planner) -----------------
+                                // ----------------- PHASE 2 MODULE 1: TODAY (Task Planner) -----------------
                                 PochiTab.TODAY -> {
                                     TodayModuleView(
+                                        lang = lang,
                                         tasks = tasks,
                                         selectedDayOffset = selectedDayOffset,
+                                        taskFilter = taskFilter,
                                         onSelectDay = {
                                             bump()
                                             selectedDayOffset = it
+                                        },
+                                        onSelectFilter = {
+                                            bump()
+                                            taskFilter = it
                                         },
                                         newTaskInput = newTaskInput,
                                         onNewTaskInputChange = {
@@ -1137,9 +1225,17 @@ fun PochiIslandBot(
                                             bump()
                                             PochiPrefs.saveTasks(context, tasks.filterNot { it.id == task.id })
                                         },
+                                        onClearCompleted = {
+                                            bump()
+                                            PochiPrefs.saveTasks(
+                                                context,
+                                                tasks.filterNot { it.dayIndex == selectedDayOffset && it.isDone }
+                                            )
+                                        },
                                         onStartFocusForTask = { task ->
                                             bump()
                                             linkedTaskId = task.id
+                                            pomodoroPhase = PomodoroPhase.WORK
                                             currentTab = PochiTab.FOCUS
                                         },
                                         surfaceDark = surfaceDark,
@@ -1153,9 +1249,10 @@ fun PochiIslandBot(
                                     )
                                 }
 
-                                // ----------------- MODULE 2: AGENT (Remote AI & MCP Hub) -----------------
+                                // ----------------- PHASE 4 MODULE 2: AGENT (Remote AI & MCP Hub) -----------------
                                 PochiTab.AGENT -> {
                                     AgentModuleView(
+                                        lang = lang,
                                         session = agentSession,
                                         selectedHost = selectedAgentHost,
                                         onSelectHost = { host ->
@@ -1164,7 +1261,7 @@ fun PochiIslandBot(
                                             PochiSignals.updateAgentSession {
                                                 it.copy(
                                                     providerName = host,
-                                                    compactStatus = "Connected to $host",
+                                                    compactStatus = if (isId) "Terhubung ke $host" else "Connected to $host",
                                                     recentLogs = (listOf("✓ Switched MCP session to $host") + it.recentLogs).take(8)
                                                 )
                                             }
@@ -1197,7 +1294,7 @@ fun PochiIslandBot(
                                             bump()
                                             ApprovalManager.requestApproval(
                                                 agent = selectedAgentHost,
-                                                friendlyTitle = "Push commits to remote branch",
+                                                friendlyTitle = if (isId) "Push commit ke branch utama" else "Push commits to remote branch",
                                                 rawCommand = "git push origin main"
                                             )
                                         },
@@ -1207,7 +1304,11 @@ fun PochiIslandBot(
                                                 it.copy(
                                                     activeChoicePrompt = AgentChoicePrompt(
                                                         id = System.currentTimeMillis().toString(),
-                                                        question = "Select deployment target branch for release:",
+                                                        question = if (isId) {
+                                                            "Pilih branch tujuan deployment rilis:"
+                                                        } else {
+                                                            "Select deployment target branch for release:"
+                                                        },
                                                         options = listOf("main (production)", "staging", "canary-120fps")
                                                     )
                                                 )
@@ -1249,15 +1350,34 @@ fun PochiIslandBot(
                                     )
                                 }
 
-                                // ----------------- MODULE 3: FOCUS (Pomodoro Timer) -----------------
+                                // ----------------- PHASE 2 MODULE 3: FOCUS (Pomodoro Timer) -----------------
                                 PochiTab.FOCUS -> {
                                     FocusModuleView(
+                                        lang = lang,
                                         tasks = tasks.filter { !it.isDone },
                                         linkedTaskId = linkedTaskId,
                                         onSelectTask = {
                                             bump()
                                             linkedTaskId = it
                                         },
+                                        onCompleteLinkedTask = { task ->
+                                            bump()
+                                            val updated = tasks.map {
+                                                if (it.id == task.id) it.copy(isDone = true, isOverdue = false) else it
+                                            }
+                                            PochiPrefs.saveTasks(context, updated)
+                                            customEmote = PochiEmote.HAPPY
+                                            botState = BotState.DONE
+                                        },
+                                        pomodoroPhase = pomodoroPhase,
+                                        onSelectPhase = { phase ->
+                                            bump()
+                                            isFocusRunning = false
+                                            pomodoroPhase = phase
+                                            focusDurationMinutes = phase.defaultMinutes
+                                            focusRemainingSeconds = phase.defaultMinutes * 60
+                                        },
+                                        completedSessions = completedFocusSessions,
                                         durationMinutes = focusDurationMinutes,
                                         remainingSeconds = focusRemainingSeconds,
                                         isRunning = isFocusRunning,
@@ -1283,17 +1403,24 @@ fun PochiIslandBot(
                                         textPrimary = textPrimary,
                                         textSecondary = textSecondary,
                                         accentIndigo = accentIndigo,
-                                        accentEmerald = accentEmerald
+                                        accentEmerald = accentEmerald,
+                                        accentAmber = accentAmber
                                     )
                                 }
 
-                                // ----------------- MODULE 4: DECK (Quick App & Action Grid) -----------------
+                                // ----------------- PHASE 3 MODULE 4: DECK (Quick App & Action Grid) -----------------
                                 PochiTab.DECK -> {
                                     DeckModuleView(
+                                        lang = lang,
                                         installedApps = installedApps,
                                         pinnedPackages = pinnedPackages,
                                         isCustomizing = isCustomizingDeck,
                                         isTorchOn = isTorchOn,
+                                        isFlushStatusBar = isFlushStatusBar,
+                                        onToggleFlushStatusBar = {
+                                            bump()
+                                            PochiPrefs.setFlushStatusBar(context, !isFlushStatusBar)
+                                        },
                                         onToggleCustomize = {
                                             bump()
                                             isCustomizingDeck = !isCustomizingDeck
@@ -1326,7 +1453,11 @@ fun PochiIslandBot(
                                                 if (!ok) {
                                                     Toast.makeText(
                                                         context,
-                                                        "Enable Pochi Accessibility Service for 1-tap Screenshot",
+                                                        if (isId) {
+                                                            "Aktifkan Aksesibilitas Pochi untuk Screenshot 1-ketuk"
+                                                        } else {
+                                                            "Enable Pochi Accessibility Service for 1-tap Screenshot"
+                                                        },
                                                         Toast.LENGTH_SHORT
                                                     ).show()
                                                 }
@@ -1339,7 +1470,11 @@ fun PochiIslandBot(
                                             if (!ok) {
                                                 Toast.makeText(
                                                     context,
-                                                    "Enable Pochi Accessibility Service for 1-tap Lock Screen",
+                                                    if (isId) {
+                                                        "Aktifkan Aksesibilitas Pochi untuk Kunci Layar 1-ketuk"
+                                                    } else {
+                                                        "Enable Pochi Accessibility Service for 1-tap Lock Screen"
+                                                    },
                                                     Toast.LENGTH_SHORT
                                                 ).show()
                                             }
@@ -1373,18 +1508,22 @@ fun PochiIslandBot(
 }
 
 // ============================================================================
-// MODULE 1: TODAY (Weekly Strip Calendar + Progress Ring + NLP Task Planner)
+// PHASE 2 - MODULE 1: TODAY (Weekly Strip Calendar + Progress Ring + NLP Planner)
 // ============================================================================
 @Composable
 private fun TodayModuleView(
+    lang: PochiLang,
     tasks: List<TodayTask>,
     selectedDayOffset: Int,
+    taskFilter: TaskFilter,
     onSelectDay: (Int) -> Unit,
+    onSelectFilter: (TaskFilter) -> Unit,
     newTaskInput: String,
     onNewTaskInputChange: (String) -> Unit,
     onSubmitTasks: () -> Unit,
     onToggleTask: (TodayTask) -> Unit,
     onDeleteTask: (TodayTask) -> Unit,
+    onClearCompleted: () -> Unit,
     onStartFocusForTask: (TodayTask) -> Unit,
     surfaceDark: Color,
     subtleDark: Color,
@@ -1395,21 +1534,31 @@ private fun TodayModuleView(
     accentEmerald: Color,
     accentAmber: Color
 ) {
-    val dayTasks = tasks.filter { it.dayIndex == selectedDayOffset }
-    val totalCount = dayTasks.size
-    val doneCount = dayTasks.count { it.isDone }
+    val isId = lang == PochiLang.ID
+    val allDayTasks = tasks.filter { it.dayIndex == selectedDayOffset }
+    val totalCount = allDayTasks.size
+    val doneCount = allDayTasks.count { it.isDone }
     val remainingCount = totalCount - doneCount
-    val overdueCount = dayTasks.count { !it.isDone && it.isOverdue }
+    val overdueCount = allDayTasks.count { it.isCurrentlyOverdue() }
     val progressFraction = if (totalCount > 0) doneCount.toFloat() / totalCount.toFloat() else 1f
 
-    val weekDays = remember {
+    val filteredTasks = remember(allDayTasks, taskFilter) {
+        when (taskFilter) {
+            TaskFilter.ALL -> allDayTasks
+            TaskFilter.ACTIVE -> allDayTasks.filter { !it.isDone }
+            TaskFilter.DONE -> allDayTasks.filter { it.isDone }
+        }
+    }
+
+    val weekDays = remember(lang) {
         val cal = Calendar.getInstance()
-        val dayFmt = SimpleDateFormat("EEE", Locale.US)
+        val locale = if (lang == PochiLang.ID) Locale("id", "ID") else Locale.US
+        val dayFmt = SimpleDateFormat("EEE", locale)
         (-3..3).map { offset ->
             val c = (cal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, offset) }
             Triple(
                 offset,
-                dayFmt.format(c.time).take(3).uppercase(Locale.US),
+                dayFmt.format(c.time).take(3).uppercase(locale),
                 c.get(Calendar.DAY_OF_MONTH)
             )
         }
@@ -1436,6 +1585,7 @@ private fun TodayModuleView(
                 weekDays.forEach { (offset, dayLabel, dateNum) ->
                     val isSelected = offset == selectedDayOffset
                     val isToday = offset == 0
+                    val hasOverdue = tasks.any { it.dayIndex == offset && it.isCurrentlyOverdue() }
                     val hasPending = tasks.any { it.dayIndex == offset && !it.isDone }
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1468,6 +1618,7 @@ private fun TodayModuleView(
                                 .clip(CircleShape)
                                 .background(
                                     when {
+                                        hasOverdue -> accentAmber
                                         isSelected && hasPending -> Color.White
                                         hasPending -> accentEmerald
                                         else -> Color.Transparent
@@ -1514,13 +1665,16 @@ private fun TodayModuleView(
                 }
                 Column {
                     Text(
-                        text = "$remainingCount left",
+                        text = if (isId) "$remainingCount sisa" else "$remainingCount left",
                         color = textPrimary,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (overdueCount > 0) "$overdueCount overdue" else "On track",
+                        text = when {
+                            overdueCount > 0 -> if (isId) "$overdueCount telat" else "$overdueCount overdue"
+                            else -> if (isId) "Sesuai jadwal" else "On track"
+                        },
                         color = if (overdueCount > 0) accentAmber else accentEmerald,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1529,11 +1683,53 @@ private fun TodayModuleView(
             }
         }
 
+        // Sub-filter bar (All / Active / Done + Clear Done)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    TaskFilter.ALL to (if (isId) "Semua ($totalCount)" else "All ($totalCount)"),
+                    TaskFilter.ACTIVE to (if (isId) "Aktif ($remainingCount)" else "Active ($remainingCount)"),
+                    TaskFilter.DONE to (if (isId) "Selesai ($doneCount)" else "Done ($doneCount)")
+                ).forEach { (filter, label) ->
+                    val active = taskFilter == filter
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (active) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
+                            .border(1.dp, if (active) accentIndigo else borderDark, RoundedCornerShape(50))
+                            .clickable { onSelectFilter(filter) }
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (active) Color.White else textSecondary,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            if (doneCount > 0) {
+                Text(
+                    text = if (isId) "Hapus Selesai" else "Clear Done",
+                    color = accentIndigo,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { onClearCompleted() }
+                )
+            }
+        }
+
         // Interactive Checklist
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 76.dp, max = 148.dp)
+                .heightIn(min = 74.dp, max = 140.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
                 .border(1.dp, borderDark, RoundedCornerShape(16.dp))
@@ -1541,7 +1737,7 @@ private fun TodayModuleView(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            if (dayTasks.isEmpty()) {
+            if (filteredTasks.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1549,13 +1745,18 @@ private fun TodayModuleView(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No tasks scheduled. Type below (e.g. \"review PR, then 2pm team meeting\")",
+                        text = if (isId) {
+                            "Belum ada tugas. Ketik di bawah (mis: \"cek PR, lalu jam 2 siang rapat\")"
+                        } else {
+                            "No tasks here. Type below (e.g. \"review PR, then 2pm team meeting\")"
+                        },
                         color = textSecondary,
-                        fontSize = 11.sp
+                        fontSize = 10.sp
                     )
                 }
             } else {
-                dayTasks.forEach { task ->
+                filteredTasks.forEach { task ->
+                    val isLate = task.isCurrentlyOverdue()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1564,14 +1765,14 @@ private fun TodayModuleView(
                             .clickable { onToggleTask(task) }
                             .padding(horizontal = 9.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         Icon(
                             imageVector = if (task.isDone) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                             contentDescription = null,
                             tint = when {
                                 task.isDone -> accentEmerald
-                                task.isOverdue -> accentAmber
+                                isLate -> accentAmber
                                 else -> textSecondary
                             },
                             modifier = Modifier.size(16.dp)
@@ -1586,9 +1787,21 @@ private fun TodayModuleView(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        if (task.isOverdue && !task.isDone) {
+                        if (task.isHighPriority && !task.isDone) {
                             Text(
-                                text = "OVERDUE",
+                                text = "!",
+                                color = Color(0xFFEF4444),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.18f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                        if (isLate && !task.isDone) {
+                            Text(
+                                text = if (isId) "TELAT" else "LATE",
                                 color = accentAmber,
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -1614,8 +1827,8 @@ private fun TodayModuleView(
                         if (!task.isDone) {
                             Icon(
                                 imageVector = Icons.Rounded.Timer,
-                                contentDescription = "Start Focus",
-                                tint = textSecondary,
+                                contentDescription = "Focus",
+                                tint = accentEmerald,
                                 modifier = Modifier
                                     .size(15.dp)
                                     .clickable { onStartFocusForTask(task) }
@@ -1634,7 +1847,7 @@ private fun TodayModuleView(
             }
         }
 
-        // Bottom Natural Language Task Input Bar
+        // Bottom Natural Language Task Input Bar (Bilingual ID / EN)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1663,7 +1876,11 @@ private fun TodayModuleView(
                 decorationBox = { inner ->
                     if (newTaskInput.isEmpty()) {
                         Text(
-                            text = "Add tasks: \"review PR, then 2pm team meeting\"...",
+                            text = if (isId) {
+                                "Ketik tugas: \"cek PR, lalu jam 2 siang rapat tim\"..."
+                            } else {
+                                "Add tasks: \"review PR, then 2pm team meeting\"..."
+                            },
                             color = textSecondary,
                             fontSize = 11.sp,
                             maxLines = 1,
@@ -1680,17 +1897,23 @@ private fun TodayModuleView(
                     .clickable { onSubmitTasks() }
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                Text("Add", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (isId) "Tambah" else "Add",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
 }
 
 // ============================================================================
-// MODULE 2: AGENT (Remote AI & WebSocket/MCP Hub)
+// PHASE 4 - MODULE 2: AGENT (Remote AI & WebSocket/MCP Hub)
 // ============================================================================
 @Composable
 private fun AgentModuleView(
+    lang: PochiLang,
     session: AgentSessionState,
     selectedHost: String,
     onSelectHost: (String) -> Unit,
@@ -1715,11 +1938,11 @@ private fun AgentModuleView(
     accentAmber: Color,
     accentSky: Color
 ) {
+    val isId = lang == PochiLang.ID
     val hosts = listOf("Claude Code", "Codex", "Gemini")
     val contextRatio = (session.contextTokensUsed.toFloat() / session.contextTokensMax.toFloat()).coerceIn(0f, 1f)
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Agent Selector + MCP Endpoint Status
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1757,7 +1980,7 @@ private fun AgentModuleView(
                     .padding(horizontal = 8.dp, vertical = 5.dp)
             ) {
                 Text(
-                    text = if (isEditingMcpUrl) "Save WS" else "MCP WS",
+                    text = if (isEditingMcpUrl) (if (isId) "Simpan WS" else "Save WS") else "MCP WS",
                     color = accentEmerald,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold
@@ -1787,7 +2010,6 @@ private fun AgentModuleView(
             }
         }
 
-        // Live Notch Status + Session & Context Quota Progress Bars
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1820,7 +2042,6 @@ private fun AgentModuleView(
                     )
                 }
 
-                // Live Notch Simulation Pills ("Editing auth.ts", "Running tests", Approval, Choice)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     MiniStatusButton("Editing auth.ts", accentSky) {
                         onSimulateFileEdit("Editing auth.ts")
@@ -1831,7 +2052,6 @@ private fun AgentModuleView(
                 }
             }
 
-            // Context Window & Session Quota Bars
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1842,7 +2062,7 @@ private fun AgentModuleView(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Context Window", color = textSecondary, fontSize = 9.sp)
+                        Text(if (isId) "Konteks" else "Context Window", color = textSecondary, fontSize = 9.sp)
                         Text(
                             text = "${session.contextTokensUsed / 1000}k / ${session.contextTokensMax / 1000}k",
                             color = textPrimary,
@@ -1866,9 +2086,9 @@ private fun AgentModuleView(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Session Quota", color = textSecondary, fontSize = 9.sp)
+                        Text(if (isId) "Kuota Sesi" else "Session Quota", color = textSecondary, fontSize = 9.sp)
                         Text(
-                            text = "${(session.sessionQuotaPercent * 100).toInt()}% left",
+                            text = "${(session.sessionQuotaPercent * 100).toInt()}%",
                             color = accentEmerald,
                             fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace
@@ -1887,7 +2107,6 @@ private fun AgentModuleView(
             }
         }
 
-        // Interactive Multiple-Choice Agent Prompt (if active)
         session.activeChoicePrompt?.let { choice ->
             Column(
                 modifier = Modifier
@@ -1899,7 +2118,7 @@ private fun AgentModuleView(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "Agent Prompt • ${choice.question}",
+                    text = choice.question,
                     color = textPrimary,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
@@ -1926,7 +2145,6 @@ private fun AgentModuleView(
             }
         }
 
-        // Quick Remote Action Triggers (Test Shell Approval & Multiple-Choice Prompt) + Live Stream Log
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1940,7 +2158,12 @@ private fun AgentModuleView(
                     .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("⚡ Approval: git push", color = accentAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (isId) "⚡ Izin: git push" else "⚡ Approval: git push",
+                    color = accentAmber,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
             Box(
                 modifier = Modifier
@@ -1951,11 +2174,15 @@ private fun AgentModuleView(
                     .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("🔀 Branch Prompt", color = accentSky, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (isId) "🔀 Pilihan Branch" else "🔀 Branch Prompt",
+                    color = accentSky,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
-        // Remote Prompt Input Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1984,7 +2211,7 @@ private fun AgentModuleView(
                 decorationBox = { inner ->
                     if (promptInput.isEmpty()) {
                         Text(
-                            text = "Send instruction to $selectedHost...",
+                            text = if (isId) "Kirim instruksi ke $selectedHost..." else "Send instruction to $selectedHost...",
                             color = textSecondary,
                             fontSize = 11.sp
                         )
@@ -1999,20 +2226,30 @@ private fun AgentModuleView(
                     .clickable { onSendPrompt() }
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                Text("Send", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (isId) "Kirim" else "Send",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
 }
 
 // ============================================================================
-// MODULE 3: FOCUS (Task-Linked Pomodoro Timer)
+// PHASE 2 - MODULE 3: FOCUS (Task-Linked Pomodoro Timer with Work/Break Phases)
 // ============================================================================
 @Composable
 private fun FocusModuleView(
+    lang: PochiLang,
     tasks: List<TodayTask>,
     linkedTaskId: String?,
     onSelectTask: (String?) -> Unit,
+    onCompleteLinkedTask: (TodayTask) -> Unit,
+    pomodoroPhase: PomodoroPhase,
+    onSelectPhase: (PomodoroPhase) -> Unit,
+    completedSessions: Int,
     durationMinutes: Int,
     remainingSeconds: Int,
     isRunning: Boolean,
@@ -2025,15 +2262,52 @@ private fun FocusModuleView(
     textPrimary: Color,
     textSecondary: Color,
     accentIndigo: Color,
-    accentEmerald: Color
+    accentEmerald: Color,
+    accentAmber: Color
 ) {
+    val isId = lang == PochiLang.ID
     val totalSecs = (durationMinutes * 60).coerceAtLeast(1)
     val fraction = (remainingSeconds.toFloat() / totalSecs.toFloat()).coerceIn(0f, 1f)
     val mm = remainingSeconds / 60
     val ss = remainingSeconds % 60
     val linkedTask = tasks.firstOrNull { it.id == linkedTaskId } ?: tasks.firstOrNull()
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Phase Switcher (Focus / Short Break / Long Break) + Session Counter
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PomodoroPhase.entries.forEach { phase ->
+                    val active = phase == pomodoroPhase
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (active) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
+                            .border(1.dp, if (active) accentIndigo else borderDark, RoundedCornerShape(50))
+                            .clickable { onSelectPhase(phase) }
+                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = phase.label(lang),
+                            color = if (active) Color.White else textSecondary,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = if (isId) "🔥 $completedSessions sesi" else "🔥 $completedSessions sessions",
+                color = accentAmber,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
         // Timer Display + Ring + Presets
         Row(
             modifier = Modifier
@@ -2076,25 +2350,48 @@ private fun FocusModuleView(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(
-                    text = linkedTask?.title ?: "Deep Focus Session",
-                    color = textPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = linkedTask?.title ?: (if (isId) "Sesi Fokus Mendalam" else "Deep Focus Session"),
+                        color = textPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (linkedTask != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(accentEmerald.copy(alpha = 0.18f))
+                                .clickable { onCompleteLinkedTask(linkedTask) }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = if (isId) "✓ Selesai" else "✓ Done",
+                                color = accentEmerald,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
 
-                // Preset chips (15m, 25m, 45m, 60m)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(15, 25, 45, 60).forEach { preset ->
+                // Preset chips (5m, 15m, 25m, 45m, 60m)
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf(5, 15, 25, 45, 60).forEach { preset ->
                         val selected = preset == durationMinutes
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (selected) accentIndigo else subtleDark)
                                 .clickable { onSelectPreset(preset) }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .padding(horizontal = 7.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "${preset}m",
@@ -2112,13 +2409,16 @@ private fun FocusModuleView(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(if (isRunning) Color(0xFFF59E0B) else accentEmerald)
+                            .background(if (isRunning) accentAmber else accentEmerald)
                             .clickable { onToggleStartPause() }
                             .padding(vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (isRunning) "Pause" else "Start Focus",
+                            text = when {
+                                isRunning -> if (isId) "Jeda" else "Pause"
+                                else -> if (isId) "Mulai Fokus" else "Start Focus"
+                            },
                             color = Color(0xFF052E16),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold
@@ -2132,7 +2432,12 @@ private fun FocusModuleView(
                             .padding(horizontal = 12.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Reset", color = textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = if (isId) "Ulang" else "Reset",
+                            color = textSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
             }
@@ -2147,8 +2452,13 @@ private fun FocusModuleView(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Link task:", color = textSecondary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                tasks.take(5).forEach { t ->
+                Text(
+                    text = if (isId) "Tugas:" else "Link task:",
+                    color = textSecondary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                tasks.take(6).forEach { t ->
                     val active = (linkedTask?.id == t.id)
                     Box(
                         modifier = Modifier
@@ -2172,14 +2482,17 @@ private fun FocusModuleView(
 }
 
 // ============================================================================
-// MODULE 4: DECK (Quick App & System Shortcut Grid)
+// PHASE 3 - MODULE 4: DECK (Quick App & System Shortcut Grid)
 // ============================================================================
 @Composable
 private fun DeckModuleView(
+    lang: PochiLang,
     installedApps: List<LaunchableAppInfo>,
     pinnedPackages: Set<String>,
     isCustomizing: Boolean,
     isTorchOn: Boolean,
+    isFlushStatusBar: Boolean,
+    onToggleFlushStatusBar: () -> Unit,
     onToggleCustomize: () -> Unit,
     onTogglePinApp: (String) -> Unit,
     onLaunchApp: (String) -> Unit,
@@ -2197,6 +2510,7 @@ private fun DeckModuleView(
     accentEmerald: Color,
     accentAmber: Color
 ) {
+    val isId = lang == PochiLang.ID
     val displayedApps = remember(installedApps, pinnedPackages, isCustomizing) {
         if (isCustomizing) {
             installedApps.take(24)
@@ -2207,7 +2521,7 @@ private fun DeckModuleView(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // System Shortcuts Row (Downloads, Screenshot, Lock Screen, Torch, Customize)
+        // System Shortcuts Row (Downloads, Screenshot, Lock Screen, Torch)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -2215,7 +2529,7 @@ private fun DeckModuleView(
             DeckShortcutTile(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Rounded.Download,
-                label = "Downloads",
+                label = if (isId) "Unduhan" else "Downloads",
                 accent = accentIndigo,
                 surfaceDark = surfaceDark,
                 borderDark = borderDark,
@@ -2233,7 +2547,7 @@ private fun DeckModuleView(
             DeckShortcutTile(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Rounded.Lock,
-                label = "Lock",
+                label = if (isId) "Kunci" else "Lock",
                 accent = accentAmber,
                 surfaceDark = surfaceDark,
                 borderDark = borderDark,
@@ -2242,7 +2556,7 @@ private fun DeckModuleView(
             DeckShortcutTile(
                 modifier = Modifier.weight(1f),
                 icon = if (isTorchOn) Icons.Rounded.FlashlightOn else Icons.Rounded.FlashlightOff,
-                label = if (isTorchOn) "Torch On" else "Torch",
+                label = if (isId) (if (isTorchOn) "Senter On" else "Senter") else (if (isTorchOn) "Torch On" else "Torch"),
                 accent = if (isTorchOn) accentAmber else textSecondary,
                 surfaceDark = surfaceDark,
                 borderDark = borderDark,
@@ -2250,28 +2564,42 @@ private fun DeckModuleView(
             )
         }
 
-        // Pinned Apps Header + Customize toggle
+        // Pinned Apps Header + Status-bar Flush toggle + Customize toggle
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isCustomizing) "Tap apps to pin/unpin to Deck" else "Pinned Apps",
+                text = when {
+                    isCustomizing -> if (isId) "Ketuk aplikasi untuk pin" else "Tap apps to pin/unpin"
+                    else -> if (isId) "Aplikasi Favorit" else "Pinned Apps"
+                },
                 color = textSecondary,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = if (isCustomizing) "Done" else "Edit Pins",
+                    text = if (isFlushStatusBar) {
+                        if (isId) "✓ Nempel Statusbar" else "✓ Statusbar Dock"
+                    } else {
+                        if (isId) "Mode Melayang" else "Floating Mode"
+                    },
+                    color = accentEmerald,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { onToggleFlushStatusBar() }
+                )
+                Text(
+                    text = if (isCustomizing) (if (isId) "Selesai" else "Done") else (if (isId) "Atur Pin" else "Edit Pins"),
                     color = accentIndigo,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.clickable { onToggleCustomize() }
                 )
                 Text(
-                    text = "Hide Island",
+                    text = if (isId) "Matikan" else "Hide",
                     color = Color(0xFFEF4444),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -2354,6 +2682,7 @@ private fun DeckModuleView(
 @Composable
 private fun ScreenshotOverlayCard(
     screenshot: ScreenshotPreviewInfo,
+    isId: Boolean,
     surfaceDark: Color,
     borderDark: Color,
     textPrimary: Color,
@@ -2382,7 +2711,7 @@ private fun ScreenshotOverlayCard(
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Screenshot Captured",
+                text = if (isId) "Screenshot Diambil" else "Screenshot Captured",
                 color = textPrimary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
@@ -2395,9 +2724,9 @@ private fun ScreenshotOverlayCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        MiniStatusButton("Copy", accentSky, onCopy)
-        MiniStatusButton("Save", Color(0xFF10B981), onSave)
-        MiniStatusButton("Share", Color(0xFF6366F1), onShare)
+        MiniStatusButton(if (isId) "Salin" else "Copy", accentSky, onCopy)
+        MiniStatusButton(if (isId) "Simpan" else "Save", Color(0xFF10B981), onSave)
+        MiniStatusButton(if (isId) "Bagikan" else "Share", Color(0xFF6366F1), onShare)
         Icon(
             imageVector = Icons.Rounded.Close,
             contentDescription = "Dismiss",
@@ -2415,7 +2744,6 @@ private fun DownloadOverlayBar(
     surfaceDark: Color,
     borderDark: Color,
     textPrimary: Color,
-    textSecondary: Color,
     accentSky: Color
 ) {
     Column(

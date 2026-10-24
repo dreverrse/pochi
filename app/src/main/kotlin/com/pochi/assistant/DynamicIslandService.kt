@@ -116,10 +116,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val density = resources.displayMetrics.density
 
-        // Collapsed container wide enough to host compact notch pills (idle 132dp -> live status 248dp)
-        // without per-frame WindowManager resize calls.
-        val collapsedWidthPx = (256 * density).toInt()
-        val collapsedHeightPx = (48 * density).toInt()
+        // Ultra-slim status-bar bounding box (188dp x 30dp) so the island hugs the top status bar
+        // cutout without obstructing app toolbars below it.
+        val collapsedWidthPx = (188 * density).toInt()
+        val collapsedHeightPx = (30 * density).toInt()
 
         params = WindowManager.LayoutParams(
             collapsedWidthPx,
@@ -187,7 +187,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                             params.flags = expandedFlags
                             params.x = 0
                             params.y = (PochiPrefs.offsetYFlow.value * density).toInt()
-                                .coerceAtLeast((6 * density).toInt())
                             params.width = expandedWidthPx
                             params.height = if (expandedHeightPx > 0) {
                                 expandedHeightPx.coerceAtLeast((180 * density).toInt())
