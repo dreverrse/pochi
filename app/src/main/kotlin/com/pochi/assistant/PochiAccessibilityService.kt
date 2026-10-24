@@ -1,6 +1,7 @@
 package com.pochi.assistant
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -64,5 +65,23 @@ class PochiAccessibilityService : AccessibilityService() {
     companion object {
         @Volatile
         var instance: PochiAccessibilityService? = null
+
+        fun takeScreenshot(): Boolean {
+            val service = instance ?: return false
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                service.performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
+            } else {
+                false
+            }
+        }
+
+        fun lockScreen(): Boolean {
+            val service = instance ?: return false
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                service.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
+            } else {
+                false
+            }
+        }
     }
 }
