@@ -475,6 +475,18 @@ class MainActivity : ComponentActivity() {
                         ActivityResultContracts.RequestPermission()
                     ) { granted -> callGranted = granted }
 
+                    var locationGranted by remember {
+                        mutableStateOf(
+                            ContextCompat.checkSelfPermission(
+                                this@MainActivity,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            ) == PackageManager.PERMISSION_GRANTED
+                        )
+                    }
+                    val locationLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { granted -> locationGranted = granted }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -511,14 +523,14 @@ class MainActivity : ComponentActivity() {
                         PermissionPillButton(
                             modifier = Modifier.weight(1f),
                             icon = Icons.Rounded.Mic,
-                            label = if (micGranted) "Suara Aktif" else "Izinkan Suara",
+                            label = if (micGranted) "Mendengar Aktif" else "Izinkan Mikrofon",
                             subtleBg = subtleBg,
                             textPrimary = if (micGranted) Color(0xFF30D158) else textPrimary
                         ) {
                             if (!micGranted) {
                                 micLauncher.launch(Manifest.permission.RECORD_AUDIO)
                             } else {
-                                Toast.makeText(this@MainActivity, "Mikrofon suara Pochi sudah aktif", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@MainActivity, "Mikrofon pendengar Pochi sudah aktif", Toast.LENGTH_SHORT).show()
                             }
                         }
 
@@ -533,6 +545,25 @@ class MainActivity : ComponentActivity() {
                                 callLauncher.launch(Manifest.permission.CALL_PHONE)
                             } else {
                                 Toast.makeText(this@MainActivity, "Akses panggilan telepon sudah aktif", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PermissionPillButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            icon = Icons.Rounded.LocationOn,
+                            label = if (locationGranted) "Lokasi Cuaca & Sholat Otomatis Aktif" else "Izinkan Lokasi (Cuaca & Sholat Otomatis)",
+                            subtleBg = subtleBg,
+                            textPrimary = if (locationGranted) Color(0xFF30D158) else textPrimary
+                        ) {
+                            if (!locationGranted) {
+                                locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                            } else {
+                                Toast.makeText(this@MainActivity, "Lokasi otomatis cuaca & sholat sudah aktif", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }

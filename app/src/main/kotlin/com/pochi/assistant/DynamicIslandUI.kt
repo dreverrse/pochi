@@ -8,6 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
+import android.location.Geocoder
+import android.location.Location
+import android.location.LocationManager
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
@@ -15,17 +18,20 @@ import android.provider.AlarmClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
@@ -53,8 +59,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -84,6 +94,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 /**
  * 6 Human-Centric Daily AI Assistant Modules (Icon-only top bar so text is NEVER truncated to "..."):
@@ -251,10 +262,14 @@ fun PochiIslandBot(
     var taskFilter by remember { mutableStateOf(TaskFilter.ALL) }
     var newTaskInput by remember { mutableStateOf("") }
 
-    // Weather & Prayer Module State
+    // Weather & Prayer Module State (100% Automatic User Location Detection + Hourly Chart Data)
     var liveTempOverride by remember(selectedCity) { mutableStateOf<Int?>(null) }
+    var liveHumidityOverride by remember(selectedCity) { mutableStateOf<Int?>(null) }
+    var liveWindOverride by remember(selectedCity) { mutableStateOf<Int?>(null) }
+    var liveHourlyTemps by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
+    var livePrayerSchedule by remember { mutableStateOf<List<PrayerTimeItem>?>(null) }
+    var locationSourceLabel by remember { mutableStateOf("Auto GPS/IP") }
     var isRefreshingWeather by remember { mutableStateOf(false) }
-    var prayerReminderEnabled by remember { mutableStateOf(true) }
 
     // Wallet / Money Tracker Module State
     var expenseInput by remember { mutableStateOf("") }
@@ -268,12 +283,11 @@ fun PochiIslandBot(
     var isFocusRunning by remember { mutableStateOf(false) }
     var linkedTaskId by remember { mutableStateOf<String?>(null) }
 
-    // Smart AI Command Bar & Chat/Voice Assistant State
+    // Smart AI Command Bar & Chat/Voice Assistant State (Pochi Hanya Mendengar - Tanpa Suara TTS)
     var commandBarInput by remember { mutableStateOf("") }
     var aiQuickReply by remember { mutableStateOf<String?>(null) }
     var isAiThinking by remember { mutableStateOf(false) }
     var chatInput by remember { mutableStateOf("") }
-    var voiceReplyEnabled by remember { mutableStateOf(true) }
     var isListeningVoice by remember { mutableStateOf(false) }
     var voicePartialText by remember { mutableStateOf("") }
     var quickComposerMode by remember { mutableStateOf(QuickPhoneComposerMode.NONE) }
@@ -286,11 +300,11 @@ fun PochiIslandBot(
                     id = "welcome_1",
                     isUser = false,
                     text = if (isId) {
-                        "Halo! Aku Pochi. Kamu bisa ngobrol via teks atau suara 🎙️, minta buka aplikasi apa saja, telepon kontak/nomor, kirim SMS/WA, cek sholat & cuaca, atau catat pengeluaran!"
+                        "Halo! Aku Pochi. Ketuk tombol mikrofon 🎙️ untuk bicara (aku siap mendengarkan) atau ketik pesan untuk buka aplikasi, telepon, SMS/WA, cek cuaca & sholat otomatis, atau catat uang!"
                     } else {
-                        "Hi! I'm Pochi. Chat by text or voice 🎙️, ask me to open any app, call contacts, send SMS/WA, check prayer & weather, or log expenses!"
+                        "Hi! I'm Pochi. Tap the mic 🎙️ to speak (I'm listening) or type to open any app, call contacts, send SMS/WA, check auto-located weather & prayer, or track money!"
                     },
-                    actionBadge = if (isId) "Siap Terhubung" else "Ready",
+                    actionBadge = if (isId) "Siap Mendengar" else "Listening Ready",
                     timeLabel = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
                 )
             )
@@ -303,38 +317,6 @@ fun PochiIslandBot(
     var deckSearchQuery by remember { mutableStateOf("") }
     var showAllAppsInDeck by remember { mutableStateOf(false) }
     var isTorchOn by remember { mutableStateOf(false) }
-
-    // Text-to-Speech (Suara Balasan Pochi)
-    var ttsEngine by remember { mutableStateOf<TextToSpeech?>(null) }
-    DisposableEffect(context) {
-        var engine: TextToSpeech? = null
-        runCatching {
-            engine = TextToSpeech(context.applicationContext) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    val targetLocale = if (PochiPrefs.langFlow.value == PochiLang.ID) Locale("id", "ID") else Locale.US
-                    engine?.language = targetLocale
-                    engine?.setSpeechRate(1.03f)
-                }
-            }
-            ttsEngine = engine
-        }
-        onDispose {
-            runCatching {
-                engine?.stop()
-                engine?.shutdown()
-            }
-        }
-    }
-
-    fun speakPochiReply(text: String) {
-        if (!voiceReplyEnabled || text.isBlank()) return
-        runCatching {
-            val engine = ttsEngine ?: return
-            engine.language = if (isId) Locale("id", "ID") else Locale.US
-            customEmote = PochiEmote.HAPPY
-            engine.speak(text.take(260), TextToSpeech.QUEUE_FLUSH, null, "pochi_tts_${System.currentTimeMillis()}")
-        }
-    }
 
     val remainingTodayCount = tasks.count { !it.isDone && it.dayIndex == 0 }
     val smartBanner = remember(lang, selectedCity, waterGlasses, remainingTodayCount, interactionTick) {
@@ -387,44 +369,190 @@ fun PochiIslandBot(
         }
     }
 
-    // Optional live temperature fetch from Open-Meteo (zero API key needed)
-    fun refreshLiveWeather() {
+    // 100% Automatic User Location + Live Weather + Hourly Temperature Chart + Prayer Times
+    fun autoDetectLocationAndWeather() {
         if (isRefreshingWeather) return
         isRefreshingWeather = true
-        val coords = when (selectedCity) {
-            "Bandung" -> -6.9175 to 107.6191
-            "Surabaya" -> -7.2575 to 112.7521
-            "Yogyakarta" -> -7.7956 to 110.3695
-            "Semarang" -> -6.9667 to 110.4167
-            "Medan" -> 3.5952 to 98.6722
-            "Makassar" -> -5.1477 to 119.4327
-            "Denpasar" -> -8.6705 to 115.2126
-            else -> -6.2088 to 106.8456 // Jakarta
-        }
         coroutineScope.launch(Dispatchers.IO) {
-            val fetched = runCatching {
-                val url = URL("https://api.open-meteo.com/v1/forecast?latitude=${coords.first}&longitude=${coords.second}&current_weather=true")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 3500
-                    readTimeout = 3500
+            var lat: Double? = null
+            var lon: Double? = null
+            var detectedCity: String? = null
+            var sourceBadge = "Auto IP"
+
+            // 1. Try Android GPS / Network LocationManager first if permission is granted
+            runCatching {
+                val hasCoarse = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+                val hasFine = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (hasCoarse || hasFine) {
+                    val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                    val providers = listOf(
+                        LocationManager.GPS_PROVIDER,
+                        LocationManager.NETWORK_PROVIDER,
+                        LocationManager.PASSIVE_PROVIDER
+                    )
+                    var bestLoc: Location? = null
+                    for (p in providers) {
+                        val loc = runCatching { lm?.getLastKnownLocation(p) }.getOrNull() ?: continue
+                        if (bestLoc == null || loc.time > bestLoc.time) {
+                            bestLoc = loc
+                        }
+                    }
+                    if (bestLoc != null) {
+                        lat = bestLoc.latitude
+                        lon = bestLoc.longitude
+                        sourceBadge = "GPS"
+                        @Suppress("DEPRECATION")
+                        val addresses = runCatching {
+                            Geocoder(context, Locale.getDefault()).getFromLocation(bestLoc.latitude, bestLoc.longitude, 1)
+                        }.getOrNull()
+                        val addr = addresses?.firstOrNull()
+                        detectedCity = addr?.locality
+                            ?: addr?.subAdminArea
+                            ?: addr?.adminArea
+                    }
                 }
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(body)
-                json.getJSONObject("current_weather").getDouble("temperature").toInt()
-            }.getOrNull()
+            }
+
+            // 2. Automatic IP Geolocation fallback (works immediately without GPS lock)
+            if (lat == null || lon == null || detectedCity.isNullOrBlank()) {
+                runCatching {
+                    val conn = (URL("https://ipwho.is/").openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 3500
+                        readTimeout = 3500
+                    }
+                    val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+                    if (json.optBoolean("success", true)) {
+                        if (lat == null) lat = json.optDouble("latitude", -6.2088)
+                        if (lon == null) lon = json.optDouble("longitude", 106.8456)
+                        if (detectedCity.isNullOrBlank()) {
+                            detectedCity = json.optString("city").takeIf { it.isNotBlank() }
+                                ?: json.optString("region").takeIf { it.isNotBlank() }
+                        }
+                    }
+                }.onFailure {
+                    runCatching {
+                        val conn2 = (URL("https://get.geojs.io/v1/ip/geo.json").openConnection() as HttpURLConnection).apply {
+                            connectTimeout = 3500
+                            readTimeout = 3500
+                        }
+                        val json2 = JSONObject(conn2.inputStream.bufferedReader().use { it.readText() })
+                        if (lat == null) lat = json2.optString("latitude").toDoubleOrNull()
+                        if (lon == null) lon = json2.optString("longitude").toDoubleOrNull()
+                        if (detectedCity.isNullOrBlank()) {
+                            detectedCity = json2.optString("city").takeIf { it.isNotBlank() }
+                        }
+                    }
+                }
+            }
+
+            val finalLat = lat ?: -6.2088
+            val finalLon = lon ?: 106.8456
+            val finalCity = detectedCity?.trim()?.takeIf { it.isNotBlank() } ?: selectedCity
+
+            // 3. Fetch Live Weather + Hourly Temperature Chart (06:00 - 21:00) from Open-Meteo
+            var fetchedTemp: Int? = null
+            var fetchedWind: Int? = null
+            var fetchedHumidity: Int? = null
+            val hourlySlots = mutableListOf<Pair<String, Int>>()
+
+            runCatching {
+                val weatherUrl = URL(
+                    "https://api.open-meteo.com/v1/forecast?latitude=$finalLat&longitude=$finalLon&current_weather=true&hourly=temperature_2m,relative_humidity_2m&timezone=auto&forecast_days=1"
+                )
+                val conn = (weatherUrl.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                }
+                val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+                val cw = json.optJSONObject("current_weather")
+                if (cw != null) {
+                    fetchedTemp = cw.optDouble("temperature", 29.0).roundToInt()
+                    fetchedWind = cw.optDouble("windspeed", 11.0).roundToInt()
+                }
+                val hourly = json.optJSONObject("hourly")
+                val tempsArr = hourly?.optJSONArray("temperature_2m")
+                val humArr = hourly?.optJSONArray("relative_humidity_2m")
+                val nowHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                if (humArr != null && nowHour < humArr.length()) {
+                    fetchedHumidity = humArr.optInt(nowHour, 72)
+                }
+                if (tempsArr != null && tempsArr.length() >= 22) {
+                    listOf(6 to "06:00", 9 to "09:00", 12 to "12:00", 15 to "15:00", 18 to "18:00", 21 to "21:00").forEach { (hIdx, label) ->
+                        hourlySlots.add(label to tempsArr.optDouble(hIdx, 28.0).roundToInt())
+                    }
+                }
+            }
+
+            // 4. Fetch Accurate 5-Time Prayer Schedule for User Coordinates (Aladhan Kemenag RI Method 20)
+            var fetchedPrayers: List<PrayerTimeItem>? = null
+            runCatching {
+                val prayerUrl = URL("https://api.aladhan.com/v1/timings?latitude=$finalLat&longitude=$finalLon&method=20")
+                val conn = (prayerUrl.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                }
+                val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+                val timings = json.optJSONObject("data")?.optJSONObject("timings")
+                if (timings != null) {
+                    fun parseHm(key: String, nameId: String, nameEn: String, defH: Int, defM: Int): PrayerTimeItem {
+                        val raw = timings.optString(key, "").substringBefore(" ").trim()
+                        val parts = raw.split(":")
+                        val h = parts.getOrNull(0)?.toIntOrNull() ?: defH
+                        val m = parts.getOrNull(1)?.toIntOrNull() ?: defM
+                        return PrayerTimeItem(nameId, nameEn, h, m)
+                    }
+                    fetchedPrayers = listOf(
+                        parseHm("Fajr", "Subuh", "Fajr", 4, 38),
+                        parseHm("Dhuhr", "Dzuhur", "Dhuhr", 11, 56),
+                        parseHm("Asr", "Ashar", "Asr", 15, 14),
+                        parseHm("Maghrib", "Maghrib", "Maghrib", 17, 57),
+                        parseHm("Isha", "Isya", "Isha", 19, 8)
+                    )
+                }
+            }
+
             withContext(Dispatchers.Main) {
-                if (fetched != null) {
-                    liveTempOverride = fetched
+                if (finalCity != selectedCity) {
+                    PochiPrefs.saveCity(context, finalCity)
                 }
+                locationSourceLabel = sourceBadge
+                if (fetchedTemp != null) liveTempOverride = fetchedTemp
+                if (fetchedHumidity != null) liveHumidityOverride = fetchedHumidity
+                if (fetchedWind != null) liveWindOverride = fetchedWind
+                if (hourlySlots.isNotEmpty()) liveHourlyTemps = hourlySlots
+                if (fetchedPrayers != null) livePrayerSchedule = fetchedPrayers
                 isRefreshingWeather = false
             }
         }
     }
 
-    // Automatically shrink into the ultra-clean "Thin Rounded Eye Box" in the center after 5s of idle
+    // Automatically detect user location & weather on launch
+    LaunchedEffect(Unit) {
+        autoDetectLocationAndWeather()
+    }
+
+    // Auto-clear customEmote after 2.6s so collapsed Pochi keeps cycling through lively expressions!
+    LaunchedEffect(customEmote) {
+        if (customEmote != null) {
+            delay(2600)
+            customEmote = null
+            if (botState == BotState.DONE) {
+                botState = BotState.IDLE
+            }
+        }
+    }
+
+    // Automatically shrink into the ultra-clean "Thin Rounded Eye Box" in the center after 4.5s of idle
     LaunchedEffect(islandMode, interactionTick, isFocusRunning, mediaPlayback.isPlaying, activeDownload) {
         if (islandMode == IslandMode.COLLAPSED && !isFocusRunning && !mediaPlayback.isPlaying && activeDownload == null) {
-            delay(5000)
+            delay(4500)
             isSlimEyeBox = true
         } else {
             isSlimEyeBox = false
@@ -474,24 +602,44 @@ fun PochiIslandBot(
         }
     }
 
-    // Autonomous Pochi Mood & Expression Cycle (changes eye expressions dynamically like an AI companion)
-    LaunchedEffect(botState, isHidden, peekMode, selectedCity, waterGlasses, remainingTodayCount) {
+    // Autonomous Lively Pochi Mood & Gaze Cycle (especially rich & dynamic when collapsed!)
+    val collapsedExpressivePool = remember {
+        listOf(
+            PochiEmote.NORMAL,
+            PochiEmote.SMILING,
+            PochiEmote.HAPPY,
+            PochiEmote.WINK_LEFT,
+            PochiEmote.HMM,
+            PochiEmote.CUTE,
+            PochiEmote.EXCITED,
+            PochiEmote.CALM,
+            PochiEmote.LOVE,
+            PochiEmote.FOCUS,
+            PochiEmote.SURPRISED,
+            PochiEmote.BLUSH,
+            PochiEmote.LAUGHING
+        )
+    }
+    LaunchedEffect(botState, islandMode, isHidden, peekMode, selectedCity, waterGlasses, remainingTodayCount) {
+        var stepIdx = 0
         while (true) {
-            delay((3800..6500).random().toLong())
+            val waitTime = if (islandMode == IslandMode.COLLAPSED) (2100..3400).random().toLong() else (3800..5800).random().toLong()
+            delay(waitTime)
             if (botState == BotState.IDLE) {
+                stepIdx++
                 val idleDuration = System.currentTimeMillis() - lastActiveTime
-                idleEmote = if ((0..3).random() == 0) {
-                    smartBanner.emote
-                } else {
-                    PochiMood.nextAutonomousMood(
+                idleEmote = when {
+                    islandMode == IslandMode.COLLAPSED && stepIdx % 4 != 0 -> collapsedExpressivePool.random()
+                    stepIdx % 4 == 0 -> smartBanner.emote
+                    else -> PochiMood.nextAutonomousMood(
                         idleMillis = idleDuration,
                         isPeeking = isHidden && peekMode
                     )
                 }
-                // Subtle autonomous eye gaze shift so Pochi feels alive in the center box
+                // Smooth autonomous eye gaze shifts (left, right, up, down, center) so Pochi looks around organically
                 eyeGazeOffset = Offset(
-                    x = listOf(-0.45f, -0.2f, 0f, 0f, 0.2f, 0.45f).random(),
-                    y = listOf(-0.15f, 0f, 0.15f).random()
+                    x = listOf(-0.62f, -0.35f, -0.15f, 0f, 0f, 0.15f, 0.35f, 0.62f).random(),
+                    y = listOf(-0.28f, -0.12f, 0f, 0.12f, 0.25f).random()
                 )
             }
         }
@@ -630,7 +778,6 @@ fun PochiIslandBot(
             )
             customEmote = PochiEmote.HAPPY
             botState = BotState.DONE
-            speakPochiReply(localReply)
             if (action?.type in listOf("OPEN_APP", "CALL", "SMS", "WHATSAPP", "MAPS", "YOUTUBE", "SEARCH_WEB", "CAMERA", "SHARE")) {
                 setMode(IslandMode.COLLAPSED)
             }
@@ -657,7 +804,6 @@ fun PochiIslandBot(
             }
             val msg = if (isId) "Timer fokus $mins menit dimulai!" else "Focus timer for $mins mins started!"
             appendChatMessage(isUser = false, text = msg, actionBadge = "FOCUS")
-            speakPochiReply(msg)
             customEmote = PochiEmote.FOCUS
             currentTab = PochiTab.FOCUS
             setMode(IslandMode.COLLAPSED)
@@ -677,7 +823,6 @@ fun PochiIslandBot(
                     "Logged expense: ${parsedExpense.title} (${NaturalExpenseParser.formatRupiah(parsedExpense.amountRp)})."
                 }
                 appendChatMessage(isUser = false, text = msg, actionBadge = "WALLET")
-                speakPochiReply(msg)
                 customEmote = PochiEmote.HAPPY
                 botState = BotState.DONE
                 if (!fromChatOrVoice) {
@@ -725,7 +870,6 @@ fun PochiIslandBot(
                         isAiThinking = false
                         botState = BotState.DONE
                         customEmote = emote
-                        speakPochiReply(cleanReply)
                         return@launch
                     }
                 }
@@ -737,7 +881,6 @@ fun PochiIslandBot(
                 isAiThinking = false
                 botState = BotState.DONE
                 customEmote = emote
-                speakPochiReply(localReply)
             }
             return
         }
@@ -756,7 +899,7 @@ fun PochiIslandBot(
         }
     }
 
-    // SpeechRecognizer (Input Suara Langsung ke Pochi)
+    // SpeechRecognizer (Input Suara Langsung ke Pochi - Pochi Hanya Mendengar Tanpa Suara TTS)
     var speechRecognizerRef by remember { mutableStateOf<SpeechRecognizer?>(null) }
     DisposableEffect(Unit) {
         onDispose {
@@ -797,7 +940,6 @@ fun PochiIslandBot(
         }
 
         runCatching {
-            ttsEngine?.stop()
             if (speechRecognizerRef == null) {
                 speechRecognizerRef = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
             }
@@ -889,6 +1031,27 @@ fun PochiIslandBot(
 
     // Mandatory 120fps spring specification
     val transition = updateTransition(targetState = islandMode, label = "island120fpsTransition")
+
+    // Subtle organic breathing & floating animation when collapsed so the island never looks stiff
+    val collapsedAmbientTransition = rememberInfiniteTransition(label = "collapsedAmbient")
+    val collapsedBreathScale by collapsedAmbientTransition.animateFloat(
+        initialValue = 0.985f,
+        targetValue = 1.018f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "collapsedBreathScale"
+    )
+    val collapsedFloatPx by collapsedAmbientTransition.animateFloat(
+        initialValue = -1.2f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "collapsedFloatPx"
+    )
 
     val islandWidth by transition.animateDp(
         transitionSpec = {
@@ -1042,6 +1205,11 @@ fun PochiIslandBot(
                 .graphicsLayer {
                     clip = true
                     shape = islandShape
+                    if (islandMode == IslandMode.COLLAPSED) {
+                        scaleX = collapsedBreathScale
+                        scaleY = 2f - collapsedBreathScale
+                        translationY = if (isFlushStatusBar && offsetY <= 2) 0f else collapsedFloatPx
+                    }
                 }
                 .background(islandBlack, islandShape)
                 .border(
@@ -1812,7 +1980,7 @@ fun PochiIslandBot(
                                     )
                                 }
 
-                                // ----------------- MODULE 1B: CHAT, SUARA & KONEKSI HP -----------------
+                                // ----------------- MODULE 1B: CHAT, SUARA (MENDENGAR) & KONEKSI HP -----------------
                                 PochiTab.CHAT -> {
                                     ChatAndVoiceModuleView(
                                         lang = lang,
@@ -1832,14 +2000,6 @@ fun PochiIslandBot(
                                         isListeningVoice = isListeningVoice,
                                         voicePartialText = voicePartialText,
                                         onToggleVoiceMic = { toggleVoiceListening() },
-                                        voiceReplyEnabled = voiceReplyEnabled,
-                                        onToggleVoiceReply = {
-                                            bump()
-                                            voiceReplyEnabled = !voiceReplyEnabled
-                                            if (!voiceReplyEnabled) {
-                                                runCatching { ttsEngine?.stop() }
-                                            }
-                                        },
                                         isAiThinking = isAiThinking,
                                         quickComposerMode = quickComposerMode,
                                         onSelectQuickComposer = { mode ->
@@ -1938,25 +2098,21 @@ fun PochiIslandBot(
                                     )
                                 }
 
-                                // ----------------- MODULE 2: CUACA & JADWAL SHOLAT -----------------
+                                // ----------------- MODULE 2: CUACA OTOMATIS & JADWAL SHOLAT + CHART -----------------
                                 PochiTab.LIFE -> {
                                     WeatherAndPrayerModuleView(
                                         lang = lang,
                                         selectedCity = selectedCity,
+                                        locationSourceLabel = locationSourceLabel,
                                         liveTempOverride = liveTempOverride,
+                                        liveHumidityOverride = liveHumidityOverride,
+                                        liveWindOverride = liveWindOverride,
+                                        liveHourlyTemps = liveHourlyTemps,
+                                        livePrayerSchedule = livePrayerSchedule,
                                         isRefreshingWeather = isRefreshingWeather,
-                                        prayerReminderEnabled = prayerReminderEnabled,
-                                        onSelectCity = { city ->
-                                            bump()
-                                            PochiPrefs.saveCity(context, city)
-                                        },
                                         onRefreshWeather = {
                                             bump()
-                                            refreshLiveWeather()
-                                        },
-                                        onTogglePrayerReminder = {
-                                            bump()
-                                            prayerReminderEnabled = !prayerReminderEnabled
+                                            autoDetectLocationAndWeather()
                                         },
                                         onSchedulePrayerTask = { prayer ->
                                             bump()
@@ -2707,6 +2863,23 @@ private fun TodayModuleView(
             }
         }
 
+        // Weekly Productivity & Hydration Mini-Chart (Visual Bar Chart & Table)
+        TodayProductivityChartCard(
+            isId = isId,
+            weekDays = weekDays,
+            tasks = tasks,
+            selectedDayOffset = selectedDayOffset,
+            waterGlasses = waterGlasses,
+            surfaceDark = surfaceDark,
+            subtleDark = subtleDark,
+            borderDark = borderDark,
+            textPrimary = textPrimary,
+            textSecondary = textSecondary,
+            accentEmerald = accentEmerald,
+            accentSky = accentSky,
+            accentAmber = accentAmber
+        )
+
         // Bottom Rectangular Rounded Task Input Bar
         Row(
             modifier = Modifier
@@ -2771,8 +2944,104 @@ private fun TodayModuleView(
     }
 }
 
+@Composable
+private fun TodayProductivityChartCard(
+    isId: Boolean,
+    weekDays: List<Triple<Int, String, Int>>,
+    tasks: List<TodayTask>,
+    selectedDayOffset: Int,
+    waterGlasses: Int,
+    surfaceDark: Color,
+    subtleDark: Color,
+    borderDark: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    accentEmerald: Color,
+    accentSky: Color,
+    accentAmber: Color
+) {
+    val waterPct = ((waterGlasses.coerceIn(0, 8) / 8f) * 100).roundToInt()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(surfaceDark)
+            .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (isId) "📊 Grafik Produktivitas 7 Hari & Hidrasi" else "📊 7-Day Productivity & Hydration Chart",
+                color = textPrimary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = if (isId) "Air: $waterPct%" else "Water: $waterPct%",
+                color = accentSky,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            weekDays.forEach { (offset, dayLabel, _) ->
+                val dayTasks = tasks.filter { it.dayIndex == offset }
+                val total = dayTasks.size
+                val done = dayTasks.count { it.isDone }
+                val ratio = when {
+                    total > 0 -> (done.toFloat() / total.toFloat()).coerceIn(0.18f, 1f)
+                    offset == 0 -> 0.45f
+                    offset < 0 -> 0.65f
+                    else -> 0.22f
+                }
+                val isSel = offset == selectedDayOffset
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Bottom
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.62f)
+                            .height((26.dp * ratio).coerceAtLeast(5.dp))
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(
+                                when {
+                                    isSel -> accentEmerald
+                                    done > 0 -> accentSky
+                                    else -> subtleDark
+                                }
+                            )
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = dayLabel.take(2),
+                        color = if (isSel) Color.White else textSecondary,
+                        fontSize = 8.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ============================================================================
-// MODULE 1B: CHAT, SUARA & KONEKSI SEMUA APLIKASI/TELEPON/SMS/WA
+// MODULE 1B: CHAT, SUARA (HANYA MENDENGAR) & KONEKSI SEMUA APLIKASI/TELEPON/SMS/WA
 // ============================================================================
 @Composable
 private fun ChatAndVoiceModuleView(
@@ -2784,8 +3053,6 @@ private fun ChatAndVoiceModuleView(
     isListeningVoice: Boolean,
     voicePartialText: String,
     onToggleVoiceMic: () -> Unit,
-    voiceReplyEnabled: Boolean,
-    onToggleVoiceReply: () -> Unit,
     isAiThinking: Boolean,
     quickComposerMode: QuickPhoneComposerMode,
     onSelectQuickComposer: (QuickPhoneComposerMode) -> Unit,
@@ -2815,7 +3082,7 @@ private fun ChatAndVoiceModuleView(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 1-Tap Phone Connection Bar: Telepon, SMS, WhatsApp, Buka Aplikasi, Share & Suara TTS
+        // 1-Tap Phone Connection Bar: Telepon, SMS, WhatsApp, Buka Aplikasi, & Bagikan (Tanpa Suara TTS)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2877,29 +3144,6 @@ private fun ChatAndVoiceModuleView(
                 borderDark = borderDark,
                 onClick = onShareAnything
             )
-
-            // Toggle Voice Reply (TTS Suara Pochi) - Icon-only / Compact
-            Box(
-                modifier = Modifier
-                    .height(30.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (voiceReplyEnabled) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
-                    .border(
-                        1.dp,
-                        if (voiceReplyEnabled) accentIndigo else borderDark,
-                        RoundedCornerShape(8.dp)
-                    )
-                    .clickable { onToggleVoiceReply() }
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (voiceReplyEnabled) Icons.Rounded.VolumeUp else Icons.Rounded.VolumeOff,
-                    contentDescription = "Voice Reply",
-                    tint = if (voiceReplyEnabled) accentIndigo else textSecondary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
         }
 
         // Inline Quick Composer for Call / SMS / WhatsApp / Open Any Installed App
@@ -3308,18 +3552,20 @@ private fun QuickConnectActionChip(
 }
 
 // ============================================================================
-// MODULE 2: CUACA PINTAR & JADWAL SHOLAT 5 WAKTU (Weather & Prayer Schedule)
+// MODULE 2: CUACA OTOMATIS, GRAFIK SUHU HARIAN & TABEL JADWAL SHOLAT 5 WAKTU
 // ============================================================================
 @Composable
 private fun WeatherAndPrayerModuleView(
     lang: PochiLang,
     selectedCity: String,
+    locationSourceLabel: String,
     liveTempOverride: Int?,
+    liveHumidityOverride: Int?,
+    liveWindOverride: Int?,
+    liveHourlyTemps: List<Pair<String, Int>>,
+    livePrayerSchedule: List<PrayerTimeItem>?,
     isRefreshingWeather: Boolean,
-    prayerReminderEnabled: Boolean,
-    onSelectCity: (String) -> Unit,
     onRefreshWeather: () -> Unit,
-    onTogglePrayerReminder: () -> Unit,
     onSchedulePrayerTask: (PrayerTimeItem) -> Unit,
     surfaceDark: Color,
     subtleDark: Color,
@@ -3332,54 +3578,62 @@ private fun WeatherAndPrayerModuleView(
     accentSky: Color
 ) {
     val isId = lang == PochiLang.ID
-    val weather = remember(selectedCity, liveTempOverride) {
+    val baseWeather = remember(selectedCity, liveTempOverride) {
         WeatherHelper.getSnapshot(selectedCity, liveTempOverride)
     }
-    val prayerSchedule = remember(selectedCity) {
-        PrayerScheduleHelper.getScheduleForCity(selectedCity)
+    val humidity = liveHumidityOverride ?: baseWeather.humidityPercent
+    val windKmh = liveWindOverride ?: baseWeather.windKmh
+
+    val prayerSchedule = remember(selectedCity, livePrayerSchedule) {
+        livePrayerSchedule ?: PrayerScheduleHelper.getScheduleForCity(selectedCity)
     }
-    val nextPrayerSummary = remember(selectedCity) {
-        PrayerScheduleHelper.getNextPrayer(selectedCity)
+    val nowCal = remember { Calendar.getInstance() }
+    val nowMins = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE)
+    val upcomingPrayer = remember(prayerSchedule, nowMins) {
+        prayerSchedule.firstOrNull { it.totalMinutes > nowMins } ?: prayerSchedule.first()
+    }
+    val diffMins = remember(upcomingPrayer, nowMins) {
+        if (upcomingPrayer.totalMinutes > nowMins) {
+            upcomingPrayer.totalMinutes - nowMins
+        } else {
+            (1440 - nowMins) + upcomingPrayer.totalMinutes
+        }
+    }
+    val remText = remember(diffMins, isId) {
+        val h = diffMins / 60
+        val m = diffMins % 60
+        if (isId) {
+            if (h > 0) "${h}j ${m}m lagi" else "${m}m lagi"
+        } else {
+            if (h > 0) "in ${h}h ${m}m" else "in ${m}m"
+        }
+    }
+
+    val hourlyChartData = remember(liveHourlyTemps, baseWeather.tempC) {
+        if (liveHourlyTemps.size >= 5) {
+            liveHourlyTemps
+        } else {
+            val t = baseWeather.tempC
+            listOf(
+                "06:00" to (t - 4),
+                "09:00" to (t - 1),
+                "12:00" to (t + 2),
+                "15:00" to (t + 1),
+                "18:00" to (t - 1),
+                "21:00" to (t - 3)
+            )
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // City Selector Row (Persegi Panjang Rounded)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            PrayerScheduleHelper.supportedCities.forEach { city ->
-                val active = city == selectedCity
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (active) Color.White else surfaceDark)
-                        .border(1.dp, if (active) Color.White else borderDark, RoundedCornerShape(8.dp))
-                        .clickable { onSelectCity(city) }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = city,
-                        color = if (active) Color(0xFF0A0A0A) else textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        // Smart Weather Card (Suhu, Kondisi, Kelembapan & Rekomendasi AI)
+        // 1. Smart Auto-Located Weather Card + Icon-Only Refresh Button
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(surfaceDark)
                 .border(1.dp, borderDark, RoundedCornerShape(10.dp))
-                .padding(12.dp),
+                .padding(11.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
@@ -3389,11 +3643,12 @@ private fun WeatherAndPrayerModuleView(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(38.dp)
                             .clip(RoundedCornerShape(9.dp))
                             .background(subtleDark),
                         contentAlignment = Alignment.Center
@@ -3402,40 +3657,57 @@ private fun WeatherAndPrayerModuleView(
                             imageVector = Icons.Rounded.WbSunny,
                             contentDescription = null,
                             tint = accentAmber,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(21.dp)
                         )
                     }
-                    Column {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "${weather.tempC}°C",
+                                text = "${baseWeather.tempC}°C",
                                 color = textPrimary,
-                                fontSize = 20.sp,
+                                fontSize = 19.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
-                                text = if (isId) weather.conditionId else weather.conditionEn,
+                                text = if (isId) baseWeather.conditionId else baseWeather.conditionEn,
                                 color = accentSky,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(accentEmerald.copy(alpha = 0.16f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "📍 ${baseWeather.city} ($locationSourceLabel)",
+                                    color = accentEmerald,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                         Text(
                             text = if (isId) {
-                                "${weather.city} • Kelembapan ${weather.humidityPercent}% • Angin ${weather.windKmh} km/j"
+                                "Lokasi otomatis • Kelembapan $humidity% • Angin $windKmh km/j"
                             } else {
-                                "${weather.city} • Humidity ${weather.humidityPercent}% • Wind ${weather.windKmh} km/h"
+                                "Auto-located • Humidity $humidity% • Wind $windKmh km/h"
                             },
                             color = textSecondary,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                // Icon-only Refresh Button (sesuai permintaan user: ganti tulisan Segarkan menjadi Icon saja)
+                // Icon-only Refresh Button (Deteksi ulang lokasi & cuaca otomatis)
                 Box(
                     modifier = Modifier
                         .size(34.dp)
@@ -3447,115 +3719,124 @@ private fun WeatherAndPrayerModuleView(
                 ) {
                     Icon(
                         imageVector = if (isRefreshingWeather) Icons.Rounded.Sync else Icons.Rounded.Refresh,
-                        contentDescription = if (isId) "Segarkan Cuaca" else "Refresh Weather",
+                        contentDescription = if (isId) "Segarkan Lokasi & Cuaca" else "Refresh Auto Location & Weather",
                         tint = accentSky,
                         modifier = Modifier.size(17.dp)
                     )
                 }
             }
 
-            Text(
-                text = if (isId) "💡 ${weather.adviceId}" else "💡 ${weather.adviceEn}",
-                color = textSecondary,
-                fontSize = 11.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            // Hourly Temperature Curve & Bar Chart (06:00 - 21:00)
+            WeatherHourlyChartCard(
+                isId = isId,
+                hourlyData = hourlyChartData,
+                subtleDark = subtleDark,
+                borderDark = borderDark,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                accentSky = accentSky,
+                accentAmber = accentAmber
             )
         }
 
-        // 5-Time Prayer Schedule Card (Subuh, Dzuhur, Ashar, Maghrib, Isya + Countdown)
+        // 2. Clean 5-Time Prayer Schedule Table (Tanpa Scrollbar / Elemen Kanan yang Mengganggu!)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(surfaceDark)
                 .border(1.dp, borderDark, RoundedCornerShape(10.dp))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(11.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = if (isId) {
-                            "🕌 Berikutnya: ${nextPrayerSummary.prayer.nameId} • ${nextPrayerSummary.prayer.formatted}"
-                        } else {
-                            "🕌 Next: ${nextPrayerSummary.prayer.nameEn} • ${nextPrayerSummary.prayer.formatted}"
-                        },
-                        color = accentEmerald,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = if (isId) {
-                            "Waktu sholat ${nextPrayerSummary.remainingTextId} (Ketuk waktu untuk pasang pengingat)"
-                        } else {
-                            "Prayer starts ${nextPrayerSummary.remainingTextEn} (Tap any time to set reminder)"
-                        },
-                        color = textSecondary,
-                        fontSize = 10.sp
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (prayerReminderEnabled) accentEmerald.copy(alpha = 0.18f) else subtleDark)
-                        .border(
-                            1.dp,
-                            if (prayerReminderEnabled) accentEmerald else borderDark,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .clickable { onTogglePrayerReminder() }
-                        .padding(horizontal = 8.dp, vertical = 5.dp)
-                ) {
-                    Text(
-                        text = if (prayerReminderEnabled) (if (isId) "🔔 Aktif" else "🔔 On") else (if (isId) "Mati" else "Off"),
-                        color = if (prayerReminderEnabled) accentEmerald else textSecondary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    text = if (isId) {
+                        "🕌 Jadwal Sholat ${baseWeather.city}"
+                    } else {
+                        "🕌 Prayer Schedule (${baseWeather.city})"
+                    },
+                    color = textPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = if (isId) {
+                        "Berikutnya: ${upcomingPrayer.nameId} ${upcomingPrayer.formatted} ($remText)"
+                    } else {
+                        "Next: ${upcomingPrayer.nameEn} ${upcomingPrayer.formatted} ($remText)"
+                    },
+                    color = accentEmerald,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            // 5 Prayer Time Boxes (Persegi Panjang Rounded)
+            // 5-Column Clean Prayer Schedule Table/Grid (Zero Scrollbar!)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 prayerSchedule.forEach { item ->
-                    val isNext = item.nameId == nextPrayerSummary.prayer.nameId
+                    val isNext = item.nameId == upcomingPrayer.nameId
+                    val isPassed = item.totalMinutes <= nowMins && !isNext
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isNext) accentEmerald.copy(alpha = 0.22f) else subtleDark)
+                            .background(
+                                when {
+                                    isNext -> accentEmerald.copy(alpha = 0.22f)
+                                    isPassed -> subtleDark.copy(alpha = 0.45f)
+                                    else -> subtleDark
+                                }
+                            )
                             .border(
                                 1.dp,
                                 if (isNext) accentEmerald else borderDark,
                                 RoundedCornerShape(8.dp)
                             )
                             .clickable { onSchedulePrayerTask(item) }
-                            .padding(vertical = 8.dp, horizontal = 4.dp)
+                            .padding(vertical = 7.dp, horizontal = 3.dp)
                     ) {
                         Text(
                             text = if (isId) item.nameId else item.nameEn,
-                            color = if (isNext) accentEmerald else textSecondary,
-                            fontSize = 10.sp,
+                            color = when {
+                                isNext -> accentEmerald
+                                isPassed -> textSecondary.copy(alpha = 0.65f)
+                                else -> textSecondary
+                            },
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1
                         )
                         Text(
                             text = item.formatted,
-                            color = textPrimary,
-                            fontSize = 12.sp,
+                            color = if (isPassed) textSecondary else textPrimary,
+                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = when {
+                                isNext -> if (isId) "● Aktif" else "● Next"
+                                isPassed -> if (isId) "✓ Lewat" else "✓ Done"
+                                else -> if (isId) "Nanti" else "Later"
+                            },
+                            color = when {
+                                isNext -> accentEmerald
+                                isPassed -> textSecondary.copy(alpha = 0.6f)
+                                else -> accentSky
+                            },
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
                         )
                     }
                 }
@@ -3564,8 +3845,135 @@ private fun WeatherAndPrayerModuleView(
     }
 }
 
+@Composable
+private fun WeatherHourlyChartCard(
+    isId: Boolean,
+    hourlyData: List<Pair<String, Int>>,
+    subtleDark: Color,
+    borderDark: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    accentSky: Color,
+    accentAmber: Color
+) {
+    val temps = hourlyData.map { it.second }
+    val minT = (temps.minOrNull() ?: 22) - 1
+    val maxT = (temps.maxOrNull() ?: 34) + 1
+    val span = (maxT - minT).coerceAtLeast(4)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(subtleDark)
+            .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+            .padding(horizontal = 9.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (isId) "📈 Grafik Suhu Harian (06:00–21:00)" else "📈 Hourly Temperature Chart (06:00–21:00)",
+                color = textSecondary,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Min ${temps.minOrNull() ?: 24}° • Max ${temps.maxOrNull() ?: 32}°",
+                color = accentAmber,
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        // Smooth Curve + Gradient Area Chart on Compose Canvas
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(38.dp)
+        ) {
+            val w = size.width
+            val h = size.height
+            if (hourlyData.size < 2) return@Canvas
+
+            val stepX = w / (hourlyData.size - 1).toFloat()
+            val points = hourlyData.mapIndexed { idx, (_, temp) ->
+                val norm = ((temp - minT).toFloat() / span.toFloat()).coerceIn(0f, 1f)
+                val x = idx * stepX
+                val y = h - (norm * (h * 0.72f) + h * 0.14f)
+                Offset(x, y)
+            }
+
+            val areaPath = Path().apply {
+                moveTo(points.first().x, h)
+                points.forEach { pt -> lineTo(pt.x, pt.y) }
+                lineTo(points.last().x, h)
+                close()
+            }
+            drawPath(
+                path = areaPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(accentSky.copy(alpha = 0.34f), Color.Transparent)
+                )
+            )
+
+            val linePath = Path().apply {
+                moveTo(points.first().x, points.first().y)
+                for (i in 1 until points.size) {
+                    val prev = points[i - 1]
+                    val curr = points[i]
+                    val midX = (prev.x + curr.x) / 2f
+                    cubicTo(midX, prev.y, midX, curr.y, curr.x, curr.y)
+                }
+            }
+            drawPath(
+                path = linePath,
+                color = accentSky,
+                style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            points.forEachIndexed { idx, pt ->
+                val isPeak = hourlyData[idx].second == temps.maxOrNull()
+                drawCircle(
+                    color = if (isPeak) accentAmber else Color.White,
+                    radius = if (isPeak) 3.6.dp.toPx() else 2.8.dp.toPx(),
+                    center = pt
+                )
+            }
+        }
+
+        // Data Table Row under Chart (Hour & Temp °C)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            hourlyData.forEach { (hourLabel, tempVal) ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "${tempVal}°",
+                        color = textPrimary,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = hourLabel,
+                        color = textSecondary,
+                        fontSize = 8.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ============================================================================
-// MODULE 3: DOMPET, MONEY TRACKER & PINTASAN PEMBAYARAN (Wallet & Quick Pay)
+// MODULE 3: DOMPET, MONEY TRACKER, CHART KATEGORI & PINTASAN PEMBAYARAN
 // ============================================================================
 @Composable
 private fun WalletModuleView(
@@ -3706,6 +4114,81 @@ private fun WalletModuleView(
                 },
                 trackColor = subtleDark
             )
+
+            // Expense Category Distribution Chart & Summary Table
+            if (expenses.isNotEmpty()) {
+                val categoryTotals = remember(expenses) {
+                    expenses.groupBy { it.category }
+                        .mapValues { (_, list) -> list.sumOf { it.amountRp } }
+                        .entries
+                        .sortedByDescending { it.value }
+                        .take(4)
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    categoryTotals.forEachIndexed { index, (cat, amt) ->
+                        val pct = ((amt.toFloat() / totalSpentRp.coerceAtLeast(1L).toFloat()) * 100).roundToInt()
+                        val badgeColor = when (index) {
+                            0 -> accentAmber
+                            1 -> accentSky
+                            2 -> accentEmerald
+                            else -> accentIndigo
+                        }
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(subtleDark)
+                                .padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = cat,
+                                    color = badgeColor,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = "$pct%",
+                                    color = textSecondary,
+                                    fontSize = 8.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(borderDark)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth((pct / 100f).coerceIn(0.15f, 1f))
+                                        .height(3.dp)
+                                        .background(badgeColor)
+                                )
+                            }
+                            Text(
+                                text = "${amt / 1000}rb",
+                                color = textPrimary,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Quick 1-Tap Expense Presets + E-Wallet / QRIS Payment Shortcuts

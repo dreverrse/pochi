@@ -137,7 +137,7 @@ fun PochiMascot(
 
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.22f,
-        targetValue = 0.48f,
+        targetValue = 0.52f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -145,13 +145,33 @@ fun PochiMascot(
         label = "pulseAlpha"
     )
 
-    // Squishy spring physics reactive to touch, tap, and swipe
+    val floatOffsetY by infiniteTransition.animateFloat(
+        initialValue = -0.045f,
+        targetValue = 0.045f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1850, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floatOffsetY"
+    )
+
+    val smoothTrackerOffset by animateOffsetAsState(
+        targetValue = eyeTrackerOffset,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "smoothTrackerOffset"
+    )
+
+    // Squishy spring physics reactive to touch, tap, swipe, and expression changes
     val squishX = remember { Animatable(1f) }
     val squishY = remember { Animatable(1f) }
+    val bounceY = remember { Animatable(0f) }
     val touchGazeX = remember { Animatable(0f) }
     val touchGazeY = remember { Animatable(0f) }
 
-    fun triggerSquish(targetX: Float = 1.22f, targetY: Float = 0.78f) {
+    fun triggerSquish(targetX: Float = 1.22f, targetY: Float = 0.78f, hopY: Float = -0.07f) {
         coroutineScope.launch {
             launch {
                 squishX.snapTo(targetX)
@@ -173,19 +193,37 @@ fun PochiMascot(
                     )
                 )
             }
+            launch {
+                bounceY.snapTo(hopY)
+                bounceY.animateTo(
+                    targetValue = 0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )
+            }
         }
     }
 
+    // Every expression change triggers a lively organic squash-and-stretch + micro-hop so Pochi is never stiff!
     LaunchedEffect(activeEmote, state) {
-        if (activeEmote in setOf(PochiEmote.HAPPY, PochiEmote.EXCITED, PochiEmote.LAUGHING, PochiEmote.SUCCESS, PochiEmote.PET_POKE)) {
-            triggerSquish(1.16f, 0.85f)
+        when (activeEmote) {
+            PochiEmote.HAPPY, PochiEmote.EXCITED, PochiEmote.LAUGHING, PochiEmote.SUCCESS, PochiEmote.PET_POKE, PochiEmote.LOVE ->
+                triggerSquish(1.18f, 0.82f, -0.09f)
+            PochiEmote.SURPRISED, PochiEmote.SHOCK ->
+                triggerSquish(0.86f, 1.18f, -0.10f)
+            else ->
+                triggerSquish(1.11f, 0.89f, -0.05f)
         }
     }
 
     val targetTilt = when (activeEmote) {
-        PochiEmote.CONFUSED, PochiEmote.THINKING, PochiEmote.HMM -> -6f
-        PochiEmote.SUSPICIOUS -> 4f
-        PochiEmote.WINK_LEFT, PochiEmote.CUTE, PochiEmote.HI, PochiEmote.BYE -> 5f
+        PochiEmote.CONFUSED, PochiEmote.THINKING, PochiEmote.HMM -> -6.5f
+        PochiEmote.SUSPICIOUS -> 4.5f
+        PochiEmote.WINK_LEFT, PochiEmote.CUTE, PochiEmote.HI, PochiEmote.BYE -> 5.5f
+        PochiEmote.LOVE, PochiEmote.BLUSH -> -4f
+        PochiEmote.HAPPY, PochiEmote.EXCITED -> 2.5f
         else -> 0f
     }
     val animatedTilt by animateFloatAsState(
@@ -197,14 +235,20 @@ fun PochiMascot(
         label = "eyeTilt"
     )
 
-    // Natural periodic blinking
+    // Natural periodic blinking (with occasional lively double-blinks & micro-squish)
     var isBlinking by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay((2200..4500).random().toLong())
+            delay((1900..3900).random().toLong())
             isBlinking = true
-            delay(130)
+            delay(115)
             isBlinking = false
+            if ((0..2).random() == 0) {
+                delay(95)
+                isBlinking = true
+                delay(105)
+                isBlinking = false
+            }
         }
     }
 
@@ -276,10 +320,10 @@ fun PochiMascot(
         val cx = w * 0.5f
         val cy = h * 0.5f
 
-        val combinedGazeX = (touchGazeX.value + eyeTrackerOffset.x +
-            if (activeEmote == PochiEmote.HMM || activeEmote == PochiEmote.WORKING) idleLookDrift else 0f)
+        val combinedGazeX = (touchGazeX.value + smoothTrackerOffset.x +
+            if (activeEmote in setOf(PochiEmote.NORMAL, PochiEmote.SMILING, PochiEmote.HMM, PochiEmote.WORKING)) idleLookDrift * 0.65f else 0f)
             .coerceIn(-1f, 1f)
-        val combinedGazeY = (touchGazeY.value + eyeTrackerOffset.y).coerceIn(-1f, 1f)
+        val combinedGazeY = (touchGazeY.value + smoothTrackerOffset.y + floatOffsetY + bounceY.value).coerceIn(-1f, 1f)
 
         rotate(degrees = animatedTilt, pivot = Offset(cx, cy)) {
             scale(
@@ -306,8 +350,8 @@ fun PochiMascot(
                     )
                 }
 
-                val eyeShiftX = combinedGazeX * (s * 0.095f)
-                val eyeShiftY = combinedGazeY * (s * 0.075f)
+                val eyeShiftX = combinedGazeX * (s * 0.115f)
+                val eyeShiftY = combinedGazeY * (s * 0.095f)
                 val leftEyeX = cx - s * 0.175f + eyeShiftX
                 val rightEyeX = cx + s * 0.175f + eyeShiftX
                 val eyeY = cy + eyeShiftY
@@ -316,11 +360,14 @@ fun PochiMascot(
                 val canAutoBlink = activeEmote in setOf(
                     PochiEmote.NORMAL,
                     PochiEmote.SMILING,
+                    PochiEmote.CUTE,
+                    PochiEmote.BLUSH,
                     PochiEmote.HI,
                     PochiEmote.FOCUS,
                     PochiEmote.WORKING,
                     PochiEmote.LOADING,
-                    PochiEmote.HMM
+                    PochiEmote.HMM,
+                    PochiEmote.SURPRISED
                 )
 
                 if (isBlinking && canAutoBlink) {
