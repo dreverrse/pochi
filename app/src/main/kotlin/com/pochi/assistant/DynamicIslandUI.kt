@@ -1,16 +1,24 @@
 package com.pochi.assistant
 
+import android.Manifest
 import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
+import android.os.Bundle
 import android.os.SystemClock
 import android.provider.AlarmClock
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
 import android.view.KeyEvent
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
@@ -73,16 +81,18 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import org.json.JSONObject
 
 /**
- * 5 Human-Centric Daily AI Assistant Modules (Icon-only top bar so text is NEVER truncated to "..."):
+ * 6 Human-Centric Daily AI Assistant Modules (Icon-only top bar so text is NEVER truncated to "..."):
  * 1. TODAY  - Asisten Harian, Pengingat Otomatis (Sarapan/Air/Istirahat), & Jadwal Tugas
- * 2. LIFE   - Cuaca Pintar & Jadwal Sholat 5 Waktu (dengan Hitung Mundur Otomatis)
- * 3. WALLET - Money Tracker (Catat Pengeluaran Rp, Batas Budget Harian, & Pintasan Dompet/QRIS)
- * 4. FOCUS  - Timer Fokus & Produktivitas Otomatis
- * 5. DECK   - Pintasan Alat Harian & Aplikasi Favorit
+ * 2. CHAT   - Chat & Suara Pochi (Bisa Ngobrol Suara/Teks, Telepon, SMS, WA, & Buka Aplikasi Apa Saja)
+ * 3. LIFE   - Cuaca Pintar & Jadwal Sholat 5 Waktu (dengan Hitung Mundur Otomatis)
+ * 4. WALLET - Money Tracker (Catat Pengeluaran Rp, Batas Budget Harian, & Pintasan Dompet/QRIS)
+ * 5. FOCUS  - Timer Fokus & Produktivitas Otomatis
+ * 6. DECK   - Pintasan Alat Harian & Pencarian Semua Aplikasi di HP
  */
 enum class PochiTab(
     val titleEn: String,
@@ -97,6 +107,13 @@ enum class PochiTab(
         subtitleEn = "Daily plan, breakfast & hydration care",
         subtitleId = "Rencana harian, pengingat sarapan & air putih",
         icon = Icons.Rounded.CheckCircleOutline
+    ),
+    CHAT(
+        titleEn = "Chat, Voice & Phone Actions",
+        titleId = "Chat, Suara & Aksi HP",
+        subtitleEn = "Talk or chat with Pochi • Call, SMS, WA & Open any app",
+        subtitleId = "Ngobrol teks/suara • Telepon, SMS, WA & buka aplikasi",
+        icon = Icons.Rounded.Mic
     ),
     LIFE(
         titleEn = "Weather & Prayer",
@@ -120,15 +137,27 @@ enum class PochiTab(
         icon = Icons.Rounded.Timer
     ),
     DECK(
-        titleEn = "Quick Tools & Apps",
-        titleId = "Pintasan & Alat",
-        subtitleEn = "System tools & favorite apps",
-        subtitleId = "Alat cepat sistem & aplikasi favorit",
+        titleEn = "All Apps & Quick Tools",
+        titleId = "Semua Aplikasi & Alat",
+        subtitleEn = "Open any installed app, call, SMS & system tools",
+        subtitleId = "Buka semua aplikasi di HP, telepon, SMS & alat sistem",
         icon = Icons.Rounded.GridView
     );
 
     fun label(lang: PochiLang): String = if (lang == PochiLang.ID) titleId else titleEn
     fun subtitle(lang: PochiLang): String = if (lang == PochiLang.ID) subtitleId else subtitleEn
+}
+
+data class PochiChatMessage(
+    val id: String,
+    val isUser: Boolean,
+    val text: String,
+    val actionBadge: String? = null,
+    val timeLabel: String
+)
+
+enum class QuickPhoneComposerMode {
+    NONE, CALL, SMS, WHATSAPP, OPEN_APP
 }
 
 enum class TaskFilter {
@@ -239,15 +268,73 @@ fun PochiIslandBot(
     var isFocusRunning by remember { mutableStateOf(false) }
     var linkedTaskId by remember { mutableStateOf<String?>(null) }
 
-    // Smart AI Command Bar State
+    // Smart AI Command Bar & Chat/Voice Assistant State
     var commandBarInput by remember { mutableStateOf("") }
     var aiQuickReply by remember { mutableStateOf<String?>(null) }
     var isAiThinking by remember { mutableStateOf(false) }
+    var chatInput by remember { mutableStateOf("") }
+    var voiceReplyEnabled by remember { mutableStateOf(true) }
+    var isListeningVoice by remember { mutableStateOf(false) }
+    var voicePartialText by remember { mutableStateOf("") }
+    var quickComposerMode by remember { mutableStateOf(QuickPhoneComposerMode.NONE) }
+    var quickTargetInput by remember { mutableStateOf("") }
+    var quickMessageInput by remember { mutableStateOf("") }
+    var chatMessages by remember(isId) {
+        mutableStateOf(
+            listOf(
+                PochiChatMessage(
+                    id = "welcome_1",
+                    isUser = false,
+                    text = if (isId) {
+                        "Halo! Aku Pochi. Kamu bisa ngobrol via teks atau suara 🎙️, minta buka aplikasi apa saja, telepon kontak/nomor, kirim SMS/WA, cek sholat & cuaca, atau catat pengeluaran!"
+                    } else {
+                        "Hi! I'm Pochi. Chat by text or voice 🎙️, ask me to open any app, call contacts, send SMS/WA, check prayer & weather, or log expenses!"
+                    },
+                    actionBadge = if (isId) "Siap Terhubung" else "Ready",
+                    timeLabel = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                )
+            )
+        )
+    }
 
     // Deck Module State
     var installedApps by remember { mutableStateOf<List<LaunchableAppInfo>>(emptyList()) }
     var isCustomizingDeck by remember { mutableStateOf(false) }
+    var deckSearchQuery by remember { mutableStateOf("") }
+    var showAllAppsInDeck by remember { mutableStateOf(false) }
     var isTorchOn by remember { mutableStateOf(false) }
+
+    // Text-to-Speech (Suara Balasan Pochi)
+    var ttsEngine by remember { mutableStateOf<TextToSpeech?>(null) }
+    DisposableEffect(context) {
+        var engine: TextToSpeech? = null
+        runCatching {
+            engine = TextToSpeech(context.applicationContext) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    val targetLocale = if (PochiPrefs.langFlow.value == PochiLang.ID) Locale("id", "ID") else Locale.US
+                    engine?.language = targetLocale
+                    engine?.setSpeechRate(1.03f)
+                }
+            }
+            ttsEngine = engine
+        }
+        onDispose {
+            runCatching {
+                engine?.stop()
+                engine?.shutdown()
+            }
+        }
+    }
+
+    fun speakPochiReply(text: String) {
+        if (!voiceReplyEnabled || text.isBlank()) return
+        runCatching {
+            val engine = ttsEngine ?: return
+            engine.language = if (isId) Locale("id", "ID") else Locale.US
+            customEmote = PochiEmote.HAPPY
+            engine.speak(text.take(260), TextToSpeech.QUEUE_FLUSH, null, "pochi_tts_${System.currentTimeMillis()}")
+        }
+    }
 
     val remainingTodayCount = tasks.count { !it.isDone && it.dayIndex == 0 }
     val smartBanner = remember(lang, selectedCity, waterGlasses, remainingTodayCount, interactionTick) {
@@ -410,30 +497,152 @@ fun PochiIslandBot(
         }
     }
 
-    // Auto-collapse after 20s of inactivity when no text is being typed
-    LaunchedEffect(islandMode, interactionTick, activeApproval, newTaskInput, commandBarInput, expenseInput) {
+    // Auto-collapse after 25s of inactivity when no text is being typed or voice listening
+    LaunchedEffect(
+        islandMode,
+        interactionTick,
+        activeApproval,
+        newTaskInput,
+        commandBarInput,
+        expenseInput,
+        chatInput,
+        isListeningVoice,
+        deckSearchQuery
+    ) {
         if (islandMode != IslandMode.COLLAPSED &&
             activeApproval == null &&
             newTaskInput.isBlank() &&
             commandBarInput.isBlank() &&
-            expenseInput.isBlank()
+            expenseInput.isBlank() &&
+            chatInput.isBlank() &&
+            deckSearchQuery.isBlank() &&
+            !isListeningVoice
         ) {
-            delay(20_000)
+            delay(25_000)
             setMode(IslandMode.COLLAPSED)
         }
     }
 
-    // Unified AI Assistant Command Execution (Focus, Money Tracker, Tasks, or AI Question)
-    fun executeUnifiedCommand(raw: String) {
+    fun appendChatMessage(isUser: Boolean, text: String, actionBadge: String? = null) {
+        val stamp = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        val msg = PochiChatMessage(
+            id = "msg_${System.currentTimeMillis()}_${(100..999).random()}",
+            isUser = isUser,
+            text = text,
+            actionBadge = actionBadge,
+            timeLabel = stamp
+        )
+        chatMessages = (chatMessages + msg).takeLast(30)
+    }
+
+    // Smart Local Conversational Responder when no external API key is configured
+    fun buildLocalSmartReply(prompt: String): Pair<String, PochiEmote> {
+        val lower = prompt.lowercase(Locale.getDefault())
+        val nextPrayer = PrayerScheduleHelper.getNextPrayer(selectedCity)
+        val weather = WeatherHelper.getSnapshot(selectedCity, liveTempOverride)
+        val spentToday = expenses.sumOf { it.amountRp }
+
+        return when {
+            lower.contains("sholat") || lower.contains("solat") || lower.contains("adzan") || lower.contains("prayer") -> {
+                val msg = if (isId) {
+                    "Jadwal sholat berikutnya di $selectedCity adalah ${nextPrayer.prayer.nameId} pukul ${nextPrayer.prayer.formatted} (${nextPrayer.remainingTextId})."
+                } else {
+                    "Next prayer in $selectedCity is ${nextPrayer.prayer.nameEn} at ${nextPrayer.prayer.formatted} (${nextPrayer.remainingTextEn})."
+                }
+                msg to PochiEmote.CALM
+            }
+            lower.contains("cuaca") || lower.contains("hujan") || lower.contains("panas") || lower.contains("weather") -> {
+                val msg = if (isId) {
+                    "Cuaca $selectedCity saat ini ${weather.tempC}°C (${weather.conditionId}). ${weather.adviceId}"
+                } else {
+                    "Weather in $selectedCity is ${weather.tempC}°C (${weather.conditionEn}). ${weather.adviceEn}"
+                }
+                msg to PochiEmote.SMILING
+            }
+            lower.contains("uang") || lower.contains("pengeluaran") || lower.contains("dompet") || lower.contains("budget") -> {
+                val msg = if (isId) {
+                    "Total pengeluaranmu hari ini ${NaturalExpenseParser.formatRupiah(spentToday)} dari batas harian ${NaturalExpenseParser.formatRupiah(dailyBudgetRp)}."
+                } else {
+                    "Your spending today is ${NaturalExpenseParser.formatRupiah(spentToday)} out of ${NaturalExpenseParser.formatRupiah(dailyBudgetRp)}."
+                }
+                msg to PochiEmote.HAPPY
+            }
+            lower.contains("halo") || lower.contains("hai") || lower.contains("pagi") || lower.contains("siang") || lower.contains("malam") || lower.contains("hello") -> {
+                val msg = if (isId) {
+                    "Halo! ${smartBanner.title}. Mau Pochi bantu buka aplikasi, telepon seseorang, kirim SMS/WA, atau atur jadwal?"
+                } else {
+                    "Hello! ${smartBanner.title}. Want me to open an app, call someone, send SMS/WA, or plan your day?"
+                }
+                msg to PochiEmote.HAPPY
+            }
+            lower.contains("siapa kamu") || lower.contains("pochi") -> {
+                val msg = if (isId) {
+                    "Aku Pochi, asisten AI Dynamic Island kamu! Aku bisa dihubungkan ke semua aplikasi di HP kamu, menelpon, kirim SMS/WA, catat uang, dan jaga produktivitasmu."
+                } else {
+                    "I'm Pochi, your Dynamic Island AI assistant! I can open any app on your phone, place calls, send SMS/WA, track money, and boost your productivity."
+                }
+                msg to PochiEmote.LOVE
+            }
+            else -> {
+                // Check if user mentioned an installed app name casually
+                val matchedApp = installedApps.firstOrNull { app ->
+                    lower.contains(app.label.lowercase(Locale.getDefault())) && app.label.length >= 3
+                }
+                if (matchedApp != null && (lower.contains("buka") || lower.contains("main") || lower.contains("open"))) {
+                    PochiAgent.execute(context, AgentAction("OPEN_APP", matchedApp.packageName))
+                    val msg = if (isId) "Siap! Membuka aplikasi ${matchedApp.label} untukmu." else "Opening ${matchedApp.label} for you!"
+                    msg to PochiEmote.EXCITED
+                } else {
+                    val msg = if (isId) {
+                        "Siap! Kamu bisa bilang \"buka [nama aplikasi]\", \"telepon [nama/nomor]\", \"kirim sms ke [nama]: [pesan]\", \"wa ke [nama] [pesan]\", atau isi API Key di pengaturan untuk obrolan AI penuh."
+                    } else {
+                        "Got it! Say \"open [app]\", \"call [name/number]\", \"sms [name]: [text]\", \"wa [name] [text]\", or add an API key in settings for full AI chat."
+                    }
+                    msg to PochiEmote.SMILING
+                }
+            }
+        }
+    }
+
+    // Unified AI Assistant Command & Chat Execution (Phone Call, SMS, WA, Open Any App, Focus, Money Tracker, Tasks, or AI Chat)
+    fun executeUnifiedCommand(raw: String, fromChatOrVoice: Boolean = false) {
         val text = raw.trim()
         if (text.isEmpty()) return
         bump()
 
-        // 1. Focus Timer shortcut: e.g. "25m belajar", "fokus 30m kerja"
-        val focusRegex = Regex("""^(?:focus\s+|fokus\s+|timer\s+)?(\d{1,3})\s*(?:m|min|menit|mnt)\s*(.*)$""", RegexOption.IGNORE_CASE)
+        if (fromChatOrVoice) {
+            appendChatMessage(isUser = true, text = text)
+        }
+
+        // 1. Check PochiAgent local phone actions FIRST (Buka Aplikasi, Telepon, SMS, WhatsApp, Share, Kamera, Senter, Timer, Alarm, Maps, Math, Notes)
+        PochiAgent.tryHandleLocal(context, text)?.let { (localReply, action) ->
+            val execResult = action?.let { PochiAgent.execute(context, it) }
+            val finalMsg = if (execResult != null && !localReply.contains(execResult, ignoreCase = true)) {
+                "$localReply ($execResult)"
+            } else {
+                localReply
+            }
+            aiQuickReply = finalMsg
+            appendChatMessage(
+                isUser = false,
+                text = finalMsg,
+                actionBadge = action?.type
+            )
+            customEmote = PochiEmote.HAPPY
+            botState = BotState.DONE
+            speakPochiReply(localReply)
+            if (action?.type in listOf("OPEN_APP", "CALL", "SMS", "WHATSAPP", "MAPS", "YOUTUBE", "SEARCH_WEB", "CAMERA", "SHARE")) {
+                setMode(IslandMode.COLLAPSED)
+            }
+            return
+        }
+
+        // 2. Focus Timer shortcut: e.g. "25m belajar", "fokus 30m kerja"
+        val focusRegex = Regex("""^(?:focus\s+|fokus\s+|timer\s+)(\d{1,3})\s*(?:m|min|menit|mnt)\s*(.*)$|^(\d{1,3})\s*(?:m|min|menit|mnt)\s+(.+)$""", RegexOption.IGNORE_CASE)
         focusRegex.matchEntire(text)?.let { match ->
-            val mins = match.groupValues[1].toIntOrNull()?.coerceIn(1, 180) ?: 25
-            val taskTitle = match.groupValues[2].trim()
+            val minsStr = match.groupValues[1].ifBlank { match.groupValues[3] }
+            val taskTitle = match.groupValues[2].ifBlank { match.groupValues[4] }.trim()
+            val mins = minsStr.toIntOrNull()?.coerceIn(1, 180) ?: 25
             pomodoroPhase = PomodoroPhase.WORK
             focusDurationMinutes = mins
             focusRemainingSeconds = mins * 60
@@ -446,33 +655,48 @@ fun PochiIslandBot(
                     linkedTaskId = newTasks.first().id
                 }
             }
-            customEmote = PochiEmote.HAPPY
+            val msg = if (isId) "Timer fokus $mins menit dimulai!" else "Focus timer for $mins mins started!"
+            appendChatMessage(isUser = false, text = msg, actionBadge = "FOCUS")
+            speakPochiReply(msg)
+            customEmote = PochiEmote.FOCUS
             currentTab = PochiTab.FOCUS
             setMode(IslandMode.COLLAPSED)
             return
         }
 
-        // 2. Expense / Money Tracker shortcut: e.g. "beli makan 25rb", "kopi 18k", "bensin 35000"
+        // 3. Expense / Money Tracker shortcut: e.g. "beli makan 25rb", "kopi 18k", "bensin 35000"
         val looksLikeExpense = Regex("""\b(\d+)\s*(rb|ribu|k|jt|juta)\b|(?:beli|bayar|jajan|kopi|makan|bensin|parkir)\s+.*\d{3,}""", RegexOption.IGNORE_CASE)
             .containsMatchIn(text)
         if (looksLikeExpense) {
             val parsedExpense = NaturalExpenseParser.parse(text)
             if (parsedExpense != null) {
                 PochiPrefs.saveExpenses(context, listOf(parsedExpense) + expenses)
+                val msg = if (isId) {
+                    "Tercatat di Dompet: ${parsedExpense.title} sebesar ${NaturalExpenseParser.formatRupiah(parsedExpense.amountRp)}."
+                } else {
+                    "Logged expense: ${parsedExpense.title} (${NaturalExpenseParser.formatRupiah(parsedExpense.amountRp)})."
+                }
+                appendChatMessage(isUser = false, text = msg, actionBadge = "WALLET")
+                speakPochiReply(msg)
                 customEmote = PochiEmote.HAPPY
                 botState = BotState.DONE
-                currentTab = PochiTab.WALLET
-                setMode(IslandMode.EXPANDED)
+                if (!fromChatOrVoice) {
+                    currentTab = PochiTab.WALLET
+                    setMode(IslandMode.EXPANDED)
+                }
                 return
             }
         }
 
-        // 3. AI Question / Assistant Chat: starts with "?", "tanya ", "ai ", "pochi ", "tips ", "resep "
+        // 4. If sent from Chat/Voice tab OR starts with question/assistant keywords, handle as AI Chat + Action Agent!
         val lower = text.lowercase(Locale.getDefault())
-        if (lower.startsWith("?") || lower.endsWith("?") ||
+        val isQuestionOrChat = fromChatOrVoice ||
+            lower.startsWith("?") || lower.endsWith("?") ||
             lower.startsWith("tanya ") || lower.startsWith("pochi ") ||
-            lower.startsWith("tips ") || lower.startsWith("cara ")
-        ) {
+            lower.startsWith("tips ") || lower.startsWith("cara ") ||
+            lower.startsWith("halo") || lower.startsWith("hai")
+
+        if (isQuestionOrChat) {
             val cleanPrompt = text.removePrefix("?").removePrefix("tanya ").removePrefix("pochi ").trim()
             isAiThinking = true
             botState = BotState.WORKING
@@ -480,46 +704,169 @@ fun PochiIslandBot(
             coroutineScope.launch {
                 val provider = PochiPrefs.getProvider(context)
                 val apiKey = PochiPrefs.getApiKey(context, provider)
-                val reply = if (apiKey.isNotBlank()) {
-                    runCatching {
+                if (apiKey.isNotBlank()) {
+                    val reply = runCatching {
                         AiClient.ask(
                             provider = provider,
                             apiKey = apiKey,
                             model = PochiPrefs.getModel(context, provider),
                             prompt = cleanPrompt
                         )
-                    }.getOrDefault(
-                        if (isId) "Pochi siap bantu! Pastikan koneksi stabil ya." else "Pochi is here to help!"
-                    )
-                } else {
-                    if (isId) {
-                        "Tips Pochi: Bagi target harianmu menjadi 3 prioritas utama, jaga minum 8 gelas air, dan batasi pengeluaran harian di bawah ${NaturalExpenseParser.formatRupiah(dailyBudgetRp)}!"
-                    } else {
-                        "Pochi Tip: Break your day into 3 top priorities, drink 8 glasses of water, and stay within your daily budget!"
+                    }.getOrNull()
+
+                    if (reply != null) {
+                        val (afterAction, action) = PochiAgent.extract(reply)
+                        val (cleanReply, emote) = PochiAgent.extractEmote(afterAction, cleanPrompt)
+                        if (action != null) {
+                            PochiAgent.execute(context, action)
+                        }
+                        aiQuickReply = cleanReply
+                        appendChatMessage(isUser = false, text = cleanReply, actionBadge = action?.type ?: "AI")
+                        isAiThinking = false
+                        botState = BotState.DONE
+                        customEmote = emote
+                        speakPochiReply(cleanReply)
+                        return@launch
                     }
                 }
-                val (afterAction, action) = PochiAgent.extract(reply)
-                val (cleanReply, emote) = PochiAgent.extractEmote(afterAction, cleanPrompt)
-                if (action != null) {
-                    PochiAgent.execute(context, action)
-                }
-                aiQuickReply = cleanReply
+
+                // Fallback to smart local conversational assistant
+                val (localReply, emote) = buildLocalSmartReply(cleanPrompt)
+                aiQuickReply = localReply
+                appendChatMessage(isUser = false, text = localReply, actionBadge = "POCHI")
                 isAiThinking = false
                 botState = BotState.DONE
                 customEmote = emote
+                speakPochiReply(localReply)
             }
             return
         }
 
-        // 4. Default: Parse natural language tasks into Today planner
+        // 5. Default: Parse natural language tasks into Today planner
         val parsedTasks = NaturalTaskParser.parse(text, selectedDayOffset)
         if (parsedTasks.isNotEmpty()) {
             val updated = parsedTasks + tasks
             PochiPrefs.saveTasks(context, updated)
+            val msg = if (isId) "Jadwal \"${parsedTasks.first().title}\" ditambahkan ke Hari Ini." else "Task \"${parsedTasks.first().title}\" added to Today."
+            appendChatMessage(isUser = false, text = msg, actionBadge = "TASK")
             customEmote = PochiEmote.HAPPY
             botState = BotState.DONE
             currentTab = PochiTab.TODAY
             setMode(IslandMode.EXPANDED)
+        }
+    }
+
+    // SpeechRecognizer (Input Suara Langsung ke Pochi)
+    var speechRecognizerRef by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching {
+                speechRecognizerRef?.destroy()
+                speechRecognizerRef = null
+            }
+        }
+    }
+
+    fun toggleVoiceListening() {
+        bump()
+        if (isListeningVoice) {
+            runCatching { speechRecognizerRef?.stopListening() }
+            isListeningVoice = false
+            customEmote = PochiEmote.SMILING
+            return
+        }
+
+        val hasAudioPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasAudioPerm) {
+            Toast.makeText(
+                context,
+                if (isId) "Izinkan Mikrofon di aplikasi Pochi untuk fitur Suara" else "Grant Microphone permission in Pochi app for Voice",
+                Toast.LENGTH_LONG
+            ).show()
+            runCatching {
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            }
+            return
+        }
+
+        runCatching {
+            ttsEngine?.stop()
+            if (speechRecognizerRef == null) {
+                speechRecognizerRef = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
+            }
+            val recognizer = speechRecognizerRef ?: return
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    isListeningVoice = true
+                    voicePartialText = if (isId) "Mendengarkan suaramu..." else "Listening..."
+                    customEmote = PochiEmote.HMM
+                }
+
+                override fun onBeginningOfSpeech() {
+                    customEmote = PochiEmote.HMM
+                }
+
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+
+                override fun onEndOfSpeech() {
+                    isListeningVoice = false
+                }
+
+                override fun onError(error: Int) {
+                    isListeningVoice = false
+                    voicePartialText = ""
+                    customEmote = PochiEmote.CONFUSED
+                }
+
+                override fun onResults(results: Bundle?) {
+                    isListeningVoice = false
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val spoken = matches?.firstOrNull()?.trim().orEmpty()
+                    voicePartialText = ""
+                    if (spoken.isNotBlank()) {
+                        executeUnifiedCommand(spoken, fromChatOrVoice = true)
+                    }
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val partial = partialResults
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()
+                        ?.trim()
+                        .orEmpty()
+                    if (partial.isNotBlank()) {
+                        voicePartialText = partial
+                    }
+                }
+
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+
+            val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (isId) "id-ID" else "en-US")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            }
+            isListeningVoice = true
+            voicePartialText = if (isId) "Silakan bicara..." else "Speak now..."
+            customEmote = PochiEmote.HMM
+            recognizer.startListening(speechIntent)
+        }.onFailure {
+            isListeningVoice = false
+            Toast.makeText(
+                context,
+                if (isId) "Layanan pengenal suara tidak tersedia di perangkat ini" else "Speech recognition unavailable",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -892,7 +1239,7 @@ fun PochiIslandBot(
                             decorationBox = { inner ->
                                 if (commandBarInput.isEmpty()) {
                                     Text(
-                                        text = if (isId) "Ketik \"makan 25rb\", \"25m belajar\", atau tanya AI..." else "Type \"lunch 25k\", \"25m study\", or ask AI...",
+                                        text = if (isId) "Ketik \"buka wa\", \"telepon Ibu\", \"sms Budi\", atau tanya Pochi..." else "Type \"open wa\", \"call Mom\", \"sms Budi\", or ask Pochi...",
                                         color = textSecondary,
                                         fontSize = 12.sp,
                                         maxLines = 1,
@@ -902,6 +1249,27 @@ fun PochiIslandBot(
                                 inner()
                             }
                         )
+                        // Voice Mic Button inside Command Bar
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isListeningVoice) Color(0xFFEF4444) else subtleDark)
+                                .border(
+                                    1.dp,
+                                    if (isListeningVoice) Color(0xFFEF4444) else borderDark,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable { toggleVoiceListening() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isListeningVoice) Icons.Rounded.GraphicEq else Icons.Rounded.Mic,
+                                contentDescription = "Voice Input",
+                                tint = if (isListeningVoice) Color.White else accentAmber,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -1127,6 +1495,7 @@ fun PochiIslandBot(
                                                 currentTab = tab
                                                 customEmote = when (tab) {
                                                     PochiTab.TODAY -> PochiEmote.SMILING
+                                                    PochiTab.CHAT -> PochiEmote.HMM
                                                     PochiTab.LIFE -> PochiEmote.CALM
                                                     PochiTab.WALLET -> PochiEmote.HAPPY
                                                     PochiTab.FOCUS -> PochiEmote.FOCUS
@@ -1443,6 +1812,132 @@ fun PochiIslandBot(
                                     )
                                 }
 
+                                // ----------------- MODULE 1B: CHAT, SUARA & KONEKSI HP -----------------
+                                PochiTab.CHAT -> {
+                                    ChatAndVoiceModuleView(
+                                        lang = lang,
+                                        messages = chatMessages,
+                                        chatInput = chatInput,
+                                        onChatInputChange = {
+                                            chatInput = it
+                                            bump()
+                                        },
+                                        onSendChat = {
+                                            val q = chatInput.trim()
+                                            if (q.isNotEmpty()) {
+                                                chatInput = ""
+                                                executeUnifiedCommand(q, fromChatOrVoice = true)
+                                            }
+                                        },
+                                        isListeningVoice = isListeningVoice,
+                                        voicePartialText = voicePartialText,
+                                        onToggleVoiceMic = { toggleVoiceListening() },
+                                        voiceReplyEnabled = voiceReplyEnabled,
+                                        onToggleVoiceReply = {
+                                            bump()
+                                            voiceReplyEnabled = !voiceReplyEnabled
+                                            if (!voiceReplyEnabled) {
+                                                runCatching { ttsEngine?.stop() }
+                                            }
+                                        },
+                                        isAiThinking = isAiThinking,
+                                        quickComposerMode = quickComposerMode,
+                                        onSelectQuickComposer = { mode ->
+                                            bump()
+                                            quickComposerMode = if (quickComposerMode == mode) QuickPhoneComposerMode.NONE else mode
+                                            quickTargetInput = ""
+                                            quickMessageInput = ""
+                                        },
+                                        quickTargetInput = quickTargetInput,
+                                        onQuickTargetChange = {
+                                            quickTargetInput = it
+                                            bump()
+                                        },
+                                        quickMessageInput = quickMessageInput,
+                                        onQuickMessageChange = {
+                                            quickMessageInput = it
+                                            bump()
+                                        },
+                                        installedApps = installedApps,
+                                        onExecuteQuickComposer = {
+                                            bump()
+                                            when (quickComposerMode) {
+                                                QuickPhoneComposerMode.CALL -> {
+                                                    val target = quickTargetInput.trim()
+                                                    if (target.isNotEmpty()) {
+                                                        executeUnifiedCommand("telepon $target", fromChatOrVoice = true)
+                                                        quickComposerMode = QuickPhoneComposerMode.NONE
+                                                    } else {
+                                                        PochiAgent.execute(context, AgentAction("CALL", ""))
+                                                        setMode(IslandMode.COLLAPSED)
+                                                    }
+                                                }
+                                                QuickPhoneComposerMode.SMS -> {
+                                                    val target = quickTargetInput.trim()
+                                                    val body = quickMessageInput.trim()
+                                                    if (target.isNotEmpty()) {
+                                                        executeUnifiedCommand("kirim sms ke $target: $body", fromChatOrVoice = true)
+                                                        quickComposerMode = QuickPhoneComposerMode.NONE
+                                                    } else {
+                                                        PochiAgent.execute(context, AgentAction("SMS", "|$body"))
+                                                        setMode(IslandMode.COLLAPSED)
+                                                    }
+                                                }
+                                                QuickPhoneComposerMode.WHATSAPP -> {
+                                                    val target = quickTargetInput.trim()
+                                                    val body = quickMessageInput.trim()
+                                                    if (target.isNotEmpty() || body.isNotEmpty()) {
+                                                        executeUnifiedCommand("kirim wa ke $target: $body", fromChatOrVoice = true)
+                                                        quickComposerMode = QuickPhoneComposerMode.NONE
+                                                    } else {
+                                                        PochiAgent.execute(context, AgentAction("OPEN_APP", "com.whatsapp"))
+                                                        setMode(IslandMode.COLLAPSED)
+                                                    }
+                                                }
+                                                QuickPhoneComposerMode.OPEN_APP -> {
+                                                    val target = quickTargetInput.trim()
+                                                    if (target.isNotEmpty()) {
+                                                        executeUnifiedCommand("buka $target", fromChatOrVoice = true)
+                                                        quickComposerMode = QuickPhoneComposerMode.NONE
+                                                    }
+                                                }
+                                                QuickPhoneComposerMode.NONE -> {}
+                                            }
+                                        },
+                                        onLaunchAppDirect = { app ->
+                                            bump()
+                                            appendChatMessage(isUser = true, text = if (isId) "Buka ${app.label}" else "Open ${app.label}")
+                                            PochiAgent.execute(context, AgentAction("OPEN_APP", app.packageName))
+                                            appendChatMessage(
+                                                isUser = false,
+                                                text = if (isId) "Membuka aplikasi ${app.label}..." else "Opening ${app.label}...",
+                                                actionBadge = "OPEN_APP"
+                                            )
+                                            quickComposerMode = QuickPhoneComposerMode.NONE
+                                            setMode(IslandMode.COLLAPSED)
+                                        },
+                                        onShareAnything = {
+                                            bump()
+                                            val textToShare = chatInput.ifBlank {
+                                                chatMessages.lastOrNull { !it.isUser }?.text.orEmpty()
+                                            }
+                                            if (textToShare.isNotBlank()) {
+                                                PochiAgent.execute(context, AgentAction("SHARE", textToShare))
+                                                setMode(IslandMode.COLLAPSED)
+                                            }
+                                        },
+                                        surfaceDark = surfaceDark,
+                                        subtleDark = subtleDark,
+                                        borderDark = borderDark,
+                                        textPrimary = textPrimary,
+                                        textSecondary = textSecondary,
+                                        accentIndigo = accentIndigo,
+                                        accentEmerald = accentEmerald,
+                                        accentAmber = accentAmber,
+                                        accentSky = accentSky
+                                    )
+                                }
+
                                 // ----------------- MODULE 2: CUACA & JADWAL SHOLAT -----------------
                                 PochiTab.LIFE -> {
                                     WeatherAndPrayerModuleView(
@@ -1640,12 +2135,22 @@ fun PochiIslandBot(
                                     )
                                 }
 
-                                // ----------------- MODULE 5: DECK (Pintasan & Alat Harian) -----------------
+                                // ----------------- MODULE 5: DECK (Pintasan & Semua Aplikasi) -----------------
                                 PochiTab.DECK -> {
                                     DeckModuleView(
                                         lang = lang,
                                         installedApps = installedApps,
                                         pinnedPackages = pinnedPackages,
+                                        searchQuery = deckSearchQuery,
+                                        onSearchQueryChange = {
+                                            deckSearchQuery = it
+                                            bump()
+                                        },
+                                        showAllApps = showAllAppsInDeck,
+                                        onToggleShowAllApps = {
+                                            bump()
+                                            showAllAppsInDeck = !showAllAppsInDeck
+                                        },
                                         isCustomizing = isCustomizingDeck,
                                         isTorchOn = isTorchOn,
                                         isFlushStatusBar = isFlushStatusBar,
@@ -1664,6 +2169,16 @@ fun PochiIslandBot(
                                         onLaunchApp = { pkg ->
                                             bump()
                                             PochiAgent.execute(context, AgentAction("OPEN_APP", pkg))
+                                            setMode(IslandMode.COLLAPSED)
+                                        },
+                                        onActionCallDialer = {
+                                            bump()
+                                            PochiAgent.execute(context, AgentAction("CALL", ""))
+                                            setMode(IslandMode.COLLAPSED)
+                                        },
+                                        onActionSendSms = {
+                                            bump()
+                                            PochiAgent.execute(context, AgentAction("SMS", "|"))
                                             setMode(IslandMode.COLLAPSED)
                                         },
                                         onActionDownloads = {
@@ -2257,6 +2772,542 @@ private fun TodayModuleView(
 }
 
 // ============================================================================
+// MODULE 1B: CHAT, SUARA & KONEKSI SEMUA APLIKASI/TELEPON/SMS/WA
+// ============================================================================
+@Composable
+private fun ChatAndVoiceModuleView(
+    lang: PochiLang,
+    messages: List<PochiChatMessage>,
+    chatInput: String,
+    onChatInputChange: (String) -> Unit,
+    onSendChat: () -> Unit,
+    isListeningVoice: Boolean,
+    voicePartialText: String,
+    onToggleVoiceMic: () -> Unit,
+    voiceReplyEnabled: Boolean,
+    onToggleVoiceReply: () -> Unit,
+    isAiThinking: Boolean,
+    quickComposerMode: QuickPhoneComposerMode,
+    onSelectQuickComposer: (QuickPhoneComposerMode) -> Unit,
+    quickTargetInput: String,
+    onQuickTargetChange: (String) -> Unit,
+    quickMessageInput: String,
+    onQuickMessageChange: (String) -> Unit,
+    installedApps: List<LaunchableAppInfo>,
+    onExecuteQuickComposer: () -> Unit,
+    onLaunchAppDirect: (LaunchableAppInfo) -> Unit,
+    onShareAnything: () -> Unit,
+    surfaceDark: Color,
+    subtleDark: Color,
+    borderDark: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    accentIndigo: Color,
+    accentEmerald: Color,
+    accentAmber: Color,
+    accentSky: Color
+) {
+    val isId = lang == PochiLang.ID
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(messages.size, isAiThinking) {
+        scrollState.animateScrollTo(scrollState.maxValue)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 1-Tap Phone Connection Bar: Telepon, SMS, WhatsApp, Buka Aplikasi, Share & Suara TTS
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Telepon Action Button
+            QuickConnectActionChip(
+                icon = Icons.Rounded.Call,
+                label = if (isId) "Telepon" else "Call",
+                active = quickComposerMode == QuickPhoneComposerMode.CALL,
+                accentColor = accentEmerald,
+                surfaceDark = surfaceDark,
+                borderDark = borderDark,
+                onClick = { onSelectQuickComposer(QuickPhoneComposerMode.CALL) }
+            )
+
+            // SMS Action Button
+            QuickConnectActionChip(
+                icon = Icons.Rounded.Sms,
+                label = "SMS",
+                active = quickComposerMode == QuickPhoneComposerMode.SMS,
+                accentColor = accentSky,
+                surfaceDark = surfaceDark,
+                borderDark = borderDark,
+                onClick = { onSelectQuickComposer(QuickPhoneComposerMode.SMS) }
+            )
+
+            // WhatsApp Action Button
+            QuickConnectActionChip(
+                icon = Icons.Rounded.Send,
+                label = "WhatsApp",
+                active = quickComposerMode == QuickPhoneComposerMode.WHATSAPP,
+                accentColor = Color(0xFF25D366),
+                surfaceDark = surfaceDark,
+                borderDark = borderDark,
+                onClick = { onSelectQuickComposer(QuickPhoneComposerMode.WHATSAPP) }
+            )
+
+            // Buka Aplikasi Action Button
+            QuickConnectActionChip(
+                icon = Icons.Rounded.Apps,
+                label = if (isId) "Buka App (${installedApps.size})" else "Open App (${installedApps.size})",
+                active = quickComposerMode == QuickPhoneComposerMode.OPEN_APP,
+                accentColor = accentAmber,
+                surfaceDark = surfaceDark,
+                borderDark = borderDark,
+                onClick = { onSelectQuickComposer(QuickPhoneComposerMode.OPEN_APP) }
+            )
+
+            // Share ke Aplikasi Mana Saja
+            QuickConnectActionChip(
+                icon = Icons.Rounded.Share,
+                label = if (isId) "Bagikan" else "Share",
+                active = false,
+                accentColor = accentIndigo,
+                surfaceDark = surfaceDark,
+                borderDark = borderDark,
+                onClick = onShareAnything
+            )
+
+            // Toggle Voice Reply (TTS Suara Pochi) - Icon-only / Compact
+            Box(
+                modifier = Modifier
+                    .height(30.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (voiceReplyEnabled) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
+                    .border(
+                        1.dp,
+                        if (voiceReplyEnabled) accentIndigo else borderDark,
+                        RoundedCornerShape(8.dp)
+                    )
+                    .clickable { onToggleVoiceReply() }
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (voiceReplyEnabled) Icons.Rounded.VolumeUp else Icons.Rounded.VolumeOff,
+                    contentDescription = "Voice Reply",
+                    tint = if (voiceReplyEnabled) accentIndigo else textSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        // Inline Quick Composer for Call / SMS / WhatsApp / Open Any Installed App
+        AnimatedVisibility(visible = quickComposerMode != QuickPhoneComposerMode.NONE) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(surfaceDark)
+                    .border(1.dp, accentSky.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                when (quickComposerMode) {
+                    QuickPhoneComposerMode.OPEN_APP -> {
+                        val filteredApps = remember(installedApps, quickTargetInput) {
+                            val q = quickTargetInput.trim().lowercase(Locale.getDefault())
+                            if (q.isEmpty()) installedApps.take(24)
+                            else installedApps.filter {
+                                it.label.lowercase(Locale.getDefault()).contains(q) ||
+                                    it.packageName.lowercase(Locale.getDefault()).contains(q)
+                            }.take(24)
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(subtleDark)
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = null,
+                                tint = accentAmber,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            BasicTextField(
+                                value = quickTargetInput,
+                                onValueChange = onQuickTargetChange,
+                                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                cursorBrush = SolidColor(accentAmber),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                decorationBox = { inner ->
+                                    if (quickTargetInput.isEmpty()) {
+                                        Text(
+                                            text = if (isId) "Cari dari ${installedApps.size} aplikasi di HP kamu..." else "Search ${installedApps.size} installed apps...",
+                                            color = textSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                    inner()
+                                }
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            filteredApps.forEach { app ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(subtleDark)
+                                        .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                                        .clickable { onLaunchAppDirect(app) }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "🚀 ${app.label}",
+                                        color = textPrimary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    QuickPhoneComposerMode.CALL,
+                    QuickPhoneComposerMode.SMS,
+                    QuickPhoneComposerMode.WHATSAPP -> {
+                        val isCall = quickComposerMode == QuickPhoneComposerMode.CALL
+                        val isWa = quickComposerMode == QuickPhoneComposerMode.WHATSAPP
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(subtleDark)
+                                    .padding(horizontal = 10.dp, vertical = 7.dp)
+                            ) {
+                                BasicTextField(
+                                    value = quickTargetInput,
+                                    onValueChange = onQuickTargetChange,
+                                    textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                    cursorBrush = SolidColor(accentEmerald),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    decorationBox = { inner ->
+                                        if (quickTargetInput.isEmpty()) {
+                                            Text(
+                                                text = if (isId) "Nama kontak atau nomor (0812...)..." else "Contact name or number...",
+                                                color = textSecondary,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                        inner()
+                                    }
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .height(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isCall) accentEmerald else if (isWa) Color(0xFF25D366) else accentSky)
+                                    .clickable { onExecuteQuickComposer() }
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isCall) Icons.Rounded.Call else Icons.Rounded.Send,
+                                    contentDescription = "Execute",
+                                    tint = Color(0xFF0A0A0A),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        if (!isCall) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(subtleDark)
+                                    .padding(horizontal = 10.dp, vertical = 7.dp)
+                            ) {
+                                BasicTextField(
+                                    value = quickMessageInput,
+                                    onValueChange = onQuickMessageChange,
+                                    textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                    cursorBrush = SolidColor(accentSky),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                    keyboardActions = KeyboardActions(onSend = { onExecuteQuickComposer() }),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    decorationBox = { inner ->
+                                        if (quickMessageInput.isEmpty()) {
+                                            Text(
+                                                text = if (isId) "Isi pesan yang ingin dikirim..." else "Message to send...",
+                                                color = textSecondary,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                        inner()
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    QuickPhoneComposerMode.NONE -> {}
+                }
+            }
+        }
+
+        // Live Voice Listening Banner (when microphone is active)
+        AnimatedVisibility(visible = isListeningVoice || voicePartialText.isNotBlank()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFEF4444).copy(alpha = 0.16f))
+                    .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.GraphicEq,
+                    contentDescription = null,
+                    tint = Color(0xFFF87171),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = voicePartialText.ifBlank {
+                        if (isId) "Mendengarkan... Ucapkan misal: \"Buka WhatsApp\" atau \"Telepon Ibu\""
+                        else "Listening... Say e.g. \"Open WhatsApp\" or \"Call Mom\""
+                    },
+                    color = textPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Chat Conversation History Box (Persegi Panjang Rounded)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 104.dp, max = 160.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(surfaceDark)
+                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            messages.forEach { msg ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (msg.isUser) Arrangement.End else Arrangement.Start
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 275.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(if (msg.isUser) accentIndigo else subtleDark)
+                            .border(
+                                1.dp,
+                                if (msg.isUser) accentIndigo else borderDark,
+                                RoundedCornerShape(9.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        if (!msg.isUser && !msg.actionBadge.isNullOrBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "POCHI • ${msg.actionBadge}",
+                                    color = accentAmber,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = msg.timeLabel,
+                                    color = textSecondary,
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                        Text(
+                            text = msg.text,
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            if (isAiThinking) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(subtleDark)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = accentSky,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = if (isId) "Pochi sedang memproses..." else "Pochi is thinking...",
+                        color = textSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        // Bottom Chat & Voice Input Bar (Teks + Tombol Mic Suara + Tombol Kirim Icon)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 42.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(surfaceDark)
+                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Microphone Voice Button (Bicara dengan Pochi)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isListeningVoice) Color(0xFFEF4444) else subtleDark)
+                    .border(
+                        1.dp,
+                        if (isListeningVoice) Color(0xFFEF4444) else accentAmber.copy(alpha = 0.6f),
+                        RoundedCornerShape(8.dp)
+                    )
+                    .clickable { onToggleVoiceMic() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isListeningVoice) Icons.Rounded.GraphicEq else Icons.Rounded.Mic,
+                    contentDescription = "Voice Input",
+                    tint = if (isListeningVoice) Color.White else accentAmber,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+
+            BasicTextField(
+                value = chatInput,
+                onValueChange = onChatInputChange,
+                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                cursorBrush = SolidColor(Color.White),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { onSendChat() }),
+                modifier = Modifier.weight(1f),
+                decorationBox = { inner ->
+                    if (chatInput.isEmpty()) {
+                        Text(
+                            text = if (isId) {
+                                "Chat / suara: \"buka wa\", \"telepon Ibu\", \"sms Budi: halo\"..."
+                            } else {
+                                "Chat / voice: \"open wa\", \"call Mom\", \"sms Budi: hi\"..."
+                            },
+                            color = textSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    inner()
+                }
+            )
+
+            // Send Icon Button
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White)
+                    .clickable { onSendChat() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Send,
+                    contentDescription = "Send",
+                    tint = Color(0xFF0A0A0A),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickConnectActionChip(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    accentColor: Color,
+    surfaceDark: Color,
+    borderDark: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .height(30.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (active) accentColor else surfaceDark)
+            .border(1.dp, if (active) accentColor else borderDark, RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (active) Color(0xFF0A0A0A) else accentColor,
+            modifier = Modifier.size(14.dp)
+        )
+        Text(
+            text = label,
+            color = if (active) Color(0xFF0A0A0A) else Color(0xFFF8FAFC),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+// ============================================================================
 // MODULE 2: CUACA PINTAR & JADWAL SHOLAT 5 WAKTU (Weather & Prayer Schedule)
 // ============================================================================
 @Composable
@@ -2384,20 +3435,21 @@ private fun WeatherAndPrayerModuleView(
                     }
                 }
 
+                // Icon-only Refresh Button (sesuai permintaan user: ganti tulisan Segarkan menjadi Icon saja)
                 Box(
                     modifier = Modifier
+                        .size(34.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(subtleDark)
                         .border(1.dp, borderDark, RoundedCornerShape(8.dp))
-                        .clickable { onRefreshWeather() }
-                        .padding(horizontal = 9.dp, vertical = 6.dp),
+                        .clickable { onRefreshWeather() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (isRefreshingWeather) "..." else (if (isId) "Segarkan" else "Refresh"),
-                        color = accentSky,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                    Icon(
+                        imageVector = if (isRefreshingWeather) Icons.Rounded.Sync else Icons.Rounded.Refresh,
+                        contentDescription = if (isId) "Segarkan Cuaca" else "Refresh Weather",
+                        tint = accentSky,
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
@@ -3101,13 +4153,17 @@ private fun FocusModuleView(
 }
 
 // ============================================================================
-// MODULE 5: DECK (Grid Persegi Panjang Rounded untuk Alat Harian & Aplikasi)
+// MODULE 5: DECK (Grid Persegi Panjang Rounded untuk Semua Aplikasi & Alat HP)
 // ============================================================================
 @Composable
 private fun DeckModuleView(
     lang: PochiLang,
     installedApps: List<LaunchableAppInfo>,
     pinnedPackages: Set<String>,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    showAllApps: Boolean,
+    onToggleShowAllApps: () -> Unit,
     isCustomizing: Boolean,
     isTorchOn: Boolean,
     isFlushStatusBar: Boolean,
@@ -3115,6 +4171,8 @@ private fun DeckModuleView(
     onToggleCustomize: () -> Unit,
     onTogglePinApp: (String) -> Unit,
     onLaunchApp: (String) -> Unit,
+    onActionCallDialer: () -> Unit,
+    onActionSendSms: () -> Unit,
     onActionDownloads: () -> Unit,
     onActionScreenshot: () -> Unit,
     onActionLockScreen: () -> Unit,
@@ -3131,23 +4189,51 @@ private fun DeckModuleView(
     accentAmber: Color
 ) {
     val isId = lang == PochiLang.ID
-    val displayedApps = remember(installedApps, pinnedPackages, isCustomizing) {
-        if (isCustomizing) {
-            installedApps.take(24)
-        } else {
-            val pinned = installedApps.filter { it.packageName in pinnedPackages }
-            if (pinned.isNotEmpty()) pinned.take(8) else installedApps.take(8)
+    val displayedApps = remember(installedApps, pinnedPackages, isCustomizing, showAllApps, searchQuery) {
+        val q = searchQuery.trim().lowercase(Locale.getDefault())
+        when {
+            q.isNotEmpty() -> {
+                installedApps.filter {
+                    it.label.lowercase(Locale.getDefault()).contains(q) ||
+                        it.packageName.lowercase(Locale.getDefault()).contains(q)
+                }
+            }
+            isCustomizing || showAllApps -> installedApps
+            else -> {
+                val pinned = installedApps.filter { it.packageName in pinnedPackages }
+                if (pinned.isNotEmpty()) pinned.take(12) else installedApps.take(12)
+            }
         }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // System Shortcuts Row (Kotak Persegi Panjang Rounded: Unduhan, Snip, Alarm, Kunci, Senter)
+        // System & Phone Shortcuts Row (Telepon, SMS, Snip, Alarm, Kunci, Senter)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             DeckShortcutTile(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(62.dp),
+                icon = Icons.Rounded.Call,
+                label = if (isId) "Telepon" else "Call",
+                accent = accentEmerald,
+                surfaceDark = surfaceDark,
+                borderDark = borderDark,
+                onClick = onActionCallDialer
+            )
+            DeckShortcutTile(
+                modifier = Modifier.width(62.dp),
+                icon = Icons.Rounded.Sms,
+                label = "SMS",
+                accent = Color(0xFF38BDF8),
+                surfaceDark = surfaceDark,
+                borderDark = borderDark,
+                onClick = onActionSendSms
+            )
+            DeckShortcutTile(
+                modifier = Modifier.width(62.dp),
                 icon = Icons.Rounded.Download,
                 label = if (isId) "Unduhan" else "Downloads",
                 accent = Color.White,
@@ -3156,7 +4242,7 @@ private fun DeckModuleView(
                 onClick = onActionDownloads
             )
             DeckShortcutTile(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(62.dp),
                 icon = Icons.Rounded.ContentCut,
                 label = "Snip",
                 accent = Color.White,
@@ -3165,7 +4251,7 @@ private fun DeckModuleView(
                 onClick = onActionScreenshot
             )
             DeckShortcutTile(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(62.dp),
                 icon = Icons.Rounded.Alarm,
                 label = "Alarm",
                 accent = Color.White,
@@ -3174,7 +4260,7 @@ private fun DeckModuleView(
                 onClick = onActionAlarm
             )
             DeckShortcutTile(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(62.dp),
                 icon = Icons.Rounded.Lock,
                 label = if (isId) "Kunci" else "Lock",
                 accent = Color.White,
@@ -3183,7 +4269,7 @@ private fun DeckModuleView(
                 onClick = onActionLockScreen
             )
             DeckShortcutTile(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(62.dp),
                 icon = if (isTorchOn) Icons.Rounded.FlashlightOn else Icons.Rounded.FlashlightOff,
                 label = if (isId) "Senter" else "Torch",
                 accent = if (isTorchOn) accentAmber else Color.White,
@@ -3193,33 +4279,100 @@ private fun DeckModuleView(
             )
         }
 
-        // Pinned Apps Header + Status-bar Dock Toggle + Pin Toggle
+        // Instant App Search Bar ("Cari & buka semua aplikasi di HP...")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 38.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(surfaceDark)
+                .border(1.dp, borderDark, RoundedCornerShape(9.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = null,
+                tint = accentAmber,
+                modifier = Modifier.size(16.dp)
+            )
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                cursorBrush = SolidColor(accentAmber),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(
+                    onGo = {
+                        displayedApps.firstOrNull()?.let { onLaunchApp(it.packageName) }
+                    }
+                ),
+                modifier = Modifier.weight(1f),
+                decorationBox = { inner ->
+                    if (searchQuery.isEmpty()) {
+                        Text(
+                            text = if (isId) "Cari & buka dari ${installedApps.size} aplikasi di HP..." else "Search & open from ${installedApps.size} installed apps...",
+                            color = textSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    inner()
+                }
+            )
+            if (searchQuery.isNotEmpty()) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Clear",
+                    tint = textSecondary,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clickable { onSearchQueryChange("") }
+                )
+            }
+        }
+
+        // Pinned / All Apps Header + Status-bar Dock Toggle + Pin Toggle
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = when {
-                    isCustomizing -> if (isId) "Ketuk aplikasi untuk pin" else "Tap apps to pin/unpin"
-                    else -> if (isId) "Aplikasi Cepat" else "Quick Apps"
-                },
-                color = textSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (showAllApps) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
+                    .border(1.dp, if (showAllApps) accentIndigo else borderDark, RoundedCornerShape(8.dp))
+                    .clickable { onToggleShowAllApps() }
+                    .padding(horizontal = 9.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = if (showAllApps) {
+                        if (isId) "Semua App (${installedApps.size})" else "All Apps (${installedApps.size})"
+                    } else {
+                        if (isId) "Tampilkan Semua (${installedApps.size})" else "Show All (${installedApps.size})"
+                    },
+                    color = if (showAllApps) Color.White else accentAmber,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(surfaceDark)
                         .border(1.dp, borderDark, RoundedCornerShape(8.dp))
                         .clickable { onToggleFlushStatusBar() }
-                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = if (isFlushStatusBar) {
-                            if (isId) "✓ Nempel Statusbar" else "✓ Statusbar Dock"
+                            if (isId) "✓ Statusbar" else "✓ Docked"
                         } else {
                             if (isId) "Melayang" else "Floating"
                         },
@@ -3234,10 +4387,10 @@ private fun DeckModuleView(
                         .background(surfaceDark)
                         .border(1.dp, borderDark, RoundedCornerShape(8.dp))
                         .clickable { onToggleCustomize() }
-                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        text = if (isCustomizing) (if (isId) "Selesai" else "Done") else (if (isId) "+ Pin App" else "+ Add"),
+                        text = if (isCustomizing) (if (isId) "Selesai" else "Done") else (if (isId) "+ Pin" else "+ Pin"),
                         color = Color.White,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
@@ -3248,10 +4401,10 @@ private fun DeckModuleView(
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0xFFEF4444).copy(alpha = 0.16f))
                         .clickable { onActionPowerOff() }
-                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        text = if (isId) "Matikan" else "Off",
+                        text = if (isId) "Off" else "Off",
                         color = Color(0xFFF87171),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold

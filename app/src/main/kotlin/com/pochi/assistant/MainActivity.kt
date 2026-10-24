@@ -451,6 +451,30 @@ class MainActivity : ComponentActivity() {
                         ActivityResultContracts.RequestPermission()
                     ) { granted -> contactGranted = granted }
 
+                    var micGranted by remember {
+                        mutableStateOf(
+                            ContextCompat.checkSelfPermission(
+                                this@MainActivity,
+                                Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+                        )
+                    }
+                    val micLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { granted -> micGranted = granted }
+
+                    var callGranted by remember {
+                        mutableStateOf(
+                            ContextCompat.checkSelfPermission(
+                                this@MainActivity,
+                                Manifest.permission.CALL_PHONE
+                            ) == PackageManager.PERMISSION_GRANTED
+                        )
+                    }
+                    val callLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { granted -> callGranted = granted }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -476,6 +500,39 @@ class MainActivity : ComponentActivity() {
                                 contactLauncher.launch(Manifest.permission.READ_CONTACTS)
                             } else {
                                 Toast.makeText(this@MainActivity, "Akses kontak sudah aktif", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PermissionPillButton(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.Mic,
+                            label = if (micGranted) "Suara Aktif" else "Izinkan Suara",
+                            subtleBg = subtleBg,
+                            textPrimary = if (micGranted) Color(0xFF30D158) else textPrimary
+                        ) {
+                            if (!micGranted) {
+                                micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            } else {
+                                Toast.makeText(this@MainActivity, "Mikrofon suara Pochi sudah aktif", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+
+                        PermissionPillButton(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.Call,
+                            label = if (callGranted) "Telepon Aktif" else "Izinkan Telepon",
+                            subtleBg = subtleBg,
+                            textPrimary = if (callGranted) Color(0xFF30D158) else textPrimary
+                        ) {
+                            if (!callGranted) {
+                                callLauncher.launch(Manifest.permission.CALL_PHONE)
+                            } else {
+                                Toast.makeText(this@MainActivity, "Akses panggilan telepon sudah aktif", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
