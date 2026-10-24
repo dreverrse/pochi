@@ -1,6 +1,5 @@
 package com.pochi.assistant
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -17,7 +16,6 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -25,13 +23,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Locale
-import kotlin.math.PI
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.hypot
-import kotlin.math.sin
 
-// 36 Ekspresi Lengkap Pochi (1 - 36)
+// 36 Ekspresi Lengkap Pochi (Mata Putih Bercahaya di Background Hitam ala Nochi/Tini)
 enum class PochiEmote(val number: Int, val title: String) {
     NORMAL(1, "Normal"),
     HAPPY(2, "Happy"),
@@ -46,7 +39,7 @@ enum class PochiEmote(val number: Int, val title: String) {
     SHOCK(11, "Shock"),
     CONFUSED(12, "Confused"),
     THINKING(13, "Thinking"),
-    HMM(14, "Hmm"),
+    HMM(14, "Curious"),
     SUSPICIOUS(15, "Suspicious"),
     ANGRY(16, "Angry"),
     ANNOYED(17, "Annoyed"),
@@ -56,9 +49,9 @@ enum class PochiEmote(val number: Int, val title: String) {
     HAPPY_TEARS(21, "Happy Tears"),
     CRYING(22, "Crying"),
     SCARED(23, "Scared"),
-    EMBARRASSED(24, "Embarrassed"),
+    EMBARRASSED(24, "Shy"),
     OK(25, "OK"),
-    NO(26, "No"),
+    NO(26, "Dizzy"),
     BYE(27, "Bye"),
     HI(28, "Hi"),
     GOOD_NIGHT(29, "Good Night"),
@@ -77,31 +70,30 @@ enum class BotState(
     val collapsedLabel: String,
     val defaultEmote: PochiEmote
 ) {
-    IDLE(Color(0xFF6366F1), "Pochi", "Pochi", PochiEmote.SMILING),
-    WAITING(Color(0xFFF59E0B), "Listening...", "Pochi", PochiEmote.CALM),
+    IDLE(Color(0xFFFFFFFF), "Pochi", "Pochi", PochiEmote.NORMAL),
+    WAITING(Color(0xFFF59E0B), "Listening...", "Pochi", PochiEmote.HMM),
     WORKING(Color(0xFF38BDF8), "Working...", "Working...", PochiEmote.WORKING),
     DONE(Color(0xFF10B981), "Done", "Done", PochiEmote.HAPPY),
-    APPROVAL(Color(0xFFF59E0B), "Approval Needed", "Approve?", PochiEmote.SURPRISED),
-    ANNOYED(Color(0xFFEF4444), "Attention", "Alert", PochiEmote.ANGRY)
+    APPROVAL(Color(0xFFF59E0B), "Needs You", "Approve?", PochiEmote.SURPRISED),
+    ANNOYED(Color(0xFFEF4444), "Alert", "Alert", PochiEmote.ANGRY)
 }
 
 /**
- * Interactive Pochi Mascot (`blobatar.dev` Organic Morphing Blob + Expressive White Eyes).
+ * Pochi / Nochi Minimalist White Eyes on Pure Matte-Black Background.
  *
- * - Built 100% with Jetpack Compose `Canvas` (0MB static bitmap/GIF overhead).
- * - Smooth closed Catmull-Rom -> Cubic Bézier spline interpolation across 8 radial control points.
- * - State-based animations:
- *   - Idle blinking + gentle organic breathing morph
- *   - Happy (`^ ^`) upward arc eyes
- *   - Automatic Sleepy (`- -`) mode after 11:00 PM (23:00 - 05:00)
- *   - Squishy spring physics and pupil eye-tracking reactive to touch, tap, and swipe gestures.
+ * - Renders high-contrast glowing white (`#FFFFFF`) eyes over a `#0A0A0A` black squircle/notch.
+ * - Supports 36 distinct expressions (`PochiEmote`):
+ *   idle capsules (`• •`), happy carets (`^ ^`), laughing chevrons (`> <`), sleepy bars (`- -`),
+ *   curious tilt (`• ●`), angry slants (`\ /`), suspicious flat-tops (`¬ ¬`), shocked rings (`O O`),
+ *   crying tears (`; ;`), hearts (`♥ ♥`), stars (`✦ ✦`), dizzy (`X X`), and more.
+ * - Reactive to touch, poke, long-press pet, and swipe gaze-tracking with 120fps spring physics.
  */
 @Composable
 fun PochiMascot(
     state: BotState,
     emoteOverride: PochiEmote? = null,
     size: Dp = 44.dp,
-    blobColorOverride: Color? = null,
+    showBlackBacking: Boolean = true,
     eyeTrackerOffset: Offset = Offset.Zero,
     onPoke: (() -> Unit)? = null,
     onPet: (() -> Unit)? = null,
@@ -117,35 +109,7 @@ fun PochiMascot(
         else -> state.defaultEmote
     }
 
-    // Continuous phase clock for organic blobatar.dev radial morphing
-    val infiniteTransition = rememberInfiniteTransition(label = "blobatarMorph")
-    val morphPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = when {
-                    activeEmote in setOf(PochiEmote.SLEEPY, PochiEmote.TIRED, PochiEmote.GOOD_NIGHT) -> 5600
-                    state == BotState.WORKING || activeEmote in setOf(PochiEmote.EXCITED, PochiEmote.WORKING, PochiEmote.LOADING) -> 2100
-                    else -> 3600
-                },
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "morphPhase"
-    )
-
-    val secondaryPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 4800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "secondaryPhase"
-    )
-
+    val infiniteTransition = rememberInfiniteTransition(label = "nochiEyes")
     val breathScale by infiniteTransition.animateFloat(
         initialValue = 0.96f,
         targetValue = 1.04f,
@@ -159,14 +123,33 @@ fun PochiMascot(
         label = "breathScale"
     )
 
-    // Squishy spring physics reactive to touch, poke, pet, and swipe
+    val idleLookDrift by infiniteTransition.animateFloat(
+        initialValue = -0.22f,
+        targetValue = 0.22f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "idleLookDrift"
+    )
+
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.22f,
+        targetValue = 0.48f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
+    // Squishy spring physics reactive to touch, tap, and swipe
     val squishX = remember { Animatable(1f) }
     val squishY = remember { Animatable(1f) }
     val touchGazeX = remember { Animatable(0f) }
     val touchGazeY = remember { Animatable(0f) }
-    var isPressed by remember { mutableStateOf(false) }
 
-    fun triggerSquish(targetX: Float = 1.22f, targetY: Float = 0.80f) {
+    fun triggerSquish(targetX: Float = 1.22f, targetY: Float = 0.78f) {
         coroutineScope.launch {
             launch {
                 squishX.snapTo(targetX)
@@ -193,15 +176,14 @@ fun PochiMascot(
 
     LaunchedEffect(activeEmote, state) {
         if (activeEmote in setOf(PochiEmote.HAPPY, PochiEmote.EXCITED, PochiEmote.LAUGHING, PochiEmote.SUCCESS, PochiEmote.PET_POKE)) {
-            triggerSquish(1.16f, 0.86f)
+            triggerSquish(1.16f, 0.85f)
         }
     }
 
     val targetTilt = when (activeEmote) {
-        PochiEmote.CONFUSED, PochiEmote.THINKING, PochiEmote.HMM -> -7f
-        PochiEmote.SUSPICIOUS -> 5f
-        PochiEmote.WINK_LEFT, PochiEmote.CUTE, PochiEmote.HI, PochiEmote.BYE -> 6f
-        PochiEmote.SLEEPY, PochiEmote.TIRED, PochiEmote.GOOD_NIGHT -> -4f
+        PochiEmote.CONFUSED, PochiEmote.THINKING, PochiEmote.HMM -> -6f
+        PochiEmote.SUSPICIOUS -> 4f
+        PochiEmote.WINK_LEFT, PochiEmote.CUTE, PochiEmote.HI, PochiEmote.BYE -> 5f
         else -> 0f
     }
     val animatedTilt by animateFloatAsState(
@@ -210,38 +192,19 @@ fun PochiMascot(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
-        label = "blobTilt"
+        label = "eyeTilt"
     )
 
-    val targetBlobColor = blobColorOverride ?: when {
-        activeEmote in setOf(PochiEmote.ANGRY, PochiEmote.ERROR, PochiEmote.NO) -> Color(0xFFEF4444)
-        activeEmote in setOf(PochiEmote.LOVE, PochiEmote.BLUSH, PochiEmote.CUTE, PochiEmote.PET_POKE) -> Color(0xFFEC4899)
-        activeEmote in setOf(PochiEmote.HAPPY, PochiEmote.SUCCESS, PochiEmote.EXCITED, PochiEmote.LAUGHING) -> Color(0xFF10B981)
-        activeEmote in setOf(PochiEmote.SLEEPY, PochiEmote.TIRED, PochiEmote.GOOD_NIGHT) -> Color(0xFF4F46E5)
-        activeEmote in setOf(PochiEmote.SURPRISED, PochiEmote.SHOCK, PochiEmote.FOCUS) -> Color(0xFFF59E0B)
-        state == BotState.WORKING || activeEmote in setOf(PochiEmote.WORKING, PochiEmote.LOADING, PochiEmote.THINKING) -> Color(0xFF0EA5E9)
-        else -> Color(0xFF6366F1)
-    }
-
-    val blobColor by animateColorAsState(
-        targetValue = targetBlobColor,
-        animationSpec = tween(320),
-        label = "blobColor"
-    )
-
-    // Natural periodic blinking in idle/normal states
+    // Natural periodic blinking
     var isBlinking by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay((2400..4600).random().toLong())
+            delay((2200..4500).random().toLong())
             isBlinking = true
-            delay(135)
+            delay(130)
             isBlinking = false
         }
     }
-
-    val blobPath = remember { Path() }
-    val highlightPath = remember { Path() }
 
     val interactiveModifier = if (onPoke != null || onPet != null || onSwipe != null) {
         Modifier
@@ -249,7 +212,6 @@ fun PochiMascot(
                 val halfSizePx = (size.toPx() / 2f).coerceAtLeast(1f)
                 detectTapGestures(
                     onPress = { pressOffset ->
-                        isPressed = true
                         val nx = ((pressOffset.x - halfSizePx) / halfSizePx).coerceIn(-1f, 1f)
                         val ny = ((pressOffset.y - halfSizePx) / halfSizePx).coerceIn(-1f, 1f)
                         coroutineScope.launch {
@@ -258,18 +220,17 @@ fun PochiMascot(
                         }
                         triggerSquish(1.18f, 0.82f)
                         tryAwaitRelease()
-                        isPressed = false
                         coroutineScope.launch {
                             touchGazeX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioLowBouncy))
                             touchGazeY.animateTo(0f, spring(dampingRatio = Spring.DampingRatioLowBouncy))
                         }
                     },
                     onTap = {
-                        triggerSquish(1.24f, 0.78f)
+                        triggerSquish(1.25f, 0.76f)
                         onPoke?.invoke()
                     },
                     onLongPress = {
-                        triggerSquish(1.28f, 0.75f)
+                        triggerSquish(1.28f, 0.74f)
                         onPet?.invoke()
                     }
                 )
@@ -279,18 +240,16 @@ fun PochiMascot(
                     detectDragGestures(
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            val nx = (dragAmount.x / 24f).coerceIn(-1f, 1f)
-                            val ny = (dragAmount.y / 24f).coerceIn(-1f, 1f)
+                            val nx = (dragAmount.x / 22f).coerceIn(-1f, 1f)
+                            val ny = (dragAmount.y / 22f).coerceIn(-1f, 1f)
                             coroutineScope.launch {
                                 touchGazeX.snapTo(nx)
                                 touchGazeY.snapTo(ny)
-                                squishX.snapTo((1f + kotlin.math.abs(nx) * 0.18f).coerceAtMost(1.26f))
-                                squishY.snapTo((1f - kotlin.math.abs(nx) * 0.14f).coerceAtLeast(0.78f))
                             }
                             onSwipe(dragAmount)
                         },
                         onDragEnd = {
-                            triggerSquish(1.12f, 0.90f)
+                            triggerSquish(1.14f, 0.88f)
                             coroutineScope.launch {
                                 touchGazeX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioLowBouncy))
                                 touchGazeY.animateTo(0f, spring(dampingRatio = Spring.DampingRatioLowBouncy))
@@ -312,15 +271,10 @@ fun PochiMascot(
         val h = this.size.height
         val cx = w * 0.5f
         val cy = h * 0.5f
-        val baseRadius = w.coerceAtMost(h) * 0.42f
 
-        val morphIntensity = when {
-            activeEmote in setOf(PochiEmote.SLEEPY, PochiEmote.TIRED, PochiEmote.CALM, PochiEmote.GOOD_NIGHT) -> 0.045f
-            activeEmote in setOf(PochiEmote.EXCITED, PochiEmote.LAUGHING, PochiEmote.WORKING, PochiEmote.ANGRY, PochiEmote.SHOCK) -> 0.105f
-            else -> 0.072f
-        }
-
-        val combinedGazeX = (touchGazeX.value + eyeTrackerOffset.x).coerceIn(-1f, 1f)
+        val combinedGazeX = (touchGazeX.value + eyeTrackerOffset.x +
+            if (activeEmote == PochiEmote.HMM || activeEmote == PochiEmote.WORKING) idleLookDrift else 0f)
+            .coerceIn(-1f, 1f)
         val combinedGazeY = (touchGazeY.value + eyeTrackerOffset.y).coerceIn(-1f, 1f)
 
         rotate(degrees = animatedTilt, pivot = Offset(cx, cy)) {
@@ -329,66 +283,31 @@ fun PochiMascot(
                 scaleY = (1f / breathScale) * squishY.value,
                 pivot = Offset(cx, cy)
             ) {
-                // 1. Build organic blobatar.dev closed spline across 8 radial control points
-                buildBlobSplinePath(
-                    outPath = blobPath,
-                    cx = cx,
-                    cy = cy,
-                    baseRadius = baseRadius,
-                    phase1 = morphPhase,
-                    phase2 = secondaryPhase,
-                    amplitude = morphIntensity,
-                    pullX = combinedGazeX * baseRadius * 0.08f,
-                    pullY = combinedGazeY * baseRadius * 0.08f
-                )
+                // Pure Matte-Black (#0A0A0A) pill/squircle background (like Nochi/Tini)
+                if (showBlackBacking) {
+                    val pad = w * 0.04f
+                    val corner = (h * 0.38f).coerceAtLeast(8f)
+                    drawRoundRect(
+                        color = Color(0xFF0A0A0A),
+                        topLeft = Offset(pad, pad),
+                        size = Size(w - pad * 2f, h - pad * 2f),
+                        cornerRadius = CornerRadius(corner, corner)
+                    )
+                    drawRoundRect(
+                        color = Color(0xFF26262E),
+                        topLeft = Offset(pad, pad),
+                        size = Size(w - pad * 2f, h - pad * 2f),
+                        cornerRadius = CornerRadius(corner, corner),
+                        style = Stroke(width = (w * 0.025f).coerceAtLeast(1f))
+                    )
+                }
 
-                // Soft outer ambient glow on dark #0A0A0A island
-                drawPath(
-                    path = blobPath,
-                    color = blobColor.copy(alpha = 0.24f),
-                    style = Stroke(width = w * 0.08f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                )
-
-                // Main organic squishy blob body with subtle radial gradient
-                drawPath(
-                    path = blobPath,
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            lerp(blobColor, Color.White, 0.22f),
-                            blobColor,
-                            lerp(blobColor, Color.Black, 0.28f)
-                        ),
-                        center = Offset(cx - baseRadius * 0.25f, cy - baseRadius * 0.28f),
-                        radius = baseRadius * 1.35f
-                    ),
-                    style = Fill
-                )
-
-                // Subtle top-left organic specular highlight blob
-                buildBlobSplinePath(
-                    outPath = highlightPath,
-                    cx = cx - baseRadius * 0.22f,
-                    cy = cy - baseRadius * 0.26f,
-                    baseRadius = baseRadius * 0.34f,
-                    phase1 = morphPhase + 0.8f,
-                    phase2 = secondaryPhase,
-                    amplitude = morphIntensity * 0.5f,
-                    pullX = 0f,
-                    pullY = 0f
-                )
-                drawPath(
-                    path = highlightPath,
-                    color = Color.White.copy(alpha = 0.16f),
-                    style = Fill
-                )
-
-                // 2. Minimalist Expressive White Eyes (reactive to gaze + state)
-                val eyeShiftX = combinedGazeX * (w * 0.075f)
-                val eyeShiftY = combinedGazeY * (h * 0.065f)
-                val leftEyeX = cx - w * 0.135f + eyeShiftX
-                val rightEyeX = cx + w * 0.135f + eyeShiftX
+                val eyeShiftX = combinedGazeX * (w * 0.085f)
+                val eyeShiftY = combinedGazeY * (h * 0.075f)
+                val leftEyeX = cx - w * 0.165f + eyeShiftX
+                val rightEyeX = cx + w * 0.165f + eyeShiftX
                 val eyeY = cy + eyeShiftY
-                val strokeW = (w * 0.068f).coerceAtLeast(2.2f)
+                val strokeW = (w * 0.085f).coerceAtLeast(2.4f)
 
                 val canAutoBlink = activeEmote in setOf(
                     PochiEmote.NORMAL,
@@ -397,21 +316,22 @@ fun PochiMascot(
                     PochiEmote.FOCUS,
                     PochiEmote.WORKING,
                     PochiEmote.LOADING,
-                    PochiEmote.CALM
+                    PochiEmote.HMM
                 )
 
                 if (isBlinking && canAutoBlink) {
-                    drawSleepyDashEye(leftEyeX, eyeY, w, Color.White, strokeW)
-                    drawSleepyDashEye(rightEyeX, eyeY, w, Color.White, strokeW)
+                    drawGlowingDashEye(leftEyeX, eyeY, w, strokeW, pulseAlpha)
+                    drawGlowingDashEye(rightEyeX, eyeY, w, strokeW, pulseAlpha)
                 } else {
-                    drawBlobWhiteEyes(
+                    drawNochiWhiteExpression(
                         emote = activeEmote,
                         leftX = leftEyeX,
                         rightX = rightEyeX,
                         eyeY = eyeY,
                         w = w,
                         h = h,
-                        strokeW = strokeW
+                        strokeW = strokeW,
+                        glowAlpha = pulseAlpha
                     )
                 }
             }
@@ -419,113 +339,74 @@ fun PochiMascot(
     }
 }
 
-/**
- * Generates a smooth closed Catmull-Rom spline converted to Cubic Bézier segments (`blobatar.dev` style)
- * around 8 radial control points with multi-harmonic organic oscillation.
- */
-private fun buildBlobSplinePath(
-    outPath: Path,
-    cx: Float,
-    cy: Float,
-    baseRadius: Float,
-    phase1: Float,
-    phase2: Float,
-    amplitude: Float,
-    pullX: Float,
-    pullY: Float
-) {
-    outPath.reset()
-    val count = 8
-    val xs = FloatArray(count)
-    val ys = FloatArray(count)
-    val step = (2.0 * PI / count).toFloat()
-
-    for (i in 0 until count) {
-        val angle = i * step
-        val wave1 = sin(phase1 + i * 1.75f)
-        val wave2 = cos(phase2 - i * 2.35f)
-        val wave3 = sin(phase1 * 2f + i * 0.95f)
-        val r = baseRadius * (1f + amplitude * (0.55f * wave1 + 0.30f * wave2 + 0.15f * wave3))
-        xs[i] = cx + pullX + r * cos(angle)
-        ys[i] = cy + pullY + r * sin(angle)
-    }
-
-    // Closed Catmull-Rom to Cubic Bézier conversion (tension = 1.0)
-    outPath.moveTo(xs[0], ys[0])
-    for (i in 0 until count) {
-        val p0x = xs[(i - 1 + count) % count]
-        val p0y = ys[(i - 1 + count) % count]
-        val p1x = xs[i]
-        val p1y = ys[i]
-        val p2x = xs[(i + 1) % count]
-        val p2y = ys[(i + 1) % count]
-        val p3x = xs[(i + 2) % count]
-        val p3y = ys[(i + 2) % count]
-
-        val cp1x = p1x + (p2x - p0x) / 6f
-        val cp1y = p1y + (p2y - p0y) / 6f
-        val cp2x = p2x - (p3x - p1x) / 6f
-        val cp2y = p2y - (p3y - p1y) / 6f
-
-        outPath.cubicTo(cp1x, cp1y, cp2x, cp2y, p2x, p2y)
-    }
-    outPath.close()
-}
-
-private fun DrawScope.drawIdleCapsuleEye(
+private fun DrawScope.drawGlowingPillEye(
     cx: Float,
     cy: Float,
     w: Float,
-    color: Color,
+    scaleX: Float = 1f,
     scaleY: Float = 1f,
-    scaleX: Float = 1f
+    glowAlpha: Float = 0.32f
 ) {
-    val ew = w * 0.105f * scaleX
-    val eh = w * 0.175f * scaleY
+    val ew = w * 0.145f * scaleX
+    val eh = w * 0.255f * scaleY
+    // Soft white halo glow around eye (like frames 2s & 35s)
     drawRoundRect(
-        color = color,
+        color = Color.White.copy(alpha = glowAlpha * 0.55f),
+        topLeft = Offset(cx - ew * 0.72f, cy - eh * 0.65f),
+        size = Size(ew * 1.44f, eh * 1.30f),
+        cornerRadius = CornerRadius(ew, ew)
+    )
+    // Crisp pure white eye core
+    drawRoundRect(
+        color = Color.White,
         topLeft = Offset(cx - ew * 0.5f, cy - eh * 0.5f),
         size = Size(ew, eh),
         cornerRadius = CornerRadius(ew * 0.5f, ew * 0.5f)
     )
 }
 
-/**
- * Happy (`^ ^`) upward chevron/arc eye in minimalist white.
- */
-private fun DrawScope.drawHappyCaretEye(
+private fun DrawScope.drawGlowingCaretEye(
     cx: Float,
     cy: Float,
     w: Float,
-    color: Color,
-    strokeW: Float
+    strokeW: Float,
+    glowAlpha: Float
 ) {
-    val halfW = w * 0.068f
-    val halfH = w * 0.048f
+    val halfW = w * 0.088f
+    val halfH = w * 0.062f
     val path = Path().apply {
         moveTo(cx - halfW, cy + halfH * 0.55f)
-        quadraticBezierTo(cx, cy - halfH * 1.15f, cx + halfW, cy + halfH * 0.55f)
+        quadraticBezierTo(cx, cy - halfH * 1.25f, cx + halfW, cy + halfH * 0.55f)
     }
     drawPath(
         path = path,
-        color = color,
+        color = Color.White.copy(alpha = glowAlpha * 0.55f),
+        style = Stroke(width = strokeW * 1.7f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+    drawPath(
+        path = path,
+        color = Color.White,
         style = Stroke(width = strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round)
     )
 }
 
-/**
- * Sleepy (`- -`) horizontal dash eye (automatically used after 11 PM or during rest).
- */
-private fun DrawScope.drawSleepyDashEye(
+private fun DrawScope.drawGlowingDashEye(
     cx: Float,
     cy: Float,
     w: Float,
-    color: Color,
-    strokeW: Float
+    strokeW: Float,
+    glowAlpha: Float
 ) {
-    val halfW = w * 0.068f
+    val halfW = w * 0.085f
     drawLine(
-        color = color,
+        color = Color.White.copy(alpha = glowAlpha * 0.5f),
+        start = Offset(cx - halfW, cy),
+        end = Offset(cx + halfW, cy),
+        strokeWidth = strokeW * 1.6f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = Color.White,
         start = Offset(cx - halfW, cy),
         end = Offset(cx + halfW, cy),
         strokeWidth = strokeW,
@@ -533,128 +414,215 @@ private fun DrawScope.drawSleepyDashEye(
     )
 }
 
-private fun DrawScope.drawBlobWhiteEyes(
+private fun DrawScope.drawChevronSquintEye(
+    cx: Float,
+    cy: Float,
+    w: Float,
+    isLeft: Boolean,
+    strokeW: Float
+) {
+    val r = w * 0.075f
+    val path = Path().apply {
+        if (isLeft) {
+            moveTo(cx - r, cy - r * 0.7f)
+            lineTo(cx + r * 0.75f, cy)
+            lineTo(cx - r, cy + r * 0.7f)
+        } else {
+            moveTo(cx + r, cy - r * 0.7f)
+            lineTo(cx - r * 0.75f, cy)
+            lineTo(cx + r, cy + r * 0.7f)
+        }
+    }
+    drawPath(
+        path = path,
+        color = Color.White,
+        style = Stroke(width = strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+}
+
+private fun DrawScope.drawStarEye(cx: Float, cy: Float, w: Float, strokeW: Float) {
+    val r = w * 0.095f
+    drawLine(Color.White, Offset(cx - r, cy), Offset(cx + r, cy), strokeW * 0.85f, StrokeCap.Round)
+    drawLine(Color.White, Offset(cx, cy - r), Offset(cx, cy + r), strokeW * 0.85f, StrokeCap.Round)
+    drawCircle(Color.White, radius = w * 0.045f, center = Offset(cx, cy))
+}
+
+private fun DrawScope.drawHeartEye(cx: Float, cy: Float, w: Float) {
+    val r = w * 0.09f
+    val path = Path().apply {
+        moveTo(cx, cy + r * 0.85f)
+        cubicTo(cx - r * 1.4f, cy + r * 0.1f, cx - r * 0.9f, cy - r * 0.95f, cx, cy - r * 0.3f)
+        cubicTo(cx + r * 0.9f, cy - r * 0.95f, cx + r * 1.4f, cy + r * 0.1f, cx, cy + r * 0.85f)
+        close()
+    }
+    drawPath(path, color = Color.White, style = Fill)
+}
+
+private fun DrawScope.drawNochiWhiteExpression(
     emote: PochiEmote,
     leftX: Float,
     rightX: Float,
     eyeY: Float,
     w: Float,
     h: Float,
-    strokeW: Float
+    strokeW: Float,
+    glowAlpha: Float
 ) {
-    val white = Color.White
     when (emote) {
-        // Happy (`^ ^`) expressions
+        // 1. Normal / Hi / Working / Loading (`• •` classic glowing white pill eyes like 2s, 4s)
+        PochiEmote.NORMAL,
+        PochiEmote.HI,
+        PochiEmote.WORKING,
+        PochiEmote.LOADING -> {
+            drawGlowingPillEye(leftX, eyeY, w, glowAlpha = glowAlpha)
+            drawGlowingPillEye(rightX, eyeY, w, glowAlpha = glowAlpha)
+        }
+
+        // 2. Curious / Hmm / Confused (`• ●` asymmetric curious white eyes like 35s)
+        PochiEmote.HMM,
+        PochiEmote.CONFUSED -> {
+            drawGlowingPillEye(leftX, eyeY + h * 0.01f, w, scaleX = 1.05f, scaleY = 0.78f, glowAlpha = glowAlpha)
+            drawGlowingPillEye(rightX, eyeY - h * 0.01f, w, scaleX = 1.18f, scaleY = 0.95f, glowAlpha = glowAlpha)
+        }
+
+        // 3. Thinking (`- •` one flat eye, one raised tall eye)
+        PochiEmote.THINKING -> {
+            drawGlowingDashEye(leftX, eyeY, w, strokeW, glowAlpha)
+            drawGlowingPillEye(rightX, eyeY - h * 0.02f, w, scaleX = 1.08f, scaleY = 1.08f, glowAlpha = glowAlpha)
+        }
+
+        // 4. Happy / Smiling / Cute / Good Morning / Success / Pet (`^ ^` like 20s)
         PochiEmote.HAPPY,
-        PochiEmote.LAUGHING,
         PochiEmote.SMILING,
         PochiEmote.CUTE,
-        PochiEmote.EXCITED,
         PochiEmote.GOOD_MORNING,
         PochiEmote.SUCCESS,
         PochiEmote.PET_POKE,
-        PochiEmote.HAPPY_TEARS -> {
-            drawHappyCaretEye(leftX, eyeY, w, white, strokeW)
-            drawHappyCaretEye(rightX, eyeY, w, white, strokeW)
-            if (emote in setOf(PochiEmote.BLUSH, PochiEmote.CUTE, PochiEmote.PET_POKE)) {
-                val blush = Color(0xFFFFB4C8).copy(alpha = 0.65f)
-                drawCircle(blush, radius = w * 0.045f, center = Offset(leftX - w * 0.06f, eyeY + h * 0.09f))
-                drawCircle(blush, radius = w * 0.045f, center = Offset(rightX + w * 0.06f, eyeY + h * 0.09f))
-            }
+        PochiEmote.BLUSH -> {
+            drawGlowingCaretEye(leftX, eyeY, w, strokeW, glowAlpha)
+            drawGlowingCaretEye(rightX, eyeY, w, strokeW, glowAlpha)
         }
 
-        // Sleepy (`- -`) expressions (active after 11 PM or when tired/calm)
-        PochiEmote.SLEEPY,
-        PochiEmote.TIRED,
-        PochiEmote.GOOD_NIGHT,
-        PochiEmote.CALM,
-        PochiEmote.BLUSH,
-        PochiEmote.EMBARRASSED -> {
-            drawSleepyDashEye(leftX, eyeY, w, white, strokeW)
-            drawSleepyDashEye(rightX, eyeY, w, white, strokeW)
-            if (emote in setOf(PochiEmote.BLUSH, PochiEmote.EMBARRASSED)) {
-                val blush = Color(0xFFFFB4C8).copy(alpha = 0.65f)
-                drawCircle(blush, radius = w * 0.045f, center = Offset(leftX - w * 0.05f, eyeY + h * 0.08f))
-                drawCircle(blush, radius = w * 0.045f, center = Offset(rightX + w * 0.05f, eyeY + h * 0.08f))
-            }
+        // 5. Laughing (`> <` happy squinting chevrons)
+        PochiEmote.LAUGHING -> {
+            drawChevronSquintEye(leftX, eyeY, w, isLeft = true, strokeW = strokeW)
+            drawChevronSquintEye(rightX, eyeY, w, isLeft = false, strokeW = strokeW)
         }
 
-        // Wink (`^ •`)
+        // 6. Wink / OK / Bye (`^ •`)
         PochiEmote.WINK_LEFT,
         PochiEmote.OK,
         PochiEmote.BYE -> {
-            drawHappyCaretEye(leftX, eyeY, w, white, strokeW)
-            drawIdleCapsuleEye(rightX, eyeY, w, white)
+            drawGlowingCaretEye(leftX, eyeY, w, strokeW, glowAlpha)
+            drawGlowingPillEye(rightX, eyeY, w, glowAlpha = glowAlpha)
         }
 
-        // Curious / Thinking / Confused (asymmetric expressive capsule eyes)
-        PochiEmote.THINKING,
-        PochiEmote.HMM,
-        PochiEmote.CONFUSED,
-        PochiEmote.SUSPICIOUS -> {
-            drawSleepyDashEye(leftX, eyeY - h * 0.01f, w, white, strokeW)
-            drawIdleCapsuleEye(rightX, eyeY, w, white, scaleY = 1.08f)
+        // 7. Excited (`✦ ✦` sparkling white star eyes)
+        PochiEmote.EXCITED -> {
+            drawStarEye(leftX, eyeY, w, strokeW)
+            drawStarEye(rightX, eyeY, w, strokeW)
         }
 
-        // Surprised / Shock / Scared (wide circular white eyes)
-        PochiEmote.SURPRISED,
-        PochiEmote.SHOCK,
-        PochiEmote.SCARED -> {
-            drawIdleCapsuleEye(leftX, eyeY, w, white, scaleY = 1.15f, scaleX = 1.18f)
-            drawIdleCapsuleEye(rightX, eyeY, w, white, scaleY = 1.15f, scaleX = 1.18f)
-        }
-
-        // Focused / Angry / Annoyed / Error (angled white eyes)
-        PochiEmote.ANGRY,
-        PochiEmote.ANNOYED,
-        PochiEmote.ERROR,
-        PochiEmote.NO,
-        PochiEmote.FOCUS -> {
-            val r = w * 0.065f
-            drawLine(
-                color = white,
-                start = Offset(leftX - r, eyeY - r * 0.45f),
-                end = Offset(leftX + r, eyeY + r * 0.35f),
-                strokeWidth = strokeW,
-                cap = StrokeCap.Round
-            )
-            drawLine(
-                color = white,
-                start = Offset(rightX - r, eyeY + r * 0.35f),
-                end = Offset(rightX + r, eyeY - r * 0.45f),
-                strokeWidth = strokeW,
-                cap = StrokeCap.Round
-            )
-        }
-
-        // Love
+        // 8. Love (`♥ ♥` glowing white heart eyes)
         PochiEmote.LOVE -> {
-            drawHappyCaretEye(leftX, eyeY, w, white, strokeW)
-            drawHappyCaretEye(rightX, eyeY, w, white, strokeW)
-            drawCircle(Color(0xFFFFB4C8), radius = w * 0.048f, center = Offset(leftX - w * 0.06f, eyeY + h * 0.09f))
-            drawCircle(Color(0xFFFFB4C8), radius = w * 0.048f, center = Offset(rightX + w * 0.06f, eyeY + h * 0.09f))
+            drawHeartEye(leftX, eyeY, w)
+            drawHeartEye(rightX, eyeY, w)
         }
 
-        // Crying
-        PochiEmote.CRYING -> {
-            drawSleepyDashEye(leftX, eyeY, w, white, strokeW)
-            drawSleepyDashEye(rightX, eyeY, w, white, strokeW)
-            val tear = Color(0xFF7DD3FC)
-            drawCircle(tear, radius = w * 0.036f, center = Offset(leftX - w * 0.04f, eyeY + h * 0.09f))
-            drawCircle(tear, radius = w * 0.036f, center = Offset(rightX + w * 0.04f, eyeY + h * 0.09f))
+        // 9. Sleepy / Good Night / Calm (`- -` horizontal glowing white bars)
+        PochiEmote.SLEEPY,
+        PochiEmote.GOOD_NIGHT,
+        PochiEmote.CALM -> {
+            drawGlowingDashEye(leftX, eyeY, w, strokeW, glowAlpha)
+            drawGlowingDashEye(rightX, eyeY, w, strokeW, glowAlpha)
         }
 
-        // Default Idle / Working (`• •`)
-        else -> {
-            drawIdleCapsuleEye(leftX, eyeY, w, white)
-            drawIdleCapsuleEye(rightX, eyeY, w, white)
+        // 10. Tired / Embarrassed (`u u` droopy downward arcs)
+        PochiEmote.TIRED,
+        PochiEmote.EMBARRASSED -> {
+            val halfW = w * 0.082f
+            val halfH = w * 0.048f
+            for (cx in listOf(leftX, rightX)) {
+                val p = Path().apply {
+                    moveTo(cx - halfW, eyeY - halfH * 0.4f)
+                    quadraticBezierTo(cx, eyeY + halfH * 1.1f, cx + halfW, eyeY - halfH * 0.4f)
+                }
+                drawPath(p, Color.White, style = Stroke(width = strokeW, cap = StrokeCap.Round))
+            }
+        }
+
+        // 11. Surprised / Shock (`O O` wide open hollow white rings)
+        PochiEmote.SURPRISED,
+        PochiEmote.SHOCK -> {
+            val r = w * 0.095f
+            drawCircle(Color.White.copy(alpha = glowAlpha * 0.45f), radius = r * 1.35f, center = Offset(leftX, eyeY))
+            drawCircle(Color.White.copy(alpha = glowAlpha * 0.45f), radius = r * 1.35f, center = Offset(rightX, eyeY))
+            drawCircle(Color.White, radius = r, center = Offset(leftX, eyeY), style = Stroke(width = strokeW * 0.9f))
+            drawCircle(Color.White, radius = r, center = Offset(rightX, eyeY), style = Stroke(width = strokeW * 0.9f))
+        }
+
+        // 12. Scared (`• •` tiny trembling white dots)
+        PochiEmote.SCARED -> {
+            drawGlowingPillEye(leftX, eyeY, w, scaleX = 0.65f, scaleY = 0.55f, glowAlpha = glowAlpha)
+            drawGlowingPillEye(rightX, eyeY, w, scaleX = 0.65f, scaleY = 0.55f, glowAlpha = glowAlpha)
+        }
+
+        // 13. Suspicious / Annoyed (`¬ ¬` narrow flat-top white eyes)
+        PochiEmote.SUSPICIOUS,
+        PochiEmote.ANNOYED -> {
+            drawGlowingPillEye(leftX, eyeY, w, scaleX = 1.15f, scaleY = 0.42f, glowAlpha = glowAlpha)
+            drawGlowingPillEye(rightX, eyeY, w, scaleX = 1.15f, scaleY = 0.42f, glowAlpha = glowAlpha)
+        }
+
+        // 14. Angry / Focus (`\ /` fierce angled white eyes)
+        PochiEmote.ANGRY,
+        PochiEmote.FOCUS -> {
+            val r = w * 0.085f
+            drawLine(
+                color = Color.White,
+                start = Offset(leftX - r, eyeY - r * 0.48f),
+                end = Offset(leftX + r, eyeY + r * 0.38f),
+                strokeWidth = strokeW,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = Color.White,
+                start = Offset(rightX - r, eyeY + r * 0.38f),
+                end = Offset(rightX + r, eyeY - r * 0.48f),
+                strokeWidth = strokeW,
+                cap = StrokeCap.Round
+            )
+        }
+
+        // 15. Crying / Happy Tears (`; ;` white eyes with glowing white teardrops)
+        PochiEmote.CRYING,
+        PochiEmote.HAPPY_TEARS -> {
+            if (emote == PochiEmote.HAPPY_TEARS) {
+                drawGlowingCaretEye(leftX, eyeY, w, strokeW, glowAlpha)
+                drawGlowingCaretEye(rightX, eyeY, w, strokeW, glowAlpha)
+            } else {
+                drawGlowingDashEye(leftX, eyeY, w, strokeW, glowAlpha)
+                drawGlowingDashEye(rightX, eyeY, w, strokeW, glowAlpha)
+            }
+            drawCircle(Color.White.copy(alpha = 0.85f), radius = w * 0.036f, center = Offset(leftX - w * 0.05f, eyeY + h * 0.14f))
+            drawCircle(Color.White.copy(alpha = 0.85f), radius = w * 0.036f, center = Offset(rightX + w * 0.05f, eyeY + h * 0.14f))
+        }
+
+        // 16. Error / No (`X X` cross eyes)
+        PochiEmote.ERROR,
+        PochiEmote.NO -> {
+            val r = w * 0.072f
+            for (cx in listOf(leftX, rightX)) {
+                drawLine(Color.White, Offset(cx - r, eyeY - r), Offset(cx + r, eyeY + r), strokeW * 0.85f, StrokeCap.Round)
+                drawLine(Color.White, Offset(cx + r, eyeY - r), Offset(cx - r, eyeY + r), strokeW * 0.85f, StrokeCap.Round)
+            }
         }
     }
 }
 
 object PochiMood {
     /**
-     * Autonomous mood generator with automatic after-11PM Sleepy (`- -`) state.
+     * Cycles across all rich white-eye expressions so Pochi feels alive like Nochi.
      */
     fun nextAutonomousMood(idleMillis: Long, isPeeking: Boolean): PochiEmote {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -668,81 +636,66 @@ object PochiMood {
         }
         if (isPeeking) {
             return listOf(
+                PochiEmote.HMM,
                 PochiEmote.SUSPICIOUS,
                 PochiEmote.WINK_LEFT,
-                PochiEmote.CUTE,
-                PochiEmote.SURPRISED,
-                PochiEmote.HMM,
-                PochiEmote.SLEEPY,
-                PochiEmote.HI
+                PochiEmote.SURPRISED
             ).random()
         }
         if (idleMillis > 120_000L) {
             return listOf(
+                PochiEmote.HMM,
                 PochiEmote.SLEEPY,
                 PochiEmote.TIRED,
-                PochiEmote.HMM,
-                PochiEmote.CALM
+                PochiEmote.THINKING,
+                PochiEmote.SUSPICIOUS
             ).random()
         }
-        return when (hour) {
-            in 5..9 -> listOf(
-                PochiEmote.GOOD_MORNING,
-                PochiEmote.HI,
-                PochiEmote.HAPPY,
-                PochiEmote.SMILING,
-                PochiEmote.EXCITED
-            ).random()
-            in 10..17 -> listOf(
-                PochiEmote.NORMAL,
-                PochiEmote.SMILING,
-                PochiEmote.HAPPY,
-                PochiEmote.WINK_LEFT,
-                PochiEmote.FOCUS,
-                PochiEmote.THINKING
-            ).random()
-            else -> listOf(
-                PochiEmote.CALM,
-                PochiEmote.SMILING,
-                PochiEmote.HAPPY,
-                PochiEmote.BLUSH,
-                PochiEmote.SLEEPY
-            ).random()
-        }
+        return listOf(
+            PochiEmote.NORMAL,
+            PochiEmote.NORMAL,
+            PochiEmote.HMM,
+            PochiEmote.SMILING,
+            PochiEmote.HAPPY,
+            PochiEmote.WINK_LEFT,
+            PochiEmote.THINKING,
+            PochiEmote.CALM,
+            PochiEmote.EXCITED
+        ).random()
     }
 
     fun onPokeReaction(pokeCount: Int): Triple<PochiEmote, BotState, String> {
         val isId = PochiPrefs.langFlow.value == PochiLang.ID
         return when (pokeCount) {
             1 -> Triple(
-                PochiEmote.HAPPY,
+                PochiEmote.HMM,
                 BotState.IDLE,
-                if (isId) "Halo! Ketuk untuk buka Dynamic Island atau tahan untuk Perintah Cepat."
-                else "Hey! Tap to open your Dynamic Island or hold for Quick Command."
+                if (isId) "Penasaran ya? Ketuk untuk buka pulau atau tahan untuk perintah cepat."
+                else "Curious? Tap to open island or hold for quick command."
             )
             2 -> Triple(
-                PochiEmote.WINK_LEFT,
+                PochiEmote.HAPPY,
                 BotState.IDLE,
-                if (isId) "Hehe, mode blob kenyal aktif! (`^ ^`)"
-                else "Hehe, squishy blob mode active! (`^ ^`)"
+                if (isId) "Hehe (`^ ^`) siap bantu!"
+                else "Hehe (`^ ^`) ready to help!"
             )
             3 -> Triple(
                 PochiEmote.SUSPICIOUS,
                 BotState.ANNOYED,
-                if (isId) "Hmm... kok dicolek terus hari ini?"
-                else "Hmm... poking me a lot today?"
+                if (isId) "Hmm... kok dicolek terus dari tadi? (`¬ ¬`)"
+                else "Hmm... poking me a lot today? (`¬ ¬`)"
             )
             4 -> Triple(
                 PochiEmote.ANGRY,
                 BotState.ANNOYED,
-                if (isId) "Jangan dicolek terus dong! Tahan di kepala buat ngelus."
-                else "Hey, easy on the pokes! Hold to pet me instead."
+                if (isId) "Jangan dicolek terus dong! Tahan buat ngelus."
+                else "Easy on the pokes! Hold to pet me instead."
             )
             else -> Triple(
-                PochiEmote.CRYING,
+                PochiEmote.NO,
                 BotState.ANNOYED,
-                if (isId) "Pusing dicolek mulu... tahan sebentar buat nenangin Pochi."
-                else "Dizzy from all the pokes... hold on my head to calm me down."
+                if (isId) "Pusing dicolek mulu (`X X`)... tahan sebentar buat nenangin."
+                else "Dizzy from all the pokes (`X X`)... hold to calm me down."
             )
         }
     }
@@ -760,8 +713,8 @@ object PochiMood {
             Triple(
                 PochiEmote.LOVE,
                 BotState.DONE,
-                if (isId) "Nyaman banget dielus, makin semangat (`^ ^`)!"
-                else "Purr... feeling energized (`^ ^`)!"
+                if (isId) "Nyaman banget dielus (`♥ ♥`)!"
+                else "Purr... feeling energized (`♥ ♥`)!"
             )
         }
     }

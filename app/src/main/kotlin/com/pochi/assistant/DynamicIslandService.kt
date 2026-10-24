@@ -116,10 +116,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val density = resources.displayMetrics.density
 
-        // Ultra-slim status-bar bounding box (188dp x 30dp) so the island hugs the top status bar
-        // cutout without obstructing app toolbars below it.
-        val collapsedWidthPx = (188 * density).toInt()
-        val collapsedHeightPx = (30 * density).toInt()
+        // Top-notch bounding box (228dp x 34dp) so the island sits flush with the top status bar
+        // cutout (`y = 0`) without obstructing app toolbars below it.
+        val collapsedWidthPx = (228 * density).toInt()
+        val collapsedHeightPx = (34 * density).toInt()
 
         params = WindowManager.LayoutParams(
             collapsedWidthPx,
@@ -143,9 +143,9 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         }
 
         val screenWidthPx = resources.displayMetrics.widthPixels
-        val expandedWidthPx = (screenWidthPx - (20 * density).toInt())
-            .coerceIn((320 * density).toInt(), (392 * density).toInt())
-        val defaultExpandedHeightPx = (390 * density).toInt()
+        val expandedWidthPx = (screenWidthPx - (16 * density).toInt())
+            .coerceIn((328 * density).toInt(), (396 * density).toInt())
+        val defaultExpandedHeightPx = (440 * density).toInt()
 
         fun updateInteraction() {
             lastInteraction = System.currentTimeMillis()

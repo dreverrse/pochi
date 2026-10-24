@@ -27,6 +27,8 @@ fun PochiApprovalCard(
     onDeny: () -> Unit
 ) {
     val context = LocalContext.current
+    val lang by PochiPrefs.langFlow.collectAsState()
+    val isId = lang == PochiLang.ID
     var remainingSeconds by remember(request.id) { mutableIntStateOf(request.expiresInSeconds) }
 
     LaunchedEffect(request.id) {
@@ -38,28 +40,29 @@ fun PochiApprovalCard(
     }
 
     val cardBg = Color(0xFF141418)
-    val borderCol = Color(0xFFF59E0B).copy(alpha = 0.45f)
+    val borderCol = Color(0xFFF59E0B).copy(alpha = 0.55f)
     val titleCol = Color(0xFFF9FAFB)
     val subCol = Color(0xFFA1A1AA)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(cardBg)
-            .border(1.dp, borderCol, RoundedCornerShape(16.dp))
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .border(1.dp, borderCol, RoundedCornerShape(18.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             PochiMascot(
                 state = BotState.APPROVAL,
                 emoteOverride = PochiEmote.SURPRISED,
-                size = 28.dp
+                size = 34.dp,
+                showBlackBacking = true
             )
 
             Column(modifier = Modifier.weight(1f)) {
@@ -69,50 +72,79 @@ fun PochiApprovalCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${request.agentName} • Command Approval",
+                        text = if (isId) "${request.agentName} • Izin Perintah" else "${request.agentName} • Needs Approval",
                         color = Color(0xFFF59E0B),
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "${remainingSeconds}s",
                         color = subCol,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
                 Text(
                     text = request.friendlyTitle,
                     color = titleCol,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
 
-            // Reject (✕) button
+        if (request.rawCommand.isNotBlank()) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF0A0A0A))
+                    .border(1.dp, Color(0xFF27272A), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "$ ${request.rawCommand}",
+                    color = Color(0xFF38BDF8),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Reject (✕) button - comfortable touch target
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 40.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFFEF4444).copy(alpha = 0.18f))
-                    .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                    .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.45f), RoundedCornerShape(12.dp))
                     .clickable { onDeny() }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "✕ Reject",
+                    text = if (isId) "✕ Tolak" else "✕ Reject",
                     color = Color(0xFFF87171),
-                    fontSize = 10.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            // Approve (✓) button
+            // Approve (✓) button - comfortable touch target
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .weight(1f)
+                    .heightIn(min = 40.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF10B981))
                     .clickable {
                         if (request.rawCommand.startsWith("pochi-agent ")) {
@@ -124,34 +156,14 @@ fun PochiApprovalCard(
                             ApprovalManager.confirmAllow()
                         }
                     }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "✓ Approve",
+                    text = if (isId) "✓ Izinkan" else "✓ Approve",
                     color = Color(0xFF052E16),
-                    fontSize = 10.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold
-                )
-            }
-        }
-
-        if (request.rawCommand.isNotBlank()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF0A0A0A))
-                    .border(1.dp, Color(0xFF27272A), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 9.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = "$ ${request.rawCommand}",
-                    color = Color(0xFF38BDF8),
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

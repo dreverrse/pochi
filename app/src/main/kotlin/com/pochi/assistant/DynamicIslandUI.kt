@@ -437,20 +437,21 @@ fun PochiIslandBot(
         }
     }
 
-    // 120fps Spring sizing rules (ultra-slim status-bar hug when collapsed)
-    val hasCompactRightStatus = isFocusRunning ||
+    // 120fps Spring sizing rules (top-docked Nochi/Tini notch when collapsed)
+    val hasWideCollapsedStatus = isFocusRunning ||
         agentSession.isBusy ||
+        agentSession.currentFileOrTool.isNotBlank() ||
         activeDownload != null ||
         mediaPlayback.isPlaying
 
-    val collapsedWidth = if (hasCompactRightStatus) 178.dp else 102.dp
-    val collapsedHeight = 26.dp
-    val expandedWidth = (configuration.screenWidthDp.dp - 20.dp).coerceIn(320.dp, 388.dp)
+    val collapsedWidth = if (hasWideCollapsedStatus) 216.dp else 118.dp
+    val collapsedHeight = 30.dp
+    val expandedWidth = (configuration.screenWidthDp.dp - 16.dp).coerceIn(328.dp, 396.dp)
     var measuredExpandedHeightPx by remember { mutableIntStateOf(0) }
     val expandedHeight = with(density) {
         when (islandMode) {
-            IslandMode.COMMAND_BAR -> 114.dp
-            IslandMode.EXPANDED -> if (measuredExpandedHeightPx > 0) measuredExpandedHeightPx.toDp() else 364.dp
+            IslandMode.COMMAND_BAR -> 236.dp
+            IslandMode.EXPANDED -> if (measuredExpandedHeightPx > 0) measuredExpandedHeightPx.toDp() else 410.dp
             IslandMode.COLLAPSED -> collapsedHeight
         }
     }
@@ -485,7 +486,7 @@ fun PochiIslandBot(
     ) { mode ->
         when (mode) {
             IslandMode.COLLAPSED -> collapsedHeight
-            IslandMode.COMMAND_BAR -> 114.dp
+            IslandMode.COMMAND_BAR -> 236.dp
             IslandMode.EXPANDED -> expandedHeight
         }
     }
@@ -500,14 +501,14 @@ fun PochiIslandBot(
         label = "bottomCornerRadius"
     ) { mode ->
         when (mode) {
-            IslandMode.COLLAPSED -> 16.dp
-            IslandMode.COMMAND_BAR -> 24.dp
+            IslandMode.COLLAPSED -> 18.dp
+            IslandMode.COMMAND_BAR -> 26.dp
             IslandMode.EXPANDED -> 28.dp
         }
     }
 
-    // When flush with status bar (offsetY <= 1 and isFlushStatusBar), top corners hug the top screen edge
-    // when collapsed, or round smoothly when expanded.
+    // When flush with status bar (offsetY <= 1 and isFlushStatusBar), top corners sit 0.dp flush
+    // against the top screen edge when collapsed (like frames 4s, 6s, 20s).
     val topCornerRadius by transition.animateDp(
         transitionSpec = {
             spring(
@@ -518,9 +519,9 @@ fun PochiIslandBot(
         label = "topCornerRadius"
     ) { mode ->
         when {
-            mode == IslandMode.COLLAPSED && isFlushStatusBar && offsetY <= 1 -> 6.dp
-            mode == IslandMode.COLLAPSED -> 16.dp
-            else -> 26.dp
+            mode == IslandMode.COLLAPSED && isFlushStatusBar && offsetY <= 1 -> 0.dp
+            mode == IslandMode.COLLAPSED -> 18.dp
+            else -> 24.dp
         }
     }
 
@@ -535,7 +536,7 @@ fun PochiIslandBot(
     ) { mode -> if (mode == IslandMode.COLLAPSED) 1f else 0f }
 
     val idleDimAlpha by animateFloatAsState(
-        targetValue = if (islandMode == IslandMode.COLLAPSED && isIdleDimmed) 0.85f else 1f,
+        targetValue = if (islandMode == IslandMode.COLLAPSED && isIdleDimmed) 0.92f else 1f,
         animationSpec = tween(durationMillis = 450),
         label = "idleDimAlpha"
     )
@@ -590,7 +591,8 @@ fun PochiIslandBot(
                 PochiMascot(
                     state = botState,
                     emoteOverride = activeEmote,
-                    size = 40.dp
+                    size = 44.dp,
+                    showBlackBacking = true
                 )
             }
         }
@@ -621,11 +623,11 @@ fun PochiIslandBot(
                 .background(islandBlack, islandShape)
                 .border(
                     width = 0.8.dp,
-                    color = if (activeApproval != null) accentAmber.copy(alpha = 0.65f) else borderDark.copy(alpha = 0.75f),
+                    color = if (activeApproval != null) accentAmber.copy(alpha = 0.65f) else borderDark.copy(alpha = 0.85f),
                     shape = islandShape
                 )
         ) {
-            // ================= 1. COLLAPSED STATUS-BAR PILL =================
+            // ================= 1. COLLAPSED STATUS-BAR NOTCH (Frames 4s, 6s, 12s, 20s) =================
             if (collapsedContentAlpha > 0.01f) {
                 Row(
                     modifier = Modifier
@@ -638,7 +640,7 @@ fun PochiIslandBot(
                                     setMode(IslandMode.EXPANDED)
                                 },
                                 onLongPress = {
-                                    customEmote = PochiEmote.FOCUS
+                                    customEmote = PochiEmote.HMM
                                     setMode(IslandMode.COMMAND_BAR)
                                 }
                             )
@@ -653,39 +655,40 @@ fun PochiIslandBot(
                                 onDragCancel = { onDragEnd() }
                             )
                         }
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Left side: Organic blobatar.dev Pochi Mascot with expressive white eyes
+                    // Left side: Glowing white eyes on pure black notch (Nochi style)
                     PochiMascot(
                         state = botState,
-                        emoteOverride = activeEmote,
-                        size = 20.dp,
-                        eyeTrackerOffset = eyeGazeOffset
+                        emoteOverride = if (agentSession.isBusy) PochiEmote.HAPPY else activeEmote,
+                        size = 26.dp,
+                        eyeTrackerOffset = eyeGazeOffset,
+                        showBlackBacking = false
                     )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Right side: Ultra-compact live status indicator inside the status bar
+                    // Right side: Live status indicator matching frames 4s, 6s, 20s
                     when {
                         isFocusRunning -> {
                             val mins = focusRemainingSeconds / 60
                             val secs = focusRemainingSeconds % 60
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(5.dp)
+                                        .size(6.dp)
                                         .clip(CircleShape)
-                                        .background(accentEmerald)
+                                        .background(accentAmber)
                                 )
                                 Text(
                                     text = String.format(Locale.US, "%02d:%02d", mins, secs),
-                                    color = accentEmerald,
-                                    fontSize = 9.sp,
+                                    color = textPrimary,
+                                    fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -698,30 +701,31 @@ fun PochiIslandBot(
                             Text(
                                 text = "↓ $pct%",
                                 color = accentSky,
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
                         agentSession.isBusy || agentSession.currentFileOrTool.isNotBlank() -> {
+                            // Frame 20s style: "Claude Code connected  hooks · MCP" or live file
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(5.dp)
-                                        .clip(CircleShape)
-                                        .background(accentSky)
-                                )
                                 Text(
-                                    text = agentSession.currentFileOrTool.ifBlank { agentSession.compactStatus },
+                                    text = agentSession.currentFileOrTool.ifBlank { "${agentSession.providerName} connected" },
                                     color = textPrimary,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "MCP",
+                                    color = textSecondary,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
@@ -729,19 +733,19 @@ fun PochiIslandBot(
                         mediaPlayback.isPlaying -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.GraphicEq,
                                     contentDescription = null,
                                     tint = accentIndigo,
-                                    modifier = Modifier.size(11.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Text(
-                                    text = mediaPlayback.title.take(12),
+                                    text = mediaPlayback.title.take(14),
                                     color = textPrimary,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -749,89 +753,83 @@ fun PochiIslandBot(
                         }
 
                         else -> {
-                            val remainingCount = tasks.count { !it.isDone && it.dayIndex == 0 }
-                            val overdueCount = tasks.count { !it.isDone && it.dayIndex == 0 && it.isCurrentlyOverdue() }
-                            Text(
-                                text = when {
-                                    overdueCount > 0 -> if (isId) "$overdueCount telat" else "$overdueCount late"
-                                    remainingCount > 0 -> if (isId) "$remainingCount tugas" else "$remainingCount left"
-                                    else -> "Pochi"
-                                },
-                                color = if (overdueCount > 0) accentAmber else textSecondary,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1
-                            )
+                            // Frame 4s / 6s / 12s / 39s: Progress ring arc + remaining task count ("◜ 5")
+                            val todayTasks = tasks.filter { it.dayIndex == 0 }
+                            val totalToday = todayTasks.size.coerceAtLeast(1)
+                            val doneToday = todayTasks.count { it.isDone }
+                            val remainingCount = todayTasks.count { !it.isDone }
+                            val overdueCount = todayTasks.count { !it.isDone && it.isCurrentlyOverdue() }
+                            val ringFraction = if (todayTasks.isEmpty()) 0.75f else (doneToday.toFloat() / totalToday.toFloat()).coerceIn(0.18f, 1f)
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Canvas(modifier = Modifier.size(13.dp)) {
+                                    val sw = 2.dp.toPx()
+                                    drawArc(
+                                        color = borderDark,
+                                        startAngle = 0f,
+                                        sweepAngle = 360f,
+                                        useCenter = false,
+                                        style = Stroke(width = sw, cap = StrokeCap.Round)
+                                    )
+                                    drawArc(
+                                        color = if (overdueCount > 0) accentAmber else Color.White,
+                                        startAngle = -90f,
+                                        sweepAngle = 360f * ringFraction,
+                                        useCenter = false,
+                                        style = Stroke(width = sw, cap = StrokeCap.Round)
+                                    )
+                                }
+                                Text(
+                                    text = remainingCount.toString(),
+                                    color = textPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // ================= 2. LONG-PRESS QUICK COMMAND PALETTE =================
+            // ================= 2. LONG-PRESS QUICK COMMAND PALETTE (Frame 10s) =================
             if (islandMode == IslandMode.COMMAND_BAR) {
+                val previewFocusMatch = remember(commandBarInput) {
+                    Regex("""^(?:focus\s+|fokus\s+|timer\s+)?(\d{1,3})\s*(?:m|min|menit|mnt)\s*(.*)$""", RegexOption.IGNORE_CASE)
+                        .matchEntire(commandBarInput.trim())
+                }
+                val previewMins = previewFocusMatch?.groupValues?.getOrNull(1)?.toIntOrNull()?.coerceIn(1, 180) ?: 25
+                val previewTitle = previewFocusMatch?.groupValues?.getOrNull(2)?.trim()?.ifBlank { null }
+                    ?: commandBarInput.trim().ifBlank { if (isId) "cek PR" else "review PR" }
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .graphicsLayer { alpha = expandedContentAlpha }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        PochiMascot(
-                            state = botState,
-                            emoteOverride = PochiEmote.FOCUS,
-                            size = 26.dp
-                        )
-                        Text(
-                            text = if (isId) "Bar Perintah Cepat" else "Quick Command Palette",
-                            color = textPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(subtleDark)
-                                .clickable { setMode(IslandMode.EXPANDED) }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = if (isId) "Buka Panel" else "Expand Hub",
-                                color = accentSky,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Close",
-                            tint = textSecondary,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clickable { setMode(IslandMode.COLLAPSED) }
-                        )
-                    }
-
+                    // Top Command Search Bar (Frame 10s: white eyes on left + input + Esc button)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 44.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(surfaceDark)
-                            .border(1.dp, accentIndigo.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            .border(1.dp, borderDark, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Bolt,
-                            contentDescription = null,
-                            tint = accentAmber,
-                            modifier = Modifier.size(16.dp)
+                        PochiMascot(
+                            state = botState,
+                            emoteOverride = PochiEmote.NORMAL,
+                            size = 26.dp,
+                            eyeTrackerOffset = eyeGazeOffset,
+                            showBlackBacking = false
                         )
                         BasicTextField(
                             value = commandBarInput,
@@ -840,11 +838,15 @@ fun PochiIslandBot(
                                 bump()
                                 eyeGazeOffset = Offset(
                                     x = ((it.length % 18) / 18f - 0.5f),
-                                    y = 0.25f
+                                    y = 0.2f
                                 )
                             },
-                            textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
-                            cursorBrush = SolidColor(accentIndigo),
+                            textStyle = TextStyle(
+                                color = textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            cursorBrush = SolidColor(accentAmber),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(
@@ -858,13 +860,9 @@ fun PochiIslandBot(
                             decorationBox = { inner ->
                                 if (commandBarInput.isEmpty()) {
                                     Text(
-                                        text = if (isId) {
-                                            "\"25m cek PR\", \"cek PR, lalu jam 2 rapat\", atau \"> jalankan tes\""
-                                        } else {
-                                            "\"25m review PR\", \"review PR, then 2pm sync\", or \"> run tests\""
-                                        },
+                                        text = if (isId) "25m cek PR, jadwal tugas, atau > perintah agen" else "25m review PR, schedule task, or > agent prompt",
                                         color = textSecondary,
-                                        fontSize = 11.sp,
+                                        fontSize = 13.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -874,43 +872,108 @@ fun PochiIslandBot(
                         )
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(accentIndigo)
-                                .clickable {
-                                    val q = commandBarInput
-                                    commandBarInput = ""
-                                    executeUnifiedCommand(q)
-                                }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(subtleDark)
+                                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                                .clickable { setMode(IslandMode.COLLAPSED) }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (isId) "Jalan" else "Run",
-                                color = Color.White,
-                                fontSize = 10.sp,
+                                text = "Esc",
+                                color = textSecondary,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
+                    // Frame 10s Live Focus Session Card with big amber "Start" / "Mulai" button
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(surfaceDark)
+                            .border(1.dp, borderDark, RoundedCornerShape(16.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        QuickCommandHintChip(if (isId) "⏱ 25m cek PR" else "⏱ 25m review PR") {
-                            executeUnifiedCommand(if (isId) "25m cek PR" else "25m review PR")
-                        }
-                        QuickCommandHintChip(
-                            if (isId) "📅 cek PR, lalu jam 2 siang rapat tim" else "📅 review PR, then 2pm team meeting"
-                        ) {
-                            executeUnifiedCommand(
-                                if (isId) "cek PR, lalu jam 2 siang rapat tim" else "review PR, then 2pm team meeting"
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = if (isId) "Sesi fokus" else "Focus session",
+                                color = accentAmber,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = String.format(Locale.US, "%02d:00", previewMins),
+                                color = textPrimary,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = previewTitle,
+                                color = textSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        QuickCommandHintChip(if (isId) "🤖 > jalankan unit test" else "🤖 > run test suite") {
-                            executeUnifiedCommand(if (isId) "> jalankan unit test" else "> run test suite")
+
+                        // Large user-friendly Amber "Start" / "Mulai" button
+                        Box(
+                            modifier = Modifier
+                                .heightIn(min = 40.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(accentAmber)
+                                .clickable {
+                                    val cmd = if (commandBarInput.isNotBlank()) {
+                                        commandBarInput
+                                    } else {
+                                        "${previewMins}m $previewTitle"
+                                    }
+                                    commandBarInput = ""
+                                    executeUnifiedCommand(cmd)
+                                }
+                                .padding(horizontal = 20.dp, vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (isId) "Mulai" else "Start",
+                                color = Color(0xFF0A0A0A),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         }
+                    }
+
+                    // Quick Action Suggestions (Frame 10s bottom list with large touch targets)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        QuickCommandRowItem(
+                            icon = Icons.Rounded.Timer,
+                            title = if (isId) "Mulai fokus — $previewTitle" else "Start focus — $previewTitle",
+                            trailing = "${previewMins} min",
+                            subtleDark = subtleDark,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            onClick = {
+                                commandBarInput = ""
+                                executeUnifiedCommand("${previewMins}m $previewTitle")
+                            }
+                        )
+                        QuickCommandRowItem(
+                            icon = Icons.Rounded.Terminal,
+                            title = if (isId) "Kirim ke $selectedAgentHost — jalankan tes" else "Ask $selectedAgentHost — run test suite",
+                            trailing = "MCP",
+                            subtleDark = Color.Transparent,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            onClick = {
+                                commandBarInput = ""
+                                executeUnifiedCommand(if (isId) "> jalankan unit test" else "> run test suite")
+                            }
+                        )
                     }
                 }
             }
@@ -936,7 +999,7 @@ fun PochiIslandBot(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Top Header: Interactive Pochi Blob + 4-Module Switcher + ID/EN Toggle + Collapse
+                        // Top Navigation Bar (Frames 8s, 15s, 30s) with large ergonomic buttons
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -947,6 +1010,7 @@ fun PochiIslandBot(
                                 emoteOverride = activeEmote,
                                 size = 32.dp,
                                 eyeTrackerOffset = eyeGazeOffset,
+                                showBlackBacking = false,
                                 onPoke = {
                                     bump()
                                     pokeCount++
@@ -970,7 +1034,7 @@ fun PochiIslandBot(
                                 }
                             )
 
-                            // 4-Tab Pill Switcher (Today/Hari Ini, Agent/Agen, Focus/Fokus, Deck/Pintasan)
+                            // 4-Module Switcher (Today, Agent, Focus, Deck) with comfortable touch targets
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
@@ -978,7 +1042,7 @@ fun PochiIslandBot(
                                     .background(surfaceDark)
                                     .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                                     .padding(3.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 PochiTab.entries.forEach { tab ->
@@ -986,33 +1050,34 @@ fun PochiIslandBot(
                                     Row(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .clip(RoundedCornerShape(10.dp))
+                                            .heightIn(min = 34.dp)
+                                            .clip(RoundedCornerShape(11.dp))
                                             .background(if (selected) subtleDark else Color.Transparent)
                                             .clickable {
                                                 bump()
                                                 currentTab = tab
                                                 customEmote = when (tab) {
                                                     PochiTab.TODAY -> PochiEmote.SMILING
-                                                    PochiTab.AGENT -> PochiEmote.WORKING
+                                                    PochiTab.AGENT -> PochiEmote.HMM
                                                     PochiTab.FOCUS -> PochiEmote.FOCUS
                                                     PochiTab.DECK -> PochiEmote.WINK_LEFT
                                                 }
                                             }
-                                            .padding(vertical = 6.dp),
+                                            .padding(horizontal = 4.dp, vertical = 7.dp),
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
                                             imageVector = tab.icon,
                                             contentDescription = tab.label(lang),
-                                            tint = if (selected) accentIndigo else textSecondary,
-                                            modifier = Modifier.size(12.dp)
+                                            tint = if (selected) Color.White else textSecondary,
+                                            modifier = Modifier.size(14.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = tab.label(lang),
-                                            color = if (selected) textPrimary else textSecondary,
-                                            fontSize = 9.sp,
+                                            color = if (selected) Color.White else textSecondary,
+                                            fontSize = 11.sp,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -1021,53 +1086,53 @@ fun PochiIslandBot(
                                 }
                             }
 
-                            // 1-Tap Language Switcher (ID <-> EN)
+                            // 1-Tap Language Switcher (ID <-> EN) - 34dp height
                             Box(
                                 modifier = Modifier
-                                    .height(26.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .height(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(surfaceDark)
-                                    .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                                    .border(1.dp, borderDark, RoundedCornerShape(10.dp))
                                     .clickable {
                                         bump()
                                         PochiPrefs.toggleLanguage(context)
                                     }
-                                    .padding(horizontal = 6.dp),
+                                    .padding(horizontal = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = lang.shortBadge,
                                     color = accentSky,
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }
 
-                            // Command Bar button
+                            // Quick Command Search button (🔍) - 34dp touch target
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(surfaceDark)
-                                    .border(1.dp, borderDark, CircleShape)
+                                    .border(1.dp, borderDark, RoundedCornerShape(10.dp))
                                     .clickable { setMode(IslandMode.COMMAND_BAR) },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.Bolt,
+                                    imageVector = Icons.Rounded.Search,
                                     contentDescription = "Command Bar",
-                                    tint = accentAmber,
-                                    modifier = Modifier.size(14.dp)
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
 
-                            // Collapse button
+                            // Collapse button - 34dp touch target
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(surfaceDark)
-                                    .border(1.dp, borderDark, CircleShape)
+                                    .border(1.dp, borderDark, RoundedCornerShape(10.dp))
                                     .clickable { setMode(IslandMode.COLLAPSED) },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1075,7 +1140,7 @@ fun PochiIslandBot(
                                     imageVector = Icons.Rounded.KeyboardArrowUp,
                                     contentDescription = "Collapse",
                                     tint = textPrimary,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
                         }
@@ -1508,7 +1573,7 @@ fun PochiIslandBot(
 }
 
 // ============================================================================
-// PHASE 2 - MODULE 1: TODAY (Weekly Strip Calendar + Progress Ring + NLP Planner)
+// PHASE 2 - MODULE 1: TODAY (Frame 8s: Weekly Strip + Progress Ring + NLP Planner)
 // ============================================================================
 @Composable
 private fun TodayModuleView(
@@ -1564,19 +1629,19 @@ private fun TodayModuleView(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Weekly Strip Calendar + Progress Ring Row
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Frame 8s Header: 7-Day Weekly Strip (selected date in white circle) + Progress Ring ("5 left / 1 overdue")
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
                 .border(1.dp, borderDark, RoundedCornerShape(16.dp))
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // 7-Day Weekly Strip
+            // 7-Day Weekly Strip with large easy-to-tap day columns
             Row(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1589,38 +1654,50 @@ private fun TodayModuleView(
                     val hasPending = tasks.any { it.dayIndex == offset && !it.isDone }
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isSelected) accentIndigo else Color.Transparent)
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onSelectDay(offset) }
-                            .padding(horizontal = 5.dp, vertical = 4.dp)
+                            .padding(horizontal = 4.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = dayLabel.take(1),
                             color = if (isSelected) Color.White else textSecondary,
-                            fontSize = 9.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = dateNum.toString(),
-                            color = when {
-                                isSelected -> Color.White
-                                isToday -> accentIndigo
-                                else -> textPrimary
-                            },
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold
                         )
                         Box(
                             modifier = Modifier
-                                .padding(top = 2.dp)
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        isSelected -> Color.White
+                                        isToday -> subtleDark
+                                        else -> Color.Transparent
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = dateNum.toString(),
+                                color = when {
+                                    isSelected -> Color(0xFF0A0A0A)
+                                    isToday -> Color.White
+                                    else -> textPrimary
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
                                 .size(4.dp)
                                 .clip(CircleShape)
                                 .background(
                                     when {
                                         hasOverdue -> accentAmber
-                                        isSelected && hasPending -> Color.White
-                                        hasPending -> accentEmerald
+                                        hasPending -> Color.White.copy(alpha = 0.7f)
                                         else -> Color.Transparent
                                     }
                                 )
@@ -1629,15 +1706,28 @@ private fun TodayModuleView(
                 }
             }
 
-            // Progress Ring (Remaining & Overdue summary)
+            // Frame 8s Right Summary: "5 left / 1 overdue" + Circular Progress Arc
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(subtleDark)
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = if (isId) "$remainingCount sisa" else "$remainingCount left",
+                        color = textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = when {
+                            overdueCount > 0 -> if (isId) "$overdueCount telat" else "$overdueCount overdue"
+                            else -> if (isId) "$doneCount selesai" else "$doneCount done"
+                        },
+                        color = if (overdueCount > 0) accentAmber else textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(30.dp)) {
                     Canvas(modifier = Modifier.size(30.dp)) {
                         val sw = 3.5.dp.toPx()
@@ -1649,41 +1739,18 @@ private fun TodayModuleView(
                             style = Stroke(width = sw, cap = StrokeCap.Round)
                         )
                         drawArc(
-                            color = if (overdueCount > 0) accentAmber else accentEmerald,
+                            color = if (overdueCount > 0) accentAmber else Color.White,
                             startAngle = -90f,
-                            sweepAngle = 360f * progressFraction,
+                            sweepAngle = 360f * progressFraction.coerceAtLeast(0.18f),
                             useCenter = false,
                             style = Stroke(width = sw, cap = StrokeCap.Round)
                         )
                     }
-                    Text(
-                        text = "$doneCount/$totalCount",
-                        color = textPrimary,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Column {
-                    Text(
-                        text = if (isId) "$remainingCount sisa" else "$remainingCount left",
-                        color = textPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = when {
-                            overdueCount > 0 -> if (isId) "$overdueCount telat" else "$overdueCount overdue"
-                            else -> if (isId) "Sesuai jadwal" else "On track"
-                        },
-                        color = if (overdueCount > 0) accentAmber else accentEmerald,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
                 }
             }
         }
 
-        // Sub-filter bar (All / Active / Done + Clear Done)
+        // Sub-filter bar (All / Active / Done + Clear Done) with comfortable button sizing
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1699,15 +1766,15 @@ private fun TodayModuleView(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .background(if (active) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
-                            .border(1.dp, if (active) accentIndigo else borderDark, RoundedCornerShape(50))
+                            .background(if (active) subtleDark else surfaceDark)
+                            .border(1.dp, if (active) Color.White.copy(alpha = 0.4f) else borderDark, RoundedCornerShape(50))
                             .clickable { onSelectFilter(filter) }
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .padding(horizontal = 11.dp, vertical = 5.dp)
                     ) {
                         Text(
                             text = label,
                             color = if (active) Color.White else textSecondary,
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1715,33 +1782,40 @@ private fun TodayModuleView(
             }
 
             if (doneCount > 0) {
-                Text(
-                    text = if (isId) "Hapus Selesai" else "Clear Done",
-                    color = accentIndigo,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onClearCompleted() }
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(surfaceDark)
+                        .clickable { onClearCompleted() }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = if (isId) "Hapus Selesai" else "Clear Done",
+                        color = accentIndigo,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
-        // Interactive Checklist
+        // Interactive Checklist (Frame 8s style: spacious rows, 20dp radio circle, 13sp title, right-aligned Overdue/time)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 74.dp, max = 140.dp)
+                .heightIn(min = 90.dp, max = 168.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
                 .border(1.dp, borderDark, RoundedCornerShape(16.dp))
-                .padding(8.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (filteredTasks.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 18.dp),
+                        .padding(vertical = 22.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -1751,7 +1825,7 @@ private fun TodayModuleView(
                             "No tasks here. Type below (e.g. \"review PR, then 2pm team meeting\")"
                         },
                         color = textSecondary,
-                        fontSize = 10.sp
+                        fontSize = 12.sp
                     )
                 }
             } else {
@@ -1760,12 +1834,13 @@ private fun TodayModuleView(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(subtleDark)
+                            .heightIn(min = 42.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(subtleDark.copy(alpha = 0.65f))
                             .clickable { onToggleTask(task) }
-                            .padding(horizontal = 9.dp, vertical = 7.dp),
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Icon(
                             imageVector = if (task.isDone) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
@@ -1775,100 +1850,94 @@ private fun TodayModuleView(
                                 isLate -> accentAmber
                                 else -> textSecondary
                             },
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                         Text(
                             text = task.title,
                             color = if (task.isDone) textSecondary else textPrimary,
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        if (task.isHighPriority && !task.isDone) {
-                            Text(
-                                text = "!",
-                                color = Color(0xFFEF4444),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(Color(0xFFEF4444).copy(alpha = 0.18f))
-                                    .padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
                         if (isLate && !task.isDone) {
                             Text(
-                                text = if (isId) "TELAT" else "LATE",
+                                text = if (isId) "Telat" else "Overdue",
                                 color = accentAmber,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(accentAmber.copy(alpha = 0.16f))
-                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                        }
-                        if (task.timeLabel.isNotBlank()) {
+                        } else if (task.timeLabel.isNotBlank()) {
                             Text(
                                 text = task.timeLabel,
-                                color = accentIndigo,
-                                fontSize = 9.sp,
+                                color = textSecondary,
+                                fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(accentIndigo.copy(alpha = 0.16f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                         if (!task.isDone) {
-                            Icon(
-                                imageVector = Icons.Rounded.Timer,
-                                contentDescription = "Focus",
-                                tint = accentEmerald,
+                            Box(
                                 modifier = Modifier
-                                    .size(15.dp)
-                                    .clickable { onStartFocusForTask(task) }
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(surfaceDark)
+                                    .clickable { onStartFocusForTask(task) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Timer,
+                                    contentDescription = "Focus",
+                                    tint = accentEmerald,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(surfaceDark)
+                                .clickable { onDeleteTask(task) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Delete",
+                                tint = textSecondary,
+                                modifier = Modifier.size(15.dp)
                             )
                         }
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Delete",
-                            tint = textSecondary,
-                            modifier = Modifier
-                                .size(14.dp)
-                                .clickable { onDeleteTask(task) }
-                        )
                     }
                 }
             }
         }
 
-        // Bottom Natural Language Task Input Bar (Bilingual ID / EN)
+        // Frame 8s Bottom Natural Language Task Input Bar ("+ Add a task..." + circular "+" button)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(50))
+                .heightIn(min = 44.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(50))
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
-                imageVector = Icons.Rounded.AutoAwesome,
+                imageVector = Icons.Rounded.Add,
                 contentDescription = null,
-                tint = accentIndigo,
-                modifier = Modifier.size(15.dp)
+                tint = textSecondary,
+                modifier = Modifier.size(18.dp)
             )
             BasicTextField(
                 value = newTaskInput,
                 onValueChange = onNewTaskInputChange,
-                textStyle = TextStyle(color = textPrimary, fontSize = 11.sp),
-                cursorBrush = SolidColor(accentIndigo),
+                textStyle = TextStyle(color = textPrimary, fontSize = 13.sp),
+                cursorBrush = SolidColor(Color.White),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onSubmitTasks() }),
@@ -1877,12 +1946,12 @@ private fun TodayModuleView(
                     if (newTaskInput.isEmpty()) {
                         Text(
                             text = if (isId) {
-                                "Ketik tugas: \"cek PR, lalu jam 2 siang rapat tim\"..."
+                                "Tambah tugas... (mis: \"cek PR, lalu jam 2 rapat\")"
                             } else {
-                                "Add tasks: \"review PR, then 2pm team meeting\"..."
+                                "Add a task... (e.g. \"review PR, then 2pm meeting\")"
                             },
                             color = textSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1892,16 +1961,18 @@ private fun TodayModuleView(
             )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(accentIndigo)
-                    .clickable { onSubmitTasks() }
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(subtleDark)
+                    .border(1.dp, borderDark, CircleShape)
+                    .clickable { onSubmitTasks() },
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = if (isId) "Tambah" else "Add",
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = if (isId) "Tambah" else "Add",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -1909,7 +1980,7 @@ private fun TodayModuleView(
 }
 
 // ============================================================================
-// PHASE 4 - MODULE 2: AGENT (Remote AI & WebSocket/MCP Hub)
+// PHASE 4 - MODULE 2: AGENT (Frame 30s: Multi-Session List + 3 Quota Bars + MCP Hub)
 // ============================================================================
 @Composable
 private fun AgentModuleView(
@@ -1942,7 +2013,8 @@ private fun AgentModuleView(
     val hosts = listOf("Claude Code", "Codex", "Gemini")
     val contextRatio = (session.contextTokensUsed.toFloat() / session.contextTokensMax.toFloat()).coerceIn(0f, 1f)
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Host selector pills with comfortable touch targets
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1952,20 +2024,22 @@ private fun AgentModuleView(
                 val active = host == selectedHost
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (active) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
+                        .heightIn(min = 34.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (active) subtleDark else surfaceDark)
                         .border(
                             1.dp,
-                            if (active) accentIndigo else borderDark,
-                            RoundedCornerShape(10.dp)
+                            if (active) Color.White.copy(alpha = 0.45f) else borderDark,
+                            RoundedCornerShape(12.dp)
                         )
                         .clickable { onSelectHost(host) }
-                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                        .padding(horizontal = 11.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = host,
-                        color = if (active) accentSky else textSecondary,
-                        fontSize = 10.sp,
+                        color = if (active) Color.White else textSecondary,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1973,16 +2047,18 @@ private fun AgentModuleView(
             Spacer(modifier = Modifier.weight(1f))
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .heightIn(min = 34.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(surfaceDark)
-                    .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                    .border(1.dp, borderDark, RoundedCornerShape(12.dp))
                     .clickable { onToggleEditMcpUrl() }
-                    .padding(horizontal = 8.dp, vertical = 5.dp)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (isEditingMcpUrl) (if (isId) "Simpan WS" else "Save WS") else "MCP WS",
+                    text = if (isEditingMcpUrl) (if (isId) "Simpan" else "Save") else "MCP WS",
                     color = accentEmerald,
-                    fontSize = 9.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -1992,17 +2068,18 @@ private fun AgentModuleView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .heightIn(min = 40.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(surfaceDark)
-                    .border(1.dp, borderDark, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .border(1.dp, borderDark, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("WS: ", color = textSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                Text("WS: ", color = textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 BasicTextField(
                     value = mcpUrlDraft,
                     onValueChange = onMcpUrlDraftChange,
-                    textStyle = TextStyle(color = accentSky, fontSize = 10.sp, fontFamily = FontFamily.Monospace),
+                    textStyle = TextStyle(color = accentSky, fontSize = 12.sp, fontFamily = FontFamily.Monospace),
                     cursorBrush = SolidColor(accentSky),
                     singleLine = true,
                     modifier = Modifier.weight(1f)
@@ -2010,199 +2087,264 @@ private fun AgentModuleView(
             }
         }
 
+        // Frame 30s Multi-Session List + Quota Bars
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(14.dp))
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Session 1: Active Workspace ("pochi • 12 steps · 4 min / Editing auth.ts")
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(subtleDark.copy(alpha = 0.65f))
+                    .clickable {
+                        val nextStatus = if (session.currentFileOrTool == "Editing auth.ts") "Running tests" else "Editing auth.ts"
+                        onSimulateFileEdit(nextStatus)
+                    }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(if (session.isBusy) accentSky else accentEmerald)
-                    )
+                Box(
+                    modifier = Modifier
+                        .size(9.dp)
+                        .clip(CircleShape)
+                        .background(accentSky)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "pochi",
+                            color = textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isId) "12 langkah · 4 mnt" else "12 steps · 4 min",
+                            color = textSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
                     Text(
-                        text = session.compactStatus,
-                        color = textPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        text = session.currentFileOrTool.ifBlank { session.compactStatus },
+                        color = textSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    MiniStatusButton("Editing auth.ts", accentSky) {
-                        onSimulateFileEdit("Editing auth.ts")
-                    }
-                    MiniStatusButton("Running tests", accentEmerald) {
-                        onSimulateFileEdit("Running tests")
-                    }
+                MiniStatusButton(
+                    label = if (session.currentFileOrTool == "Editing auth.ts") "Running tests" else "Editing auth.ts",
+                    accent = accentSky
+                ) {
+                    val nextStatus = if (session.currentFileOrTool == "Editing auth.ts") "Running tests" else "Editing auth.ts"
+                    onSimulateFileEdit(nextStatus)
                 }
             }
 
+            // Session 2: Needs Approval ("api • needs you / Wants to run git push origin main")
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(subtleDark.copy(alpha = 0.65f))
+                    .clickable { onTriggerRemoteApproval() }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(9.dp)
+                        .clip(CircleShape)
+                        .background(accentAmber)
+                )
+                Column(modifier = Modifier.weight(1f)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(if (isId) "Konteks" else "Context Window", color = textSecondary, fontSize = 9.sp)
                         Text(
-                            text = "${session.contextTokensUsed / 1000}k / ${session.contextTokensMax / 1000}k",
+                            text = "api",
                             color = textPrimary,
-                            fontSize = 9.sp,
-                            fontFamily = FontFamily.Monospace
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                    }
-                    LinearProgressIndicator(
-                        progress = { contextRatio },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(50)),
-                        color = accentSky,
-                        trackColor = subtleDark
-                    )
-                }
-
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(if (isId) "Kuota Sesi" else "Session Quota", color = textSecondary, fontSize = 9.sp)
                         Text(
-                            text = "${(session.sessionQuotaPercent * 100).toInt()}%",
-                            color = accentEmerald,
-                            fontSize = 9.sp,
-                            fontFamily = FontFamily.Monospace
+                            text = if (isId) "butuh izin" else "needs you",
+                            color = accentAmber,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
-                    LinearProgressIndicator(
-                        progress = { session.sessionQuotaPercent },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(50)),
-                        color = accentEmerald,
-                        trackColor = subtleDark
+                    Text(
+                        text = if (isId) "Ingin menjalankan git push origin main" else "Wants to run git push origin main",
+                        color = accentAmber.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+                MiniStatusButton(
+                    label = if (isId) "Tinjau" else "Review",
+                    accent = accentAmber,
+                    onClick = onTriggerRemoteApproval
+                )
+            }
+
+            // Session 3: Branch / Choice Prompt ("docs • done · 3 min ago")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(subtleDark.copy(alpha = 0.65f))
+                    .clickable { onTriggerChoicePrompt() }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(9.dp)
+                        .clip(CircleShape)
+                        .background(accentEmerald)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "deploy",
+                            color = textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isId) "siap rilis" else "ready · 3m ago",
+                            color = textSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Text(
+                        text = if (isId) "Pilih branch target deployment" else "Select target branch for deployment",
+                        color = textSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                MiniStatusButton(
+                    label = if (isId) "Pilih Branch" else "Branch",
+                    accent = accentEmerald,
+                    onClick = onTriggerChoicePrompt
+                )
+            }
+
+            // Frame 30s Quota Progress Bars (Context, 5-hour, Weekly)
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                AgentQuotaRow(
+                    label = if (isId) "Konteks" else "Context",
+                    valueText = "${session.contextTokensUsed / 1000}k",
+                    progress = contextRatio,
+                    barColor = Color.White,
+                    subtleDark = subtleDark,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary
+                )
+                AgentQuotaRow(
+                    label = if (isId) "5-jam" else "5-hour",
+                    valueText = "${(session.sessionQuotaPercent * 100).toInt()}%",
+                    progress = session.sessionQuotaPercent,
+                    barColor = Color.White,
+                    subtleDark = subtleDark,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary
+                )
+                AgentQuotaRow(
+                    label = if (isId) "Mingguan" else "Weekly",
+                    valueText = "84%",
+                    progress = 0.84f,
+                    barColor = accentAmber,
+                    subtleDark = subtleDark,
+                    textPrimary = accentAmber,
+                    textSecondary = textSecondary
+                )
             }
         }
 
+        // Interactive Multiple-Choice Prompt Card (when active)
         session.activeChoicePrompt?.let { choice ->
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(subtleDark)
-                    .border(1.dp, accentIndigo.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                    .padding(9.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .border(1.dp, accentIndigo.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = choice.question,
                     color = textPrimary,
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     choice.options.forEach { opt ->
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(accentIndigo.copy(alpha = 0.22f))
-                                .border(1.dp, accentIndigo, RoundedCornerShape(8.dp))
+                                .heightIn(min = 36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(accentIndigo.copy(alpha = 0.25f))
+                                .border(1.dp, accentIndigo, RoundedCornerShape(10.dp))
                                 .clickable { onSelectChoiceOption(opt) }
-                                .padding(horizontal = 9.dp, vertical = 5.dp)
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(opt, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                            Text(opt, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(subtleDark)
-                    .clickable { onTriggerRemoteApproval() }
-                    .padding(vertical = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isId) "⚡ Izin: git push" else "⚡ Approval: git push",
-                    color = accentAmber,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(subtleDark)
-                    .clickable { onTriggerChoicePrompt() }
-                    .padding(vertical = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isId) "🔀 Pilihan Branch" else "🔀 Branch Prompt",
-                    color = accentSky,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
+        // Bottom Agent Prompt Input Bar (44dp comfortable height)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(50))
+                .heightIn(min = 44.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(50))
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
                 imageVector = Icons.Rounded.Terminal,
                 contentDescription = null,
                 tint = accentSky,
-                modifier = Modifier.size(15.dp)
+                modifier = Modifier.size(18.dp)
             )
             BasicTextField(
                 value = promptInput,
                 onValueChange = onPromptChange,
-                textStyle = TextStyle(color = textPrimary, fontSize = 11.sp),
+                textStyle = TextStyle(color = textPrimary, fontSize = 13.sp),
                 cursorBrush = SolidColor(accentSky),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -2213,7 +2355,7 @@ private fun AgentModuleView(
                         Text(
                             text = if (isId) "Kirim instruksi ke $selectedHost..." else "Send instruction to $selectedHost...",
                             color = textSecondary,
-                            fontSize = 11.sp
+                            fontSize = 12.sp
                         )
                     }
                     inner()
@@ -2221,15 +2363,17 @@ private fun AgentModuleView(
             )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(50))
+                    .heightIn(min = 34.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(accentIndigo)
                     .clickable { onSendPrompt() }
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (isId) "Kirim" else "Send",
                     color = Color.White,
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -2237,8 +2381,49 @@ private fun AgentModuleView(
     }
 }
 
+@Composable
+private fun AgentQuotaRow(
+    label: String,
+    valueText: String,
+    progress: Float,
+    barColor: Color,
+    subtleDark: Color,
+    textPrimary: Color,
+    textSecondary: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = label,
+            color = textSecondary,
+            fontSize = 11.sp,
+            modifier = Modifier.width(58.dp)
+        )
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .weight(1f)
+                .height(5.dp)
+                .clip(RoundedCornerShape(50)),
+            color = barColor,
+            trackColor = subtleDark
+        )
+        Text(
+            text = valueText,
+            color = textPrimary,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(36.dp)
+        )
+    }
+}
+
 // ============================================================================
-// PHASE 2 - MODULE 3: FOCUS (Task-Linked Pomodoro Timer with Work/Break Phases)
+// PHASE 2 - MODULE 3: FOCUS (Task-Linked Pomodoro Timer with Ergonomic Controls)
 // ============================================================================
 @Composable
 private fun FocusModuleView(
@@ -2272,7 +2457,7 @@ private fun FocusModuleView(
     val ss = remainingSeconds % 60
     val linkedTask = tasks.firstOrNull { it.id == linkedTaskId } ?: tasks.firstOrNull()
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // Phase Switcher (Focus / Short Break / Long Break) + Session Counter
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2284,16 +2469,18 @@ private fun FocusModuleView(
                     val active = phase == pomodoroPhase
                     Box(
                         modifier = Modifier
+                            .heightIn(min = 32.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(if (active) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
-                            .border(1.dp, if (active) accentIndigo else borderDark, RoundedCornerShape(50))
+                            .background(if (active) subtleDark else surfaceDark)
+                            .border(1.dp, if (active) Color.White.copy(alpha = 0.45f) else borderDark, RoundedCornerShape(50))
                             .clickable { onSelectPhase(phase) }
-                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = phase.label(lang),
                             color = if (active) Color.White else textSecondary,
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2303,25 +2490,25 @@ private fun FocusModuleView(
             Text(
                 text = if (isId) "🔥 $completedSessions sesi" else "🔥 $completedSessions sessions",
                 color = accentAmber,
-                fontSize = 10.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        // Timer Display + Ring + Presets
+        // Timer Display + Ring + Presets (with large comfortable buttons)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
-                .padding(12.dp),
+                .border(1.dp, borderDark, RoundedCornerShape(18.dp))
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(74.dp)) {
-                Canvas(modifier = Modifier.size(74.dp)) {
-                    val sw = 6.dp.toPx()
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(82.dp)) {
+                Canvas(modifier = Modifier.size(82.dp)) {
+                    val sw = 6.5.dp.toPx()
                     drawArc(
                         color = subtleDark,
                         startAngle = 0f,
@@ -2330,7 +2517,7 @@ private fun FocusModuleView(
                         style = Stroke(width = sw, cap = StrokeCap.Round)
                     )
                     drawArc(
-                        color = if (isRunning) accentEmerald else accentIndigo,
+                        color = if (isRunning) accentAmber else Color.White,
                         startAngle = -90f,
                         sweepAngle = 360f * fraction,
                         useCenter = false,
@@ -2340,7 +2527,7 @@ private fun FocusModuleView(
                 Text(
                     text = String.format(Locale.US, "%02d:%02d", mm, ss),
                     color = textPrimary,
-                    fontSize = 15.sp,
+                    fontSize = 17.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -2348,7 +2535,7 @@ private fun FocusModuleView(
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -2358,7 +2545,7 @@ private fun FocusModuleView(
                     Text(
                         text = linkedTask?.title ?: (if (isId) "Sesi Fokus Mendalam" else "Deep Focus Session"),
                         color = textPrimary,
-                        fontSize = 11.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -2367,51 +2554,54 @@ private fun FocusModuleView(
                     if (linkedTask != null) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(accentEmerald.copy(alpha = 0.18f))
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(accentEmerald.copy(alpha = 0.2f))
                                 .clickable { onCompleteLinkedTask(linkedTask) }
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = if (isId) "✓ Selesai" else "✓ Done",
                                 color = accentEmerald,
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
 
-                // Preset chips (5m, 15m, 25m, 45m, 60m)
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                // Preset chips (5m, 15m, 25m, 45m, 60m) - comfortable touch targets
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(5, 15, 25, 45, 60).forEach { preset ->
                         val selected = preset == durationMinutes
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (selected) accentIndigo else subtleDark)
+                                .heightIn(min = 32.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (selected) Color.White else subtleDark)
                                 .clickable { onSelectPreset(preset) }
-                                .padding(horizontal = 7.dp, vertical = 4.dp)
+                                .padding(horizontal = 9.dp, vertical = 5.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "${preset}m",
-                                color = if (selected) Color.White else textSecondary,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                color = if (selected) Color(0xFF0A0A0A) else textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
                     }
                 }
 
-                // Start/Pause + Reset buttons
+                // Start/Pause + Reset buttons (40dp height)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isRunning) accentAmber else accentEmerald)
+                            .heightIn(min = 40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(accentAmber)
                             .clickable { onToggleStartPause() }
-                            .padding(vertical = 7.dp),
+                            .padding(vertical = 9.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -2419,24 +2609,26 @@ private fun FocusModuleView(
                                 isRunning -> if (isId) "Jeda" else "Pause"
                                 else -> if (isId) "Mulai Fokus" else "Start Focus"
                             },
-                            color = Color(0xFF052E16),
-                            fontSize = 11.sp,
+                            color = Color(0xFF0A0A0A),
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
                     }
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
+                            .heightIn(min = 40.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(subtleDark)
+                            .border(1.dp, borderDark, RoundedCornerShape(12.dp))
                             .clickable { onReset() }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (isId) "Ulang" else "Reset",
-                            color = textSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
+                            color = textPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -2449,29 +2641,31 @@ private fun FocusModuleView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = if (isId) "Tugas:" else "Link task:",
                     color = textSecondary,
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 tasks.take(6).forEach { t ->
                     val active = (linkedTask?.id == t.id)
                     Box(
                         modifier = Modifier
+                            .heightIn(min = 32.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(if (active) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
-                            .border(1.dp, if (active) accentIndigo else borderDark, RoundedCornerShape(50))
+                            .background(if (active) subtleDark else surfaceDark)
+                            .border(1.dp, if (active) Color.White.copy(alpha = 0.45f) else borderDark, RoundedCornerShape(50))
                             .clickable { onSelectTask(t.id) }
-                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = t.title.take(22),
                             color = if (active) Color.White else textSecondary,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -2482,7 +2676,7 @@ private fun FocusModuleView(
 }
 
 // ============================================================================
-// PHASE 3 - MODULE 4: DECK (Quick App & System Shortcut Grid)
+// PHASE 3 - MODULE 4: DECK (Frame 15s: Stream-Deck Style Large Squircle Grid)
 // ============================================================================
 @Composable
 private fun DeckModuleView(
@@ -2520,26 +2714,26 @@ private fun DeckModuleView(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // System Shortcuts Row (Downloads, Screenshot, Lock Screen, Torch)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Frame 15s System Shortcuts Row (Large Squircle Tiles: Downloads, Snip/Screenshot, Lock, Torch)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             DeckShortcutTile(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Rounded.Download,
                 label = if (isId) "Unduhan" else "Downloads",
-                accent = accentIndigo,
+                accent = Color.White,
                 surfaceDark = surfaceDark,
                 borderDark = borderDark,
                 onClick = onActionDownloads
             )
             DeckShortcutTile(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Rounded.Screenshot,
-                label = "Screenshot",
-                accent = accentEmerald,
+                icon = Icons.Rounded.ContentCut,
+                label = if (isId) "Snip" else "Snip",
+                accent = Color.White,
                 surfaceDark = surfaceDark,
                 borderDark = borderDark,
                 onClick = onActionScreenshot
@@ -2548,7 +2742,7 @@ private fun DeckModuleView(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Rounded.Lock,
                 label = if (isId) "Kunci" else "Lock",
-                accent = accentAmber,
+                accent = Color.White,
                 surfaceDark = surfaceDark,
                 borderDark = borderDark,
                 onClick = onActionLockScreen
@@ -2557,14 +2751,14 @@ private fun DeckModuleView(
                 modifier = Modifier.weight(1f),
                 icon = if (isTorchOn) Icons.Rounded.FlashlightOn else Icons.Rounded.FlashlightOff,
                 label = if (isId) (if (isTorchOn) "Senter On" else "Senter") else (if (isTorchOn) "Torch On" else "Torch"),
-                accent = if (isTorchOn) accentAmber else textSecondary,
+                accent = if (isTorchOn) accentAmber else Color.White,
                 surfaceDark = surfaceDark,
                 borderDark = borderDark,
                 onClick = onActionToggleTorch
             )
         }
 
-        // Pinned Apps Header + Status-bar Flush toggle + Customize toggle
+        // Pinned Apps Header + Status-bar Flush toggle + Customize toggle (Ergonomic Pill Buttons)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2573,53 +2767,76 @@ private fun DeckModuleView(
             Text(
                 text = when {
                     isCustomizing -> if (isId) "Ketuk aplikasi untuk pin" else "Tap apps to pin/unpin"
-                    else -> if (isId) "Aplikasi Favorit" else "Pinned Apps"
+                    else -> if (isId) "Pintasan Aplikasi" else "App Deck"
                 },
                 color = textSecondary,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = if (isFlushStatusBar) {
-                        if (isId) "✓ Nempel Statusbar" else "✓ Statusbar Dock"
-                    } else {
-                        if (isId) "Mode Melayang" else "Floating Mode"
-                    },
-                    color = accentEmerald,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onToggleFlushStatusBar() }
-                )
-                Text(
-                    text = if (isCustomizing) (if (isId) "Selesai" else "Done") else (if (isId) "Atur Pin" else "Edit Pins"),
-                    color = accentIndigo,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onToggleCustomize() }
-                )
-                Text(
-                    text = if (isId) "Matikan" else "Hide",
-                    color = Color(0xFFEF4444),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onActionPowerOff() }
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(surfaceDark)
+                        .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                        .clickable { onToggleFlushStatusBar() }
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = if (isFlushStatusBar) {
+                            if (isId) "✓ Nempel Atas" else "✓ Top Notch"
+                        } else {
+                            if (isId) "Melayang" else "Floating"
+                        },
+                        color = accentEmerald,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(surfaceDark)
+                        .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                        .clickable { onToggleCustomize() }
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = if (isCustomizing) (if (isId) "Selesai" else "Done") else (if (isId) "+ Pin App" else "+ Add"),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFEF4444).copy(alpha = 0.16f))
+                        .clickable { onActionPowerOff() }
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = if (isId) "Matikan" else "Off",
+                        color = Color(0xFFF87171),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
-        // 4-Column App Grid
+        // Frame 15s 4-Column App Squircle Grid
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 84.dp, max = 140.dp)
+                .heightIn(min = 96.dp, max = 160.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             displayedApps.chunked(4).forEach { rowApps ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     rowApps.forEach { app ->
                         val isPinned = app.packageName in pinnedPackages
@@ -2627,12 +2844,13 @@ private fun DeckModuleView(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isCustomizing && isPinned) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
+                                .heightIn(min = 66.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (isCustomizing && isPinned) accentIndigo.copy(alpha = 0.25f) else surfaceDark)
                                 .border(
                                     1.dp,
                                     if (isCustomizing && isPinned) accentIndigo else borderDark,
-                                    RoundedCornerShape(12.dp)
+                                    RoundedCornerShape(16.dp)
                                 )
                                 .clickable {
                                     if (isCustomizing) {
@@ -2641,27 +2859,29 @@ private fun DeckModuleView(
                                         onLaunchApp(app.packageName)
                                     }
                                 }
-                                .padding(vertical = 8.dp, horizontal = 4.dp)
+                                .padding(vertical = 10.dp, horizontal = 6.dp),
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(subtleDark),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = app.label.take(1).uppercase(Locale.getDefault()),
+                                    text = app.label.take(2).uppercase(Locale.getDefault()),
                                     color = textPrimary,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(5.dp))
                             Text(
                                 text = app.label,
                                 color = textPrimary,
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -2677,7 +2897,7 @@ private fun DeckModuleView(
 }
 
 // ============================================================================
-// SYSTEM OVERLAY CARDS (Screenshot, Downloads, Media Controller, Chips)
+// SYSTEM OVERLAY CARDS (Screenshot, Downloads, Media Controller, Ergonomic Buttons)
 // ============================================================================
 @Composable
 private fun ScreenshotOverlayCard(
@@ -2696,10 +2916,10 @@ private fun ScreenshotOverlayCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(surfaceDark)
-            .border(1.dp, accentSky.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .border(1.dp, accentSky.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -2707,19 +2927,19 @@ private fun ScreenshotOverlayCard(
             imageVector = Icons.Rounded.Image,
             contentDescription = null,
             tint = accentSky,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(20.dp)
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = if (isId) "Screenshot Diambil" else "Screenshot Captured",
                 color = textPrimary,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = screenshot.displayName,
                 color = textSecondary,
-                fontSize = 9.sp,
+                fontSize = 10.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2732,7 +2952,7 @@ private fun ScreenshotOverlayCard(
             contentDescription = "Dismiss",
             tint = textSecondary,
             modifier = Modifier
-                .size(15.dp)
+                .size(20.dp)
                 .clickable { onDismiss() }
         )
     }
@@ -2749,11 +2969,11 @@ private fun DownloadOverlayBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(surfaceDark)
-            .border(1.dp, borderDark, RoundedCornerShape(14.dp))
-            .padding(horizontal = 10.dp, vertical = 7.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+            .border(1.dp, borderDark, RoundedCornerShape(16.dp))
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2763,7 +2983,7 @@ private fun DownloadOverlayBar(
             Text(
                 text = download.title,
                 color = textPrimary,
-                fontSize = 10.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -2772,7 +2992,7 @@ private fun DownloadOverlayBar(
             Text(
                 text = "${(download.fraction * 100).toInt()}%",
                 color = accentSky,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
             )
@@ -2781,7 +3001,7 @@ private fun DownloadOverlayBar(
             progress = { download.fraction },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(4.dp)
+                .height(5.dp)
                 .clip(RoundedCornerShape(50)),
             color = accentSky,
             trackColor = borderDark
@@ -2804,62 +3024,73 @@ private fun CompactMediaBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(surfaceDark)
-            .border(1.dp, borderDark, RoundedCornerShape(14.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .border(1.dp, borderDark, RoundedCornerShape(16.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Icon(
-            imageVector = Icons.Rounded.MusicNote,
+            imageVector = Icons.Rounded.GraphicEq,
             contentDescription = null,
             tint = accentIndigo,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(18.dp)
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = media.title,
+                text = if (media.artist.isNotBlank()) "${media.title} — ${media.artist}" else media.title,
                 color = textPrimary,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (media.artist.isNotBlank()) {
-                Text(
-                    text = "${media.artist} • ${media.appName}",
-                    color = textSecondary,
-                    fontSize = 9.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
-        Icon(
-            imageVector = Icons.Rounded.SkipPrevious,
-            contentDescription = "Previous",
-            tint = textPrimary,
+        Box(
             modifier = Modifier
-                .size(18.dp)
-                .clickable { onPrev() }
-        )
-        Icon(
-            imageVector = if (media.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-            contentDescription = "Play/Pause",
-            tint = accentIndigo,
+                .size(30.dp)
+                .clip(CircleShape)
+                .clickable { onPrev() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.SkipPrevious,
+                contentDescription = "Previous",
+                tint = textPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Box(
             modifier = Modifier
-                .size(20.dp)
-                .clickable { onPlayPause() }
-        )
-        Icon(
-            imageVector = Icons.Rounded.SkipNext,
-            contentDescription = "Next",
-            tint = textPrimary,
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.1f))
+                .clickable { onPlayPause() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (media.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = "Play/Pause",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Box(
             modifier = Modifier
-                .size(18.dp)
-                .clickable { onNext() }
-        )
+                .size(30.dp)
+                .clip(CircleShape)
+                .clickable { onNext() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.SkipNext,
+                contentDescription = "Next",
+                tint = textPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
@@ -2875,16 +3106,26 @@ private fun DeckShortcutTile(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .heightIn(min = 66.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(surfaceDark)
-            .border(1.dp, borderDark, RoundedCornerShape(12.dp))
+            .border(1.dp, borderDark, RoundedCornerShape(16.dp))
             .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 4.dp)
+            .padding(vertical = 10.dp, horizontal = 6.dp)
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = accent, modifier = Modifier.size(16.dp))
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(text = label, color = Color(0xFFF8FAFC), fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF1E1E24)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(imageVector = icon, contentDescription = label, tint = accent, modifier = Modifier.size(18.dp))
+        }
+        Spacer(modifier = Modifier.height(5.dp))
+        Text(text = label, color = Color(0xFFF8FAFC), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -2892,25 +3133,59 @@ private fun DeckShortcutTile(
 private fun MiniStatusButton(label: String, accent: Color, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(accent.copy(alpha = 0.16f))
+            .heightIn(min = 30.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(accent.copy(alpha = 0.18f))
             .clickable { onClick() }
-            .padding(horizontal = 7.dp, vertical = 3.dp)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(label, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-private fun QuickCommandHintChip(label: String, onClick: () -> Unit) {
-    Box(
+private fun QuickCommandRowItem(
+    icon: ImageVector,
+    title: String,
+    trailing: String,
+    subtleDark: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    onClick: () -> Unit
+) {
+    Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color(0xFF1E1E24))
+            .fillMaxWidth()
+            .heightIn(min = 38.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(subtleDark)
             .clickable { onClick() }
-            .padding(horizontal = 9.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(label, color = Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = textSecondary,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = title,
+            color = textPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = trailing,
+            color = textSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
