@@ -169,6 +169,295 @@ object NaturalTaskParser {
     }
 }
 
+data class ExpenseEntry(
+    val id: String,
+    val title: String,
+    val amountRp: Long,
+    val category: String,
+    val timeLabel: String
+)
+
+object NaturalExpenseParser {
+    private val amountRegex = Regex(
+        """(\d+(?:[.,]\d{3})*|\d+(?:[.,]\d+)?)\s*(rb|ribu|k|jt|juta)?\b""",
+        RegexOption.IGNORE_CASE
+    )
+
+    fun parse(rawInput: String): ExpenseEntry? {
+        val cleaned = rawInput.trim()
+        if (cleaned.isEmpty()) return null
+        val matches = amountRegex.findAll(cleaned).toList()
+        val match = matches.lastOrNull() ?: return null
+
+        val rawNum = match.groupValues[1].replace(".", "").replace(",", ".")
+        val suffix = match.groupValues[2].lowercase(Locale.US)
+        val baseVal = rawNum.toDoubleOrNull() ?: return null
+
+        val multiplier = when (suffix) {
+            "rb", "ribu", "k" -> 1_000.0
+            "jt", "juta" -> 1_000_000.0
+            else -> if (baseVal < 500) 1_000.0 else 1.0
+        }
+        val finalAmount = (baseVal * multiplier).toLong().coerceAtLeast(100L)
+
+        var title = cleaned.removeRange(match.range)
+            .replace(Regex("""^(?:beli|bayar|buat|untuk|catat|spend|pay)\s+""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\s+"""), " ")
+            .trim(' ', '-', ',', ':')
+
+        if (title.isBlank()) {
+            title = "Pengeluaran"
+        } else {
+            title = title.replaceFirstChar {
+                if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+            }
+        }
+
+        val lower = title.lowercase(Locale.getDefault())
+        val category = when {
+            lower.contains("makan") || lower.contains("sarapan") || lower.contains("nasi") ||
+                lower.contains("ayam") || lower.contains("bakso") || lower.contains("lunch") ||
+                lower.contains("dinner") -> "Makan"
+            lower.contains("kopi") || lower.contains("es ") || lower.contains("jajan") ||
+                lower.contains("snack") || lower.contains("teh") || lower.contains("coffee") -> "Jajan"
+            lower.contains("bensin") || lower.contains("parkir") || lower.contains("gojek") ||
+                lower.contains("grab") || lower.contains("tol") || lower.contains("kereta") -> "Transport"
+            lower.contains("listrik") || lower.contains("pulsa") || lower.contains("kuota") ||
+                lower.contains("wifi") || lower.contains("air") || lower.contains("tagihan") -> "Tagihan"
+            else -> "Belanja"
+        }
+
+        val now = Calendar.getInstance()
+        val timeStr = String.format(
+            Locale.US,
+            "%02d:%02d",
+            now.get(Calendar.HOUR_OF_DAY),
+            now.get(Calendar.MINUTE)
+        )
+
+        return ExpenseEntry(
+            id = System.currentTimeMillis().toString(),
+            title = title,
+            amountRp = finalAmount,
+            category = category,
+            timeLabel = timeStr
+        )
+    }
+
+    fun formatRupiah(amount: Long): String {
+        val str = amount.coerceAtLeast(0L).toString()
+        val sb = StringBuilder()
+        for (i in str.indices) {
+            if (i > 0 && (str.length - i) % 3 == 0) {
+                sb.append('.')
+            }
+            sb.append(str[i])
+        }
+        return "Rp $sb"
+    }
+}
+
+data class PrayerTimeItem(
+    val nameId: String,
+    val nameEn: String,
+    val hour: Int,
+    val minute: Int
+) {
+    val formatted: String
+        get() = String.format(Locale.US, "%02d:%02d", hour, minute)
+    val totalMinutes: Int
+        get() = hour * 60 + minute
+}
+
+data class NextPrayerSummary(
+    val prayer: PrayerTimeItem,
+    val remainingTextId: String,
+    val remainingTextEn: String
+)
+
+object PrayerScheduleHelper {
+    private val cityMinuteOffsets = mapOf(
+        "Jakarta" to 0,
+        "Bandung" to -3,
+        "Semarang" to -14,
+        "Yogyakarta" to -14,
+        "Surabaya" to -24,
+        "Medan" to +33,
+        "Makassar" to -50,
+        "Denpasar" to -33
+    )
+
+    val supportedCities = listOf(
+        "Jakarta", "Bandung", "Surabaya", "Yogyakarta", "Semarang", "Medan", "Makassar", "Denpasar"
+    )
+
+    fun getScheduleForCity(city: String): List<PrayerTimeItem> {
+        val shift = cityMinuteOffsets[city] ?: 0
+        fun shifted(nameId: String, nameEn: String, baseH: Int, baseM: Int): PrayerTimeItem {
+            val total = (baseH * 60 + baseM + shift + 1440) % 1440
+            return PrayerTimeItem(nameId, nameEn, total / 60, total % 60)
+        }
+        return listOf(
+            shifted("Subuh", "Fajr", 4, 38),
+            shifted("Dzuhur", "Dhuhr", 11, 56),
+            shifted("Ashar", "Asr", 15, 14),
+            shifted("Maghrib", "Maghrib", 17, 57),
+            shifted("Isya", "Isha", 19, 8)
+        )
+    }
+
+    fun getNextPrayer(city: String): NextPrayerSummary {
+        val schedule = getScheduleForCity(city)
+        val now = Calendar.getInstance()
+        val nowMins = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+
+        val upcoming = schedule.firstOrNull { it.totalMinutes > nowMins } ?: schedule.first()
+        val diffMins = if (upcoming.totalMinutes > nowMins) {
+            upcoming.totalMinutes - nowMins
+        } else {
+            (1440 - nowMins) + upcoming.totalMinutes
+        }
+        val h = diffMins / 60
+        val m = diffMins % 60
+        val remId = if (h > 0) "${h}j ${m}m lagi" else "${m}m lagi"
+        val remEn = if (h > 0) "in ${h}h ${m}m" else "in ${m}m"
+
+        return NextPrayerSummary(
+            prayer = upcoming,
+            remainingTextId = remId,
+            remainingTextEn = remEn
+        )
+    }
+}
+
+data class WeatherSnapshot(
+    val city: String,
+    val tempC: Int,
+    val conditionId: String,
+    val conditionEn: String,
+    val humidityPercent: Int,
+    val windKmh: Int,
+    val adviceId: String,
+    val adviceEn: String
+)
+
+object WeatherHelper {
+    fun getSnapshot(city: String, customTempC: Int? = null): WeatherSnapshot {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val baseCityTemp = when (city) {
+            "Bandung" -> 24
+            "Surabaya" -> 32
+            "Yogyakarta" -> 28
+            "Medan" -> 30
+            "Makassar" -> 31
+            "Denpasar" -> 29
+            else -> 30
+        }
+        val timeDelta = when (hour) {
+            in 0..5 -> -4
+            in 6..9 -> -2
+            in 10..15 -> +2
+            in 16..18 -> 0
+            else -> -3
+        }
+        val temp = customTempC ?: (baseCityTemp + timeDelta)
+        val (condId, condEn) = when (hour) {
+            in 5..10 -> "Cerah Pagi" to "Sunny Morning"
+            in 11..15 -> "Cerah Berawan" to "Partly Cloudy"
+            in 16..18 -> "Berawan Sore" to "Cloudy Breeze"
+            else -> "Sejuk Malam" to "Clear Night"
+        }
+        val (advId, advEn) = when {
+            temp >= 31 -> "Cuaca cukup terik, perbanyak minum air putih & gunakan topi/payung." to "Warm weather today, stay hydrated & wear sun protection."
+            hour in 15..19 -> "Sore agak berawan, siapkan jas hujan/payung bila bepergian." to "Breezy afternoon, keep an umbrella handy if commuting."
+            hour >= 21 || hour < 5 -> "Udara malam sejuk, waktu yang pas untuk istirahat lebih awal." to "Cool night air, great time to wind down and rest."
+            else -> "Cuaca nyaman untuk beraktivitas dan menyelesaikan rencana hari ini." to "Comfortable weather for outdoor activities and productivity."
+        }
+        return WeatherSnapshot(
+            city = city,
+            tempC = temp,
+            conditionId = condId,
+            conditionEn = condEn,
+            humidityPercent = if (hour in 11..15) 64 else 76,
+            windKmh = 12,
+            adviceId = advId,
+            adviceEn = advEn
+        )
+    }
+}
+
+data class SmartAssistantBanner(
+    val title: String,
+    val subtitle: String,
+    val shortPillText: String,
+    val emote: PochiEmote
+)
+
+object SmartLifeAssistant {
+    fun currentBanner(
+        lang: PochiLang,
+        city: String,
+        waterGlasses: Int,
+        remainingTasks: Int
+    ): SmartAssistantBanner {
+        val isId = lang == PochiLang.ID
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val nextPrayer = PrayerScheduleHelper.getNextPrayer(city)
+        val weather = WeatherHelper.getSnapshot(city)
+
+        return when (hour) {
+            in 4..5 -> SmartAssistantBanner(
+                title = if (isId) "Subuh ${nextPrayer.prayer.formatted} • Awali Hari" else "Fajr ${nextPrayer.prayer.formatted} • Fresh Start",
+                subtitle = if (isId) "Minum segelas air hangat & cek rencana hari ini." else "Drink a glass of water & review today's plan.",
+                shortPillText = if (isId) "Subuh ${nextPrayer.prayer.formatted}" else "Fajr ${nextPrayer.prayer.formatted}",
+                emote = PochiEmote.CALM
+            )
+            in 6..9 -> SmartAssistantBanner(
+                title = if (isId) "Jangan Lupa Sarapan Pagi 🥣" else "Don't Forget Breakfast 🥣",
+                subtitle = if (isId) "${weather.city} ${weather.tempC}°C • Isi energi dulu sebelum mulai aktivitas!" else "${weather.city} ${weather.tempC}°C • Fuel up before starting your day!",
+                shortPillText = if (isId) "Ingat Sarapan ☀️" else "Breakfast ☀️",
+                emote = PochiEmote.GOOD_MORNING
+            )
+            in 10..11 -> SmartAssistantBanner(
+                title = if (isId) "Waktunya Fokus Produktif 💪" else "Peak Productivity Time 💪",
+                subtitle = if (isId) "Ada $remainingTasks tugas aktif • Hidrasi: $waterGlasses/8 gelas air." else "$remainingTasks active tasks • Hydration: $waterGlasses/8 glasses.",
+                shortPillText = if (isId) "$remainingTasks Tugas • ${weather.tempC}°C" else "$remainingTasks Tasks • ${weather.tempC}°C",
+                emote = PochiEmote.SMILING
+            )
+            in 12..13 -> SmartAssistantBanner(
+                title = if (isId) "Makan Siang & Sholat Dzuhur 🕌" else "Lunch & Dhuhr Break 🕌",
+                subtitle = if (isId) "Istirahatkan mata sejenak, makan siang & jaga hidrasi ($waterGlasses/8)." else "Rest your eyes, grab lunch & stay hydrated ($waterGlasses/8).",
+                shortPillText = if (isId) "Rehat & Dzuhur" else "Lunch & Dhuhr",
+                emote = PochiEmote.HAPPY
+            )
+            in 14..16 -> SmartAssistantBanner(
+                title = if (isId) "Sholat Ashar & Minum Air 💧" else "Asr Time & Hydration Check 💧",
+                subtitle = if (isId) "${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted} (${nextPrayer.remainingTextId}) • Air: $waterGlasses/8 gelas." else "${nextPrayer.prayer.nameEn} ${nextPrayer.prayer.formatted} (${nextPrayer.remainingTextEn}) • Water: $waterGlasses/8.",
+                shortPillText = "${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
+                emote = PochiEmote.HMM
+            )
+            in 17..19 -> SmartAssistantBanner(
+                title = if (isId) "Waktu Maghrib & Makan Malam 🌇" else "Maghrib & Dinner Time 🌇",
+                subtitle = if (isId) "Jangan lupa catat pengeluaran hari ini di menu Dompet." else "Don't forget to log today's expenses in Wallet.",
+                shortPillText = "${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
+                emote = PochiEmote.SMILING
+            )
+            in 20..22 -> SmartAssistantBanner(
+                title = if (isId) "Waktu Santai & Evaluasi Hari Ini 🌙" else "Evening Wind Down & Review 🌙",
+                subtitle = if (isId) "Cek sisa tugas besok & pastikan target air putih ($waterGlasses/8) terpenuhi." else "Review tomorrow's tasks & finish your hydration goal ($waterGlasses/8).",
+                shortPillText = if (isId) "Malam • ${weather.tempC}°C" else "Night • ${weather.tempC}°C",
+                emote = PochiEmote.CALM
+            )
+            else -> SmartAssistantBanner(
+                title = if (isId) "Waktunya Istirahat Malam 💤" else "Time to Sleep & Recharge 💤",
+                subtitle = if (isId) "Sudah larut malam, kurangi layar HP agar bangun segar besok pagi." else "It's late—rest your eyes so you wake up refreshed tomorrow.",
+                shortPillText = if (isId) "Istirahat 💤" else "Sleep 💤",
+                emote = PochiEmote.SLEEPY
+            )
+        }
+    }
+}
+
 object PochiPrefs {
     private const val PREF_NAME = "pochi_settings"
     private const val KEY_API = "gemini_api_key"
@@ -187,11 +476,14 @@ object PochiPrefs {
     private const val KEY_LANG = "pochi_language_code"
     private const val KEY_FLUSH_STATUSBAR = "pochi_flush_statusbar"
     private const val KEY_FOCUS_SESSIONS = "pochi_focus_completed_sessions"
+    private const val KEY_EXPENSES_JSON = "pochi_expenses_json"
+    private const val KEY_DAILY_BUDGET = "pochi_daily_budget_rp"
+    private const val KEY_WATER_GLASSES = "pochi_water_glasses_today"
 
     private val _offsetXFlow = MutableStateFlow(0)
     val offsetXFlow: StateFlow<Int> = _offsetXFlow
 
-    // Default Y = 0dp so the island sits flush ("nempel") inside the top status bar
+    // Default Y = 0dp so the island sits flush ("nempel") inside/under the top status bar
     private val _offsetYFlow = MutableStateFlow(0)
     val offsetYFlow: StateFlow<Int> = _offsetYFlow
 
@@ -200,6 +492,18 @@ object PochiPrefs {
 
     private val _langFlow = MutableStateFlow(PochiLang.ID)
     val langFlow: StateFlow<PochiLang> = _langFlow
+
+    private val _cityFlow = MutableStateFlow("Jakarta")
+    val cityFlow: StateFlow<String> = _cityFlow
+
+    private val _waterGlassesFlow = MutableStateFlow(3)
+    val waterGlassesFlow: StateFlow<Int> = _waterGlassesFlow
+
+    private val _dailyBudgetFlow = MutableStateFlow(100_000L)
+    val dailyBudgetFlow: StateFlow<Long> = _dailyBudgetFlow
+
+    private val _expensesFlow = MutableStateFlow<List<ExpenseEntry>>(defaultSampleExpenses())
+    val expensesFlow: StateFlow<List<ExpenseEntry>> = _expensesFlow
 
     private val _screenAwarenessFlow = MutableStateFlow(false)
     val screenAwarenessFlow: StateFlow<Boolean> = _screenAwarenessFlow
@@ -234,6 +538,9 @@ object PochiPrefs {
         _screenAwarenessFlow.value = prefs.getBoolean(KEY_SCREEN_AWARENESS, false)
         _notesFlow.value = prefs.getString(KEY_NOTES, "") ?: ""
         _focusSessionsFlow.value = prefs.getInt(KEY_FOCUS_SESSIONS, 2)
+        _cityFlow.value = prefs.getString(KEY_CITY, "Jakarta") ?: "Jakarta"
+        _waterGlassesFlow.value = prefs.getInt(KEY_WATER_GLASSES, 3)
+        _dailyBudgetFlow.value = prefs.getLong(KEY_DAILY_BUDGET, 100_000L)
 
         val savedLang = prefs.getString(KEY_LANG, PochiLang.ID.code)
         _langFlow.value = PochiLang.entries.firstOrNull { it.code == savedLang } ?: PochiLang.ID
@@ -249,6 +556,13 @@ object PochiPrefs {
             _tasksFlow.value = decodeTasks(savedTasksJson)
         } else {
             _tasksFlow.value = defaultSampleTasks()
+        }
+
+        val savedExpensesJson = prefs.getString(KEY_EXPENSES_JSON, null)
+        if (!savedExpensesJson.isNullOrBlank()) {
+            _expensesFlow.value = decodeExpenses(savedExpensesJson)
+        } else {
+            _expensesFlow.value = defaultSampleExpenses()
         }
 
         val savedPinned = prefs.getStringSet(KEY_PINNED_APPS, null)
@@ -283,23 +597,92 @@ object PochiPrefs {
         prefs(context).edit().putInt(KEY_FOCUS_SESSIONS, next).apply()
     }
 
+    fun addWaterGlass(context: Context) {
+        val next = (_waterGlassesFlow.value + 1).coerceIn(0, 16)
+        _waterGlassesFlow.value = next
+        prefs(context).edit().putInt(KEY_WATER_GLASSES, next).apply()
+    }
+
+    fun resetWaterGlasses(context: Context) {
+        _waterGlassesFlow.value = 0
+        prefs(context).edit().putInt(KEY_WATER_GLASSES, 0).apply()
+    }
+
+    fun setDailyBudget(context: Context, budgetRp: Long) {
+        val clean = budgetRp.coerceAtLeast(10_000L)
+        _dailyBudgetFlow.value = clean
+        prefs(context).edit().putLong(KEY_DAILY_BUDGET, clean).apply()
+    }
+
+    fun saveExpenses(context: Context, list: List<ExpenseEntry>) {
+        _expensesFlow.value = list
+        val arr = JSONArray()
+        list.forEach { e ->
+            arr.put(
+                JSONObject().apply {
+                    put("id", e.id)
+                    put("title", e.title)
+                    put("amountRp", e.amountRp)
+                    put("category", e.category)
+                    put("timeLabel", e.timeLabel)
+                }
+            )
+        }
+        prefs(context).edit().putString(KEY_EXPENSES_JSON, arr.toString()).apply()
+    }
+
+    private fun decodeExpenses(json: String): List<ExpenseEntry> = runCatching {
+        val arr = JSONArray(json)
+        buildList {
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                add(
+                    ExpenseEntry(
+                        id = obj.optString("id", "exp_$i"),
+                        title = obj.optString("title", "Pengeluaran"),
+                        amountRp = obj.optLong("amountRp", 0L),
+                        category = obj.optString("category", "Lainnya"),
+                        timeLabel = obj.optString("timeLabel", "12:00")
+                    )
+                )
+            }
+        }
+    }.getOrDefault(defaultSampleExpenses())
+
+    private fun defaultSampleExpenses(): List<ExpenseEntry> = listOf(
+        ExpenseEntry(
+            id = "exp_1",
+            title = "Sarapan & Teh Hangat",
+            amountRp = 18_000L,
+            category = "Makan",
+            timeLabel = "07:30"
+        ),
+        ExpenseEntry(
+            id = "exp_2",
+            title = "Kopi Susu Dingin",
+            amountRp = 15_000L,
+            category = "Jajan",
+            timeLabel = "13:15"
+        )
+    )
+
     private fun defaultSampleTasks(): List<TodayTask> = listOf(
         TodayTask(
             id = "sample_1",
-            title = "Review PR #42 & merge branch",
-            timeLabel = "10:30 AM",
-            hour24 = 10,
+            title = "Sarapan pagi & minum air putih",
+            timeLabel = "7:30 AM",
+            hour24 = 7,
             minute = 30,
             dayIndex = 0,
             isDone = false,
-            isOverdue = true,
+            isOverdue = false,
             isHighPriority = true
         ),
         TodayTask(
             id = "sample_2",
-            title = "Team architecture sync",
-            timeLabel = "2:00 PM",
-            hour24 = 14,
+            title = "Fokus kerja / tugas utama hari ini",
+            timeLabel = "10:00 AM",
+            hour24 = 10,
             minute = 0,
             dayIndex = 0,
             isDone = false,
@@ -307,7 +690,7 @@ object PochiPrefs {
         ),
         TodayTask(
             id = "sample_3",
-            title = "Ship 120fps Dynamic Island build",
+            title = "Olahraga ringan / jalan sore",
             timeLabel = "4:30 PM",
             hour24 = 16,
             minute = 30,
@@ -445,7 +828,9 @@ object PochiPrefs {
     }
 
     fun saveCity(context: Context, city: String) {
-        prefs(context).edit().putString(KEY_CITY, city.trim()).apply()
+        val clean = city.trim().ifBlank { "Jakarta" }
+        _cityFlow.value = clean
+        prefs(context).edit().putString(KEY_CITY, clean).apply()
     }
 
     fun getCity(context: Context): String {

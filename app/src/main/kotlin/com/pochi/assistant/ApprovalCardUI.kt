@@ -47,9 +47,9 @@ fun PochiApprovalCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(cardBg)
-            .border(1.dp, borderCol, RoundedCornerShape(18.dp))
+            .border(1.dp, borderCol, RoundedCornerShape(10.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {

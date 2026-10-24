@@ -262,13 +262,16 @@ fun PochiMascot(
         Modifier
     }
 
+    val boxWidth = if (showBlackBacking) size * 1.42f else size
     Canvas(
         modifier = Modifier
-            .size(size)
+            .width(boxWidth)
+            .height(size)
             .then(interactiveModifier)
     ) {
         val w = this.size.width
         val h = this.size.height
+        val s = minOf(w, h)
         val cx = w * 0.5f
         val cy = h * 0.5f
 
@@ -283,10 +286,10 @@ fun PochiMascot(
                 scaleY = (1f / breathScale) * squishY.value,
                 pivot = Offset(cx, cy)
             ) {
-                // Pure Matte-Black (#0A0A0A) pill/squircle background (like Nochi/Tini)
+                // Pure Matte-Black (#0A0A0A) sleek rounded-rectangle backing (Frame 2s / 35s style, not a circle)
                 if (showBlackBacking) {
-                    val pad = w * 0.04f
-                    val corner = (h * 0.38f).coerceAtLeast(8f)
+                    val pad = s * 0.04f
+                    val corner = (h * 0.22f).coerceAtLeast(6f)
                     drawRoundRect(
                         color = Color(0xFF0A0A0A),
                         topLeft = Offset(pad, pad),
@@ -298,16 +301,16 @@ fun PochiMascot(
                         topLeft = Offset(pad, pad),
                         size = Size(w - pad * 2f, h - pad * 2f),
                         cornerRadius = CornerRadius(corner, corner),
-                        style = Stroke(width = (w * 0.025f).coerceAtLeast(1f))
+                        style = Stroke(width = (s * 0.025f).coerceAtLeast(1f))
                     )
                 }
 
-                val eyeShiftX = combinedGazeX * (w * 0.085f)
-                val eyeShiftY = combinedGazeY * (h * 0.075f)
-                val leftEyeX = cx - w * 0.165f + eyeShiftX
-                val rightEyeX = cx + w * 0.165f + eyeShiftX
+                val eyeShiftX = combinedGazeX * (s * 0.095f)
+                val eyeShiftY = combinedGazeY * (s * 0.075f)
+                val leftEyeX = cx - s * 0.175f + eyeShiftX
+                val rightEyeX = cx + s * 0.175f + eyeShiftX
                 val eyeY = cy + eyeShiftY
-                val strokeW = (w * 0.085f).coerceAtLeast(2.4f)
+                val strokeW = (s * 0.088f).coerceAtLeast(2.4f)
 
                 val canAutoBlink = activeEmote in setOf(
                     PochiEmote.NORMAL,
@@ -320,16 +323,16 @@ fun PochiMascot(
                 )
 
                 if (isBlinking && canAutoBlink) {
-                    drawGlowingDashEye(leftEyeX, eyeY, w, strokeW, pulseAlpha)
-                    drawGlowingDashEye(rightEyeX, eyeY, w, strokeW, pulseAlpha)
+                    drawGlowingDashEye(leftEyeX, eyeY, s, strokeW, pulseAlpha)
+                    drawGlowingDashEye(rightEyeX, eyeY, s, strokeW, pulseAlpha)
                 } else {
                     drawNochiWhiteExpression(
                         emote = activeEmote,
                         leftX = leftEyeX,
                         rightX = rightEyeX,
                         eyeY = eyeY,
-                        w = w,
-                        h = h,
+                        w = s,
+                        h = s,
                         strokeW = strokeW,
                         glowAlpha = pulseAlpha
                     )
