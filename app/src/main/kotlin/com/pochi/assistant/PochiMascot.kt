@@ -4,7 +4,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -265,8 +267,7 @@ fun PochiMascot(
     val boxWidth = if (showBlackBacking) size * 1.42f else size
     Canvas(
         modifier = Modifier
-            .width(boxWidth)
-            .height(size)
+            .size(width = boxWidth, height = size)
             .then(interactiveModifier)
     ) {
         val w = this.size.width
