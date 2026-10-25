@@ -652,6 +652,60 @@ object PochiPrefs {
         prefs(context).edit().putString(KEY_DECK_JSON, arr.toString()).apply()
     }
 
+    fun addDeckCollection(context: Context, title: String, category: String, iconKey: String = "ui") {
+        val newItem = DeckCollectionItem(
+            id = "deck_${System.currentTimeMillis()}",
+            title = title.trim(),
+            category = category,
+            itemCount = 0,
+            updatedAgoEn = "Just now",
+            updatedAgoId = "Baru saja",
+            iconKey = iconKey,
+            description = ""
+        )
+        saveDeckItems(context, listOf(newItem) + _deckItemsFlow.value)
+    }
+
+    fun toggleTask(context: Context, taskId: String) {
+        val updated = _tasksFlow.value.map {
+            if (it.id == taskId) it.copy(isDone = !it.isDone) else it
+        }
+        saveTasks(context, updated)
+    }
+
+    fun addTask(context: Context, title: String, timeLabel: String = "12:00") {
+        val newTask = TodayTask(
+            id = "task_${System.currentTimeMillis()}",
+            title = title.trim(),
+            timeLabel = timeLabel,
+            isDone = false
+        )
+        saveTasks(context, listOf(newTask) + _tasksFlow.value)
+    }
+
+    fun deleteTask(context: Context, taskId: String) {
+        saveTasks(context, _tasksFlow.value.filterNot { it.id == taskId })
+    }
+
+    fun updateTaskNotes(context: Context, taskId: String, notes: String) {
+        val updated = _tasksFlow.value.map {
+            if (it.id == taskId) it.copy(notes = notes) else it
+        }
+        saveTasks(context, updated)
+    }
+
+    fun toggleSubtask(context: Context, taskId: String, subtaskIndex: Int) {
+        val updated = _tasksFlow.value.map { task ->
+            if (task.id == taskId) {
+                val newSub = task.subtasks.mapIndexed { idx, st ->
+                    if (idx == subtaskIndex) st.copy(isDone = !st.isDone) else st
+                }
+                task.copy(subtasks = newSub)
+            } else task
+        }
+        saveTasks(context, updated)
+    }
+
     private fun decodeDeckItems(json: String): List<DeckCollectionItem> = runCatching {
         val arr = JSONArray(json)
         buildList {
@@ -1014,6 +1068,10 @@ object PochiPrefs {
     fun saveApiKey(context: Context, provider: AiProvider, apiKey: String) {
         prefs(context).edit().putString(keyName(provider), apiKey.trim()).apply()
     }
+
+    fun setApiKey(context: Context, apiKey: String) = saveApiKey(context, apiKey)
+
+    fun setApiKey(context: Context, provider: AiProvider, apiKey: String) = saveApiKey(context, provider, apiKey)
 
     fun getModel(context: Context, provider: AiProvider): String {
         return prefs(context).getString(modelName(provider), provider.defaultModel)

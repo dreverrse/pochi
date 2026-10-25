@@ -22,7 +22,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -43,7 +42,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,8 +54,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,9 +70,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Coffee
 import androidx.compose.material.icons.rounded.DarkMode
@@ -98,7 +92,6 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -139,16 +132,12 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -283,7 +272,7 @@ enum class MainTab { HOME, AGENT, FOCUS, DECK }
 
 sealed class AppDestination {
     data object Splash : AppDestination()
-    data class Onboarding(val step: Int) : AppDestination() // 0, 1, 2
+    data class Onboarding(val step: Int) : AppDestination()
     data class Main(val tab: MainTab = MainTab.HOME) : AppDestination()
     data object TodayDetail : AppDestination()
     data class TaskDetail(val taskId: String) : AppDestination()
@@ -316,7 +305,7 @@ fun PochiAppRoot() {
     var activeTab by remember { mutableStateOf(MainTab.HOME) }
 
     // Shared Pomodoro state so Home & Focus tabs stay in sync
-    var focusPhase by remember { mutableIntStateOf(0) } // 0 = Focus (25m), 1 = Short Break (5m), 2 = Long Break (15m)
+    var focusPhase by remember { mutableIntStateOf(0) }
     var focusSecondsLeft by remember { mutableIntStateOf(25 * 60) }
     var focusRunning by remember { mutableStateOf(false) }
 
@@ -534,11 +523,11 @@ fun PochiAppRoot() {
     }
 }
 
-private fun toggleDynamicIslandOverlay(context: Context, lang: String) {
+private fun toggleDynamicIslandOverlay(context: Context, lang: PochiLang) {
     if (!Settings.canDrawOverlays(context)) {
         Toast.makeText(
             context,
-            if (lang == "id") "Izinkan 'Tampilkan di atas aplikasi lain' untuk mengaktifkan Pochi Dynamic Island"
+            if (lang == PochiLang.ID) "Izinkan 'Tampilkan di atas aplikasi lain' untuk mengaktifkan Pochi Dynamic Island"
             else "Allow 'Display over other apps' to activate Pochi Dynamic Island",
             Toast.LENGTH_SHORT
         ).show()
@@ -555,7 +544,7 @@ private fun toggleDynamicIslandOverlay(context: Context, lang: String) {
         context.stopService(intent)
         Toast.makeText(
             context,
-            if (lang == "id") "Pochi Island dinonaktifkan" else "Pochi Island hidden",
+            if (lang == PochiLang.ID) "Pochi Island dinonaktifkan" else "Pochi Island hidden",
             Toast.LENGTH_SHORT
         ).show()
     } else {
@@ -566,7 +555,7 @@ private fun toggleDynamicIslandOverlay(context: Context, lang: String) {
         }
         Toast.makeText(
             context,
-            if (lang == "id") "⚡ Pochi Dynamic Island aktif di status bar!" else "⚡ Pochi Dynamic Island active at status bar!",
+            if (lang == PochiLang.ID) "⚡ Pochi Dynamic Island aktif di status bar!" else "⚡ Pochi Dynamic Island active at status bar!",
             Toast.LENGTH_SHORT
         ).show()
     }
@@ -574,8 +563,6 @@ private fun toggleDynamicIslandOverlay(context: Context, lang: String) {
 
 // ============================================================================
 // SIGNATURE 3D MATTE-BLACK POCHI SQUIRCLE MASCOT & APP ICON VARIANTS
-// (Matches the Reference Image's App Icon, Light/Dark/Accent/Adaptive Variants,
-// and Hero Mascot with Soft Pastel Aura Glow & Happy Curved `^ ^` White Eyes)
 // ============================================================================
 @Composable
 fun PochiSquircleMascot(
@@ -583,14 +570,13 @@ fun PochiSquircleMascot(
     width: Dp = 148.dp,
     height: Dp = 114.dp,
     cornerRadius: Dp = 36.dp,
-    style: String = "dark", // "dark", "light", "accent", "adaptive"
+    style: String = "dark",
     showPastelAura: Boolean = true,
     interactive: Boolean = true
 ) {
-    var expressionMode by remember { mutableIntStateOf(0) } // 0 = happy ^ ^, 1 = wink ^ -, 2 = sparkly oval, 3 = heart/joy
+    var expressionMode by remember { mutableIntStateOf(0) }
     var lastTapMs by remember { mutableLongStateOf(0L) }
 
-    // Periodic gentle blink & idle float
     val infinite = rememberInfiniteTransition(label = "pochi_hero_anim")
     val floatY by infinite.animateFloat(
         initialValue = -3f,
@@ -636,7 +622,6 @@ fun PochiSquircleMascot(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Soft radial pastel aura behind mascot (matches reference image Home & Onboarding)
         if (showPastelAura) {
             Canvas(
                 modifier = Modifier.size(width * 1.65f, height * 1.65f)
@@ -667,7 +652,6 @@ fun PochiSquircleMascot(
             }
         }
 
-        // Adaptive layered back card if style == "adaptive"
         if (style == "adaptive") {
             Box(
                 modifier = Modifier
@@ -678,7 +662,6 @@ fun PochiSquircleMascot(
             )
         }
 
-        // Main 3D Squircle Body + Eyes drawn in crisp Canvas
         Canvas(
             modifier = Modifier
                 .offset(y = floatY.dp)
@@ -702,13 +685,11 @@ fun PochiSquircleMascot(
                 )
             }
 
-            // Squircle base
             drawRoundRect(
                 brush = bodyBrush,
                 cornerRadius = cr
             )
 
-            // Subtle 3D glossy inner top rim highlight
             drawRoundRect(
                 brush = Brush.verticalGradient(
                     listOf(
@@ -767,13 +748,11 @@ fun PochiSquircleMascot(
                     drawHappyArchEye(rightCenter, eyeColor, strokePx * 0.7f, flatBlink = true)
                 }
                 expressionMode == 1 -> {
-                    // Wink (^ -)
                     drawHappyArchEye(leftCenter, glowColor, strokePx * 1.45f)
                     drawHappyArchEye(leftCenter, eyeColor, strokePx)
                     drawHappyArchEye(rightCenter, eyeColor, strokePx * 0.85f, flatBlink = true)
                 }
                 expressionMode == 2 -> {
-                    // Curious glowing ovals (o o)
                     val ovalW = eyeHalfW * 1.25f
                     val ovalH = archHeight * 1.65f
                     drawRoundRect(
@@ -802,7 +781,6 @@ fun PochiSquircleMascot(
                     )
                 }
                 else -> {
-                    // Signature Pochi Happy Curved Eyes (^ ^) from the reference image
                     drawHappyArchEye(leftCenter, glowColor, strokePx * 1.48f)
                     drawHappyArchEye(rightCenter, glowColor, strokePx * 1.48f)
                     drawHappyArchEye(leftCenter, eyeColor, strokePx)
@@ -814,7 +792,7 @@ fun PochiSquircleMascot(
 }
 
 // ============================================================================
-// SPLASH SCREEN (Bottom-Left 1st Screen in Reference Image)
+// SPLASH SCREEN
 // ============================================================================
 @Composable
 fun PochiSplashScreen(fonts: PochiFontPack) {
@@ -836,7 +814,6 @@ fun PochiSplashScreen(fonts: PochiFontPack) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Glowing white ^ ^ eyes directly on pitch-black background (exact match to Splash Screen in image)
             Canvas(modifier = Modifier.size(120.dp, 54.dp)) {
                 val cx = size.width / 2f
                 val cy = size.height * 0.55f
@@ -889,7 +866,6 @@ fun PochiSplashScreen(fonts: PochiFontPack) {
             )
         }
 
-        // Bottom minimalist progress bar
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -912,14 +888,14 @@ fun PochiSplashScreen(fonts: PochiFontPack) {
 }
 
 // ============================================================================
-// ONBOARDING FLOW (Onboarding 1, 2, 3 from Bottom-Left of Reference Image)
+// ONBOARDING FLOW
 // ============================================================================
 @Composable
 fun PochiOnboardingScreen(
     step: Int,
     fonts: PochiFontPack,
     iconStyle: String,
-    lang: String,
+    lang: PochiLang,
     onNext: () -> Unit,
     onSkip: () -> Unit
 ) {
@@ -931,10 +907,9 @@ fun PochiOnboardingScreen(
             .navigationBarsPadding()
             .padding(horizontal = 28.dp, vertical = 20.dp)
     ) {
-        // Top-right Skip button on steps 0 & 1
         if (step < 2) {
             Text(
-                text = if (lang == "id") "Lewati" else "Skip",
+                text = if (lang == PochiLang.ID) "Lewati" else "Skip",
                 fontFamily = fonts.titleFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
@@ -956,7 +931,6 @@ fun PochiOnboardingScreen(
         ) {
             when (step) {
                 0 -> {
-                    // ONBOARDING 1: Welcome to Pochi 👋
                     PochiSquircleMascot(
                         width = 148.dp,
                         height = 114.dp,
@@ -966,7 +940,7 @@ fun PochiOnboardingScreen(
                     )
                     Spacer(modifier = Modifier.height(42.dp))
                     Text(
-                        text = if (lang == "id") "Welcome to\nPochi 👋" else "Welcome to\nPochi 👋",
+                        text = "Welcome to\nPochi 👋",
                         fontFamily = fonts.displayFamily,
                         fontWeight = FontWeight.Black,
                         fontSize = 32.sp,
@@ -977,7 +951,7 @@ fun PochiOnboardingScreen(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = if (lang == "id") {
+                        text = if (lang == PochiLang.ID) {
                             "Teman AI pintar untuk hari yang lebih\ncerdas dan produktif."
                         } else {
                             "Your AI companion for\na smarter and more\nproductive day."
@@ -991,12 +965,10 @@ fun PochiOnboardingScreen(
                 }
 
                 1 -> {
-                    // ONBOARDING 2: Today, Agent, Focus & Deck (Orbiting Pastel Feature Icons)
                     Box(
                         modifier = Modifier.size(250.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Subtle orbit ring
                         Canvas(modifier = Modifier.size(210.dp)) {
                             drawCircle(
                                 color = Color(0xFFE5E7EB),
@@ -1004,7 +976,6 @@ fun PochiOnboardingScreen(
                             )
                         }
 
-                        // Center Pochi Mascot
                         PochiSquircleMascot(
                             width = 118.dp,
                             height = 92.dp,
@@ -1013,7 +984,6 @@ fun PochiOnboardingScreen(
                             showPastelAura = true
                         )
 
-                        // Top-Left: Blue Calendar Bubble
                         OrbitFeatureBubble(
                             icon = Icons.Rounded.CalendarMonth,
                             bg = Color(0xFFDBEAFE),
@@ -1022,7 +992,6 @@ fun PochiOnboardingScreen(
                                 .align(Alignment.TopStart)
                                 .offset(x = 18.dp, y = 8.dp)
                         )
-                        // Top-Right: Yellow Bolt Bubble
                         OrbitFeatureBubble(
                             icon = Icons.Rounded.Bolt,
                             bg = Color(0xFFFEF3C7),
@@ -1031,7 +1000,6 @@ fun PochiOnboardingScreen(
                                 .align(Alignment.TopEnd)
                                 .offset(x = (-18).dp, y = 8.dp)
                         )
-                        // Bottom-Left: Green Agent Bubble
                         OrbitFeatureBubble(
                             icon = Icons.Rounded.SmartToy,
                             bg = Color(0xFFDCFCE7),
@@ -1040,7 +1008,6 @@ fun PochiOnboardingScreen(
                                 .align(Alignment.BottomStart)
                                 .offset(x = 8.dp, y = (-32).dp)
                         )
-                        // Bottom-Right: Indigo Code Bubble
                         OrbitFeatureBubble(
                             icon = Icons.Rounded.Code,
                             bg = Color(0xFFE0E7FF),
@@ -1064,7 +1031,7 @@ fun PochiOnboardingScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = if (lang == "id") {
+                        text = if (lang == PochiLang.ID) {
                             "Semua kebutuhan produktivitasmu\ndalam satu tempat."
                         } else {
                             "Everything you need\nin one place."
@@ -1078,12 +1045,10 @@ fun PochiOnboardingScreen(
                 }
 
                 else -> {
-                    // ONBOARDING 3: Smarter. Simpler. With You. + Get Started Pill
                     Box(
                         modifier = Modifier.size(230.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Decorative soft pastel orbs matching Onboarding 3 in the reference image
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             drawCircle(
                                 brush = Brush.radialGradient(
@@ -1132,7 +1097,6 @@ fun PochiOnboardingScreen(
             }
         }
 
-        // Bottom Controls
         if (step < 2) {
             Row(
                 modifier = Modifier
@@ -1142,7 +1106,6 @@ fun PochiOnboardingScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Page Indicator Dots (● • •)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1160,7 +1123,6 @@ fun PochiOnboardingScreen(
                     }
                 }
 
-                // Circular Black Next Button (→)
                 Box(
                     modifier = Modifier
                         .size(54.dp)
@@ -1179,7 +1141,6 @@ fun PochiOnboardingScreen(
                 }
             }
         } else {
-            // Full-width Black Pill CTA "Get Started"
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -1193,7 +1154,7 @@ fun PochiOnboardingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (lang == "id") "Get Started" else "Get Started",
+                    text = "Get Started",
                     fontFamily = fonts.titleFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
@@ -1232,7 +1193,7 @@ private fun OrbitFeatureBubble(
 }
 
 // ============================================================================
-// FLOATING BOTTOM NAVIGATION BAR (Top Row of Reference Image)
+// FLOATING BOTTOM NAVIGATION BAR
 // ============================================================================
 @Composable
 fun PochiFloatingBottomNav(
@@ -1264,7 +1225,6 @@ fun PochiFloatingBottomNav(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 1. HOME
             BottomNavItem(
                 selected = currentTab == MainTab.HOME,
                 label = "Home",
@@ -1273,7 +1233,6 @@ fun PochiFloatingBottomNav(
                 fonts = fonts,
                 onClick = { onSelectTab(MainTab.HOME) }
             )
-            // 2. AGENT
             BottomNavItem(
                 selected = currentTab == MainTab.AGENT,
                 label = "Agent",
@@ -1282,7 +1241,6 @@ fun PochiFloatingBottomNav(
                 fonts = fonts,
                 onClick = { onSelectTab(MainTab.AGENT) }
             )
-            // 3. FOCUS
             BottomNavItem(
                 selected = currentTab == MainTab.FOCUS,
                 label = "Focus",
@@ -1291,7 +1249,6 @@ fun PochiFloatingBottomNav(
                 fonts = fonts,
                 onClick = { onSelectTab(MainTab.FOCUS) }
             )
-            // 4. DECK
             BottomNavItem(
                 selected = currentTab == MainTab.DECK,
                 label = "Deck",
@@ -1301,7 +1258,6 @@ fun PochiFloatingBottomNav(
                 onClick = { onSelectTab(MainTab.DECK) }
             )
 
-            // 5. Signature Golden-Yellow Lightning Button (⚡) on Right
             Box(
                 modifier = Modifier
                     .size(46.dp)
@@ -1369,14 +1325,14 @@ private fun BottomNavItem(
 }
 
 // ============================================================================
-// SCREEN 1: HOME SCREEN (Overview & Quick Access - Top-Left 1st Phone in Image)
+// SCREEN 1: HOME SCREEN
 // ============================================================================
 @Composable
 fun PochiHomeScreen(
     palette: PochiPalette,
     fonts: PochiFontPack,
     iconStyle: String,
-    lang: String,
+    lang: PochiLang,
     onNavigateTab: (MainTab) -> Unit,
     onOpenTodayDetail: () -> Unit,
     onOpenTaskDetail: (String) -> Unit,
@@ -1389,13 +1345,13 @@ fun PochiHomeScreen(
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val greeting = remember(hour, lang) {
         when {
-            hour in 4..11 -> if (lang == "id") "Good Morning" else "Good Morning"
-            hour in 12..17 -> if (lang == "id") "Good Afternoon" else "Good Afternoon"
-            else -> if (lang == "id") "Good Evening" else "Good Evening"
+            hour in 4..11 -> if (lang == PochiLang.ID) "Good Morning" else "Good Morning"
+            hour in 12..17 -> if (lang == PochiLang.ID) "Good Afternoon" else "Good Afternoon"
+            else -> if (lang == PochiLang.ID) "Good Evening" else "Good Evening"
         }
     }
 
-    val doneCount = tasks.count { it.done }
+    val doneCount = tasks.count { it.isDone }
     val totalCount = tasks.size.coerceAtLeast(1)
 
     Column(
@@ -1406,7 +1362,6 @@ fun PochiHomeScreen(
             .padding(horizontal = 22.dp)
             .padding(top = 12.dp, bottom = 110.dp)
     ) {
-        // Header Row: "Good Morning / Pochi ✦" + Notification Bell Button
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1448,7 +1403,6 @@ fun PochiHomeScreen(
                 )
             }
 
-            // Notification / Settings Bell Icon with Red Badge Dot
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -1478,7 +1432,6 @@ fun PochiHomeScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Center Hero: 3D Matte-Black Pochi Squircle Mascot with Pastel Aura Glow
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1497,7 +1450,6 @@ fun PochiHomeScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 4 Pastel Quick-Access Tiles: Today | Agent | Focus | Deck
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -1542,7 +1494,6 @@ fun PochiHomeScreen(
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        // Today's Plan Card (Matches Reference Image: "Today's Plan  3/5 completed" + Checklist)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1596,7 +1547,7 @@ fun PochiHomeScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             PochiTaskCheckbox(
-                                checked = task.done,
+                                checked = task.isDone,
                                 onToggle = { PochiPrefs.toggleTask(context, task.id) }
                             )
                             Text(
@@ -1604,8 +1555,8 @@ fun PochiHomeScreen(
                                 fontFamily = fonts.bodyFamily,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 14.5.sp,
-                                color = if (task.done) palette.textSecondary else palette.textPrimary,
-                                textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None,
+                                color = if (task.isDone) palette.textSecondary else palette.textPrimary,
+                                textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -1631,7 +1582,6 @@ fun PochiHomeScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Dynamic Island Status Pill Card (Quick toggle right from Home)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1674,7 +1624,7 @@ fun PochiHomeScreen(
                             color = palette.textPrimary
                         )
                         Text(
-                            text = if (lang == "id") "Menempel di bawah status bar • Ketuk ⚡ untuk on/off"
+                            text = if (lang == PochiLang.ID) "Menempel di bawah status bar • Ketuk ⚡ untuk on/off"
                             else "Flush below status bar • Tap ⚡ to toggle",
                             fontFamily = fonts.bodyFamily,
                             fontSize = 12.sp,
@@ -1775,15 +1725,14 @@ fun PochiTaskCheckbox(
 }
 
 // ============================================================================
-// SCREEN 2: AGENT / CHAT SCREEN (Chat with Pochi - Top Row 2nd Phone in Image)
-// Listening-only voice input via SpeechRecognizer (No TTS output)
+// SCREEN 2: AGENT / CHAT SCREEN
 // ============================================================================
 @Composable
 fun PochiAgentChatScreen(
     palette: PochiPalette,
     fonts: PochiFontPack,
     iconStyle: String,
-    lang: String,
+    lang: PochiLang,
     messages: MutableList<AgentChatMessage>,
     onOpenSettings: () -> Unit,
     onOpenDrawerHome: () -> Unit
@@ -1809,24 +1758,34 @@ fun PochiAgentChatScreen(
         isThinking = true
         scope.launch {
             val localResult = PochiAgent.tryHandleLocal(context, clean)
-            val reply = if (localResult.handled) {
-                localResult.reply
+            val reply = if (localResult != null) {
+                val (localReply, action) = localResult
+                if (action != null) {
+                    val actionFeedback = PochiAgent.execute(context, action)
+                    "$localReply\n$actionFeedback"
+                } else {
+                    localReply
+                }
             } else {
-                val apiKey = PochiPrefs.getApiKey(context)
                 val provider = PochiPrefs.getProvider(context)
+                val apiKey = PochiPrefs.getApiKey(context, provider)
                 if (apiKey.isBlank()) {
-                    if (lang == "id") {
-                        "✨ Aku mencatat pesanmu: \"$clean\".\nUntuk jawaban AI penuh (Gemini/OpenAI/Claude), masukkan API Key di Settings > Data & Storage, atau gunakan perintah langsung seperti 'buka WhatsApp', 'telepon Budi', 'cuaca', atau 'fokus'."
+                    if (lang == PochiLang.ID) {
+                        "✨ Aku mencatat pesanmu: \"$clean\".\nUntuk jawaban AI penuh (Gemini/OpenRouter/OpenCode), masukkan API Key di Settings > Data & Storage, atau gunakan perintah langsung seperti 'buka WhatsApp', 'telepon Budi', 'cuaca', atau 'fokus'."
                     } else {
                         "✨ Got your prompt: \"$clean\".\nFor full LLM replies, set your API Key in Settings > Data & Storage, or try device commands like 'open WhatsApp', 'call Mom', 'weather', or 'start focus'."
                     }
                 } else {
-                    AiClient.ask(
-                        prompt = clean,
-                        apiKey = apiKey,
-                        provider = provider,
-                        systemContext = "You are Pochi, a friendly, concise AI companion for Today, Agent, Focus & Deck."
-                    )
+                    val model = PochiPrefs.getModel(context, provider)
+                    runCatching {
+                        AiClient.ask(
+                            provider = provider,
+                            apiKey = apiKey,
+                            model = model,
+                            prompt = clean,
+                            contextNote = "MainActivity Pochi Agent Chat"
+                        )
+                    }.getOrElse { "Gagal memproses pesan: ${it.localizedMessage}" }
                 }
             }
             messages.add(AgentChatMessage(text = reply, isUser = false))
@@ -1871,7 +1830,7 @@ fun PochiAgentChatScreen(
         if (granted && speechRecognizer != null) {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (lang == "id") "id-ID" else "en-US")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (lang == PochiLang.ID) "id-ID" else "en-US")
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             }
             speechRecognizer.startListening(intent)
@@ -1896,7 +1855,7 @@ fun PochiAgentChatScreen(
         } else {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (lang == "id") "id-ID" else "en-US")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (lang == PochiLang.ID) "id-ID" else "en-US")
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             }
             runCatching { speechRecognizer.startListening(intent) }
@@ -1910,7 +1869,6 @@ fun PochiAgentChatScreen(
             .padding(horizontal = 20.dp)
             .padding(top = 12.dp, bottom = 104.dp)
     ) {
-        // Top App Bar: ☰ | Pochi (Your AI Agent) | ⚙
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1945,7 +1903,6 @@ fun PochiAgentChatScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Scrollable Center Area: Mascot + Greeting Bubble + Conversation + 6 Prompt Chips
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -1955,7 +1912,6 @@ fun PochiAgentChatScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Pochi Squircle Mascot
             PochiSquircleMascot(
                 width = 116.dp,
                 height = 88.dp,
@@ -1966,7 +1922,6 @@ fun PochiAgentChatScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Speech Bubble Card: "Hi! I'm Pochi ✨ / How can I help you today?"
             Surface(
                 modifier = Modifier
                     .fillMaxWidth(0.90f)
@@ -1988,7 +1943,7 @@ fun PochiAgentChatScreen(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (isListening) {
-                            if (lang == "id") "Mendengarkan suaramu... (Tanpa suara balasan)"
+                            if (lang == PochiLang.ID) "Mendengarkan suaramu... (Tanpa suara balasan)"
                             else "Listening to your voice... (Silent mode)"
                         } else {
                             "How can I help you today?"
@@ -2003,7 +1958,6 @@ fun PochiAgentChatScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Conversation History (if user has chatted)
             if (messages.isNotEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -2049,8 +2003,6 @@ fun PochiAgentChatScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // 6 Quick Prompt Pills (2 rows matching Reference Image)
-            // Row 1: 💡 Explain this | ✏️ Write | 🔍 Research
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2085,7 +2037,6 @@ fun PochiAgentChatScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Row 2: 🛠️ Code | 📄 Summarize | ••• More
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2121,7 +2072,6 @@ fun PochiAgentChatScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Bottom Input Bar: [ + ]  Ask me anything...  [ 🎙️ / Send ]
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2190,7 +2140,6 @@ fun PochiAgentChatScreen(
                         )
                     }
                 } else {
-                    // Listening-only Microphone Button
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -2227,7 +2176,7 @@ fun PochiAgentChatScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = if (lang == "id") "Ketuk aksi cepat untuk menelpon, kirim SMS/WhatsApp, atau membuka aplikasi:"
+                        text = if (lang == PochiLang.ID) "Ketuk aksi cepat untuk menelpon, kirim SMS/WhatsApp, atau membuka aplikasi:"
                         else "Tap a quick command to call, send SMS/WhatsApp, or launch apps:",
                         fontFamily = fonts.bodyFamily,
                         fontSize = 13.sp,
@@ -2340,13 +2289,13 @@ private fun CircularIconButton(
 }
 
 // ============================================================================
-// SCREEN 3: FOCUS SCREEN (Pomodoro & Task Management - Top Row 3rd Phone in Image)
+// SCREEN 3: FOCUS SCREEN
 // ============================================================================
 @Composable
 fun PochiFocusScreen(
     palette: PochiPalette,
     fonts: PochiFontPack,
-    lang: String,
+    lang: PochiLang,
     phase: Int,
     secondsLeft: Int,
     isRunning: Boolean,
@@ -2356,7 +2305,7 @@ fun PochiFocusScreen(
     onOpenTaskDetail: (String) -> Unit
 ) {
     val context = LocalContext.current
-    var subTab by remember { mutableIntStateOf(0) } // 0 = Timer, 1 = Tasks, 2 = Stats
+    var subTab by remember { mutableIntStateOf(0) }
     val tasks by PochiPrefs.tasksFlow.collectAsState()
     val focusSessions by PochiPrefs.focusSessionsFlow.collectAsState()
 
@@ -2378,7 +2327,6 @@ fun PochiFocusScreen(
             .padding(top = 14.dp, bottom = 110.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Header Row: "Focus / Stay focused and get more done." + Reset Timer Icon
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2410,7 +2358,6 @@ fun PochiFocusScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Segmented Pill Tabs: Timer | Tasks | Stats
         Surface(
             shape = CircleShape,
             color = palette.card,
@@ -2450,12 +2397,10 @@ fun PochiFocusScreen(
 
         when (subTab) {
             0 -> {
-                // LARGE CIRCULAR GOLDEN-YELLOW RING PROGRESS TIMER (Matches Reference Image 3. Focus)
                 Box(
                     modifier = Modifier.size(248.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Outer soft white circular card shadow
                     Box(
                         modifier = Modifier
                             .size(236.dp)
@@ -2466,7 +2411,6 @@ fun PochiFocusScreen(
 
                     Canvas(modifier = Modifier.size(210.dp)) {
                         val strokeW = 14.dp.toPx()
-                        // Track ring
                         drawArc(
                             color = if (palette.isDark) Color(0xFF282D3B) else Color(0xFFF1F3F9),
                             startAngle = 0f,
@@ -2474,7 +2418,6 @@ fun PochiFocusScreen(
                             useCenter = false,
                             style = Stroke(width = strokeW, cap = StrokeCap.Round)
                         )
-                        // Golden-yellow progress arc
                         drawArc(
                             brush = Brush.sweepGradient(
                                 listOf(Color(0xFFFDE047), Color(0xFFFACC15), Color(0xFFF59E0B), Color(0xFFFDE047))
@@ -2518,7 +2461,6 @@ fun PochiFocusScreen(
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // Phase Pills: [ ✦ Focus ]  [ Short Break ]  [ Long Break ]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
@@ -2547,7 +2489,6 @@ fun PochiFocusScreen(
 
                 Spacer(modifier = Modifier.height(22.dp))
 
-                // Golden-Yellow Pill CTA Button: [ ▶ Start Focus ]
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.86f)
@@ -2584,7 +2525,6 @@ fun PochiFocusScreen(
             }
 
             1 -> {
-                // Focus Tasks sub-view
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = palette.card,
@@ -2614,7 +2554,7 @@ fun PochiFocusScreen(
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     PochiTaskCheckbox(
-                                        checked = task.done,
+                                        checked = task.isDone,
                                         onToggle = { PochiPrefs.toggleTask(context, task.id) }
                                     )
                                     Text(
@@ -2625,7 +2565,7 @@ fun PochiFocusScreen(
                                     )
                                 }
                                 Text(
-                                    text = task.time,
+                                    text = task.timeLabel,
                                     fontFamily = fonts.monoFamily,
                                     fontSize = 12.5.sp,
                                     color = palette.textSecondary
@@ -2637,7 +2577,6 @@ fun PochiFocusScreen(
             }
 
             else -> {
-                // Focus Stats sub-view with visual bar chart
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = palette.card,
@@ -2660,7 +2599,6 @@ fun PochiFocusScreen(
                             color = palette.textSecondary
                         )
                         Spacer(modifier = Modifier.height(18.dp))
-                        // Weekly Focus Bar Chart
                         val bars = listOf(0.45f, 0.7f, 0.55f, 0.85f, 0.65f, 0.92f, (focusSessions * 0.2f).coerceIn(0.35f, 1f))
                         val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Today")
                         Row(
@@ -2703,13 +2641,13 @@ fun PochiFocusScreen(
 }
 
 // ============================================================================
-// SCREEN 4: DECK SCREEN (Collect & Organize - Top Row 4th Phone in Image)
+// SCREEN 4: DECK SCREEN
 // ============================================================================
 @Composable
 fun PochiDeckScreen(
     palette: PochiPalette,
     fonts: PochiFontPack,
-    lang: String
+    lang: PochiLang
 ) {
     val context = LocalContext.current
     val deckItems by PochiPrefs.deckItemsFlow.collectAsState()
@@ -2719,7 +2657,25 @@ fun PochiDeckScreen(
     var newCategory by remember { mutableStateOf("Notes") }
 
     val categories = listOf("All", "Notes", "Bookmarks", "Files", "Apps")
-    val installedApps = remember { PochiAgent.getInstalledLauncherApps(context) }
+
+    val installedApps = remember {
+        runCatching {
+            val pm = context.packageManager
+            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            }
+            pm.queryIntentActivities(mainIntent, 0)
+                .mapNotNull { info ->
+                    val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
+                    if (pkg == context.packageName) return@mapNotNull null
+                    val label = info.loadLabel(pm)?.toString()?.trim().orEmpty()
+                    if (label.isBlank()) return@mapNotNull null
+                    LaunchableAppInfo(label = label, packageName = pkg)
+                }
+                .distinctBy { it.packageName }
+                .sortedBy { it.label.lowercase(Locale.getDefault()) }
+        }.getOrDefault(emptyList())
+    }
 
     val filteredItems = remember(deckItems, selectedCategory) {
         if (selectedCategory == "All") deckItems
@@ -2734,7 +2690,6 @@ fun PochiDeckScreen(
             .padding(horizontal = 22.dp)
             .padding(top = 14.dp, bottom = 110.dp)
     ) {
-        // Header Row: "Deck / Collect, organize, and explore." + [ + ] Button
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2766,7 +2721,6 @@ fun PochiDeckScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Filter Pills: [ All ]  [ Notes ]  [ Bookmarks ]  [ Files ]  [ Apps ]
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2798,7 +2752,6 @@ fun PochiDeckScreen(
         Spacer(modifier = Modifier.height(18.dp))
 
         if (selectedCategory == "Apps") {
-            // Installed Android Apps Launcher Grid inside Deck
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 installedApps.take(25).forEach { app ->
                     Surface(
@@ -2863,16 +2816,16 @@ fun PochiDeckScreen(
                 }
             }
         } else {
-            // Collection Cards matching Reference Image:
-            // UI Inspiration, Programming, Design System, AI Research
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 filteredItems.forEach { item ->
-                    val (iconVec, iconBg, iconTint) = when (item.iconType) {
+                    val (iconVec, iconBg, iconTint) = when (item.iconKey) {
                         "code" -> Triple(Icons.Rounded.Code, Color(0xFFE0F2FE), Color(0xFF0284C7))
                         "palette" -> Triple(Icons.Rounded.Palette, Color(0xFFFEF3C7), Color(0xFFD97706))
                         "doc" -> Triple(Icons.Rounded.Description, Color(0xFFE0E7FF), Color(0xFF4F46E5))
                         else -> Triple(Icons.Rounded.Image, Color(0xFFDBEAFE), Color(0xFF2563EB))
                     }
+
+                    val updatedText = if (lang == PochiLang.ID) item.updatedAgoId else item.updatedAgoEn
 
                     Surface(
                         modifier = Modifier
@@ -2924,7 +2877,7 @@ fun PochiDeckScreen(
                                     )
                                     Spacer(modifier = Modifier.height(3.dp))
                                     Text(
-                                        text = "${item.itemCount} items • ${item.updatedAgo}",
+                                        text = "${item.itemCount} items • $updatedText",
                                         fontFamily = fonts.bodyFamily,
                                         fontSize = 12.5.sp,
                                         color = palette.textSecondary
@@ -3010,19 +2963,19 @@ fun PochiDeckScreen(
 }
 
 // ============================================================================
-// TODAY DETAIL SCREEN (Bottom Row 5th Screen in Reference Image)
+// TODAY DETAIL SCREEN
 // ============================================================================
 @Composable
 fun PochiTodayDetailScreen(
     palette: PochiPalette,
     fonts: PochiFontPack,
-    lang: String,
+    lang: PochiLang,
     onBack: () -> Unit,
     onOpenTaskDetail: (String) -> Unit
 ) {
     val context = LocalContext.current
     val tasks by PochiPrefs.tasksFlow.collectAsState()
-    var subMode by remember { mutableIntStateOf(0) } // 0 = Tasks, 1 = Calendar
+    var subMode by remember { mutableIntStateOf(0) }
     var newTaskTitle by remember { mutableStateOf("") }
 
     val formattedDate = remember {
@@ -3037,7 +2990,6 @@ fun PochiTodayDetailScreen(
             .padding(horizontal = 22.dp)
             .padding(top = 14.dp, bottom = 110.dp)
     ) {
-        // Header: "Today / Tue, Oct 26, 2026" + Calendar Icon
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3069,7 +3021,6 @@ fun PochiTodayDetailScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Segmented Pill: [ Tasks ]  [ Calendar ]
         Surface(
             shape = CircleShape,
             color = palette.card,
@@ -3106,7 +3057,6 @@ fun PochiTodayDetailScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Input Bar: [ ⊕ Add new task... ] + Black Circular [ + ] Button
         Surface(
             shape = RoundedCornerShape(22.dp),
             color = palette.card,
@@ -3185,7 +3135,6 @@ fun PochiTodayDetailScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Task List Card with Right-Aligned Timestamps (10:00, 14:00, 16:00, 19:00)
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = palette.card,
@@ -3215,7 +3164,7 @@ fun PochiTodayDetailScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             PochiTaskCheckbox(
-                                checked = task.done,
+                                checked = task.isDone,
                                 onToggle = { PochiPrefs.toggleTask(context, task.id) }
                             )
                             Text(
@@ -3223,12 +3172,12 @@ fun PochiTodayDetailScreen(
                                 fontFamily = fonts.titleFamily,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 15.sp,
-                                color = if (task.done) palette.textSecondary else palette.textPrimary,
-                                textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None
+                                color = if (task.isDone) palette.textSecondary else palette.textPrimary,
+                                textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None
                             )
                         }
                         Text(
-                            text = task.time,
+                            text = task.timeLabel,
                             fontFamily = fonts.monoFamily,
                             fontSize = 13.sp,
                             color = palette.textSecondary
@@ -3249,14 +3198,14 @@ fun PochiTodayDetailScreen(
 }
 
 // ============================================================================
-// TASK DETAIL SCREEN (Bottom Row 6th Screen in Reference Image)
+// TASK DETAIL SCREEN
 // ============================================================================
 @Composable
 fun PochiTaskDetailScreen(
     taskId: String,
     palette: PochiPalette,
     fonts: PochiFontPack,
-    lang: String,
+    lang: PochiLang,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -3280,7 +3229,6 @@ fun PochiTaskDetailScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        // Top Action Bar: ← on left | ✎  📎  🗑 on right
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3337,7 +3285,6 @@ fun PochiTaskDetailScreen(
 
         Spacer(modifier = Modifier.height(26.dp))
 
-        // Large Blue Rounded Squircle Checkmark Badge (Matches Task Detail in Reference Image)
         Box(
             modifier = Modifier
                 .size(56.dp)
@@ -3361,7 +3308,6 @@ fun PochiTaskDetailScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Task Title ("Study UI Design")
         Text(
             text = task.title,
             fontFamily = fonts.displayFamily,
@@ -3373,7 +3319,6 @@ fun PochiTaskDetailScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Date & Time Row: 🕒 Tue, Oct 26, 2026 • 14:00 - 16:00
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -3385,7 +3330,7 @@ fun PochiTaskDetailScreen(
                 modifier = Modifier.size(18.dp)
             )
             Text(
-                text = "Tue, Oct 26, 2026\n${task.time} - 16:00",
+                text = "Tue, Oct 26, 2026\n${task.timeLabel} - 16:00",
                 fontFamily = fonts.monoFamily,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
@@ -3395,7 +3340,6 @@ fun PochiTaskDetailScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Notes Section
         Text(
             text = "Notes",
             fontFamily = fonts.titleFamily,
@@ -3440,7 +3384,7 @@ fun PochiTaskDetailScreen(
             }
         } else {
             Text(
-                text = task.notes,
+                text = task.notes.ifBlank { "No notes yet. Tap to add details." },
                 fontFamily = fonts.bodyFamily,
                 fontSize = 14.5.sp,
                 lineHeight = 22.sp,
@@ -3451,7 +3395,6 @@ fun PochiTaskDetailScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Subtasks Section (Watch tutorial, Create mockup, Review design)
         Text(
             text = "Subtasks",
             fontFamily = fonts.titleFamily,
@@ -3471,15 +3414,15 @@ fun PochiTaskDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     PochiTaskCheckbox(
-                        checked = sub.done,
+                        checked = sub.isDone,
                         onToggle = { PochiPrefs.toggleSubtask(context, task.id, idx) }
                     )
                     Text(
                         text = sub.title,
                         fontFamily = fonts.bodyFamily,
                         fontSize = 15.sp,
-                        color = if (sub.done) palette.textSecondary else palette.textPrimary,
-                        textDecoration = if (sub.done) TextDecoration.LineThrough else TextDecoration.None
+                        color = if (sub.isDone) palette.textSecondary else palette.textPrimary,
+                        textDecoration = if (sub.isDone) TextDecoration.LineThrough else TextDecoration.None
                     )
                 }
             }
@@ -3488,15 +3431,14 @@ fun PochiTaskDetailScreen(
 }
 
 // ============================================================================
-// SETTINGS SCREEN (Light Mode & Dark Mode - Bottom-Right 2 Screens in Image)
-// Includes App Icon Variants Selector (Light, Dark, Accent, Adaptive) & Font Selector
+// SETTINGS SCREEN
 // ============================================================================
 @Composable
 fun PochiSettingsScreen(
     palette: PochiPalette,
     fonts: PochiFontPack,
     iconStyle: String,
-    lang: String,
+    lang: PochiLang,
     onBack: () -> Unit,
     onReplayOnboarding: () -> Unit
 ) {
@@ -3518,7 +3460,6 @@ fun PochiSettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp, vertical = 14.dp)
     ) {
-        // Top Bar: ←  |  Settings
         Box(modifier = Modifier.fillMaxWidth()) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -3543,7 +3484,6 @@ fun PochiSettingsScreen(
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        // 1. Pochi Profile Card ("Pochi • Your AI Companion >")
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -3598,7 +3538,6 @@ fun PochiSettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 2. App Icon Style Selector (Matches the 4 Icon Variants on Left of Design Sheet)
         Surface(
             shape = RoundedCornerShape(22.dp),
             color = palette.card,
@@ -3666,7 +3605,6 @@ fun PochiSettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 3. Main Settings List (Theme, Font Style, Language, Notifications, Data & Storage, Privacy & Security, About)
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = palette.card,
@@ -3676,7 +3614,6 @@ fun PochiSettingsScreen(
                 .shadow(8.dp, RoundedCornerShape(24.dp), spotColor = Color.Black.copy(alpha = 0.05f))
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                // Theme Row (Light / Dark)
                 SettingsRowItem(
                     icon = if (isDark) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
                     title = "Theme",
@@ -3687,7 +3624,6 @@ fun PochiSettingsScreen(
                 )
                 SettingsDivider(palette)
 
-                // Font Style Row (Non-monotonous typography switcher)
                 SettingsRowItem(
                     icon = Icons.Rounded.AutoAwesome,
                     title = "Font Style",
@@ -3705,20 +3641,21 @@ fun PochiSettingsScreen(
                 )
                 SettingsDivider(palette)
 
-                // Language Row (English / Indonesia)
                 SettingsRowItem(
                     icon = Icons.Rounded.Language,
                     title = "Language",
-                    valueText = if (lang == "id") "Indonesia" else "English",
+                    valueText = if (lang == PochiLang.ID) "Indonesia" else "English",
                     palette = palette,
                     fonts = fonts,
                     onClick = {
-                        PochiPrefs.setLanguage(context, if (lang == "id") "en" else "id")
+                        PochiPrefs.setLanguage(
+                            context,
+                            if (lang == PochiLang.ID) PochiLang.EN else PochiLang.ID
+                        )
                     }
                 )
                 SettingsDivider(palette)
 
-                // Notifications Row with Blue Switch Toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3758,18 +3695,16 @@ fun PochiSettingsScreen(
                 }
                 SettingsDivider(palette)
 
-                // Data & Storage Row (AI API Key & Provider)
                 SettingsRowItem(
                     icon = Icons.Rounded.Storage,
                     title = "Data & Storage",
-                    valueText = PochiPrefs.getProvider(context).uppercase(),
+                    valueText = PochiPrefs.getProvider(context).name,
                     palette = palette,
                     fonts = fonts,
                     onClick = { showApiDialog = true }
                 )
                 SettingsDivider(palette)
 
-                // Privacy & Security Row (Permissions)
                 SettingsRowItem(
                     icon = Icons.Rounded.Lock,
                     title = "Privacy & Security",
@@ -3780,7 +3715,6 @@ fun PochiSettingsScreen(
                 )
                 SettingsDivider(palette)
 
-                // About Row (Replay Welcome & Onboarding)
                 SettingsRowItem(
                     icon = Icons.Rounded.Info,
                     title = "About",
@@ -3793,10 +3727,9 @@ fun PochiSettingsScreen(
         }
     }
 
-    // AI API Key & Provider Dialog
     if (showApiDialog) {
-        var apiKeyInput by remember { mutableStateOf(PochiPrefs.getApiKey(context)) }
-        var providerInput by remember { mutableStateOf(PochiPrefs.getProvider(context)) }
+        var selectedProvider by remember { mutableStateOf(PochiPrefs.getProvider(context)) }
+        var apiKeyInput by remember { mutableStateOf(PochiPrefs.getApiKey(context, selectedProvider)) }
 
         AlertDialog(
             onDismissRequest = { showApiDialog = false },
@@ -3810,16 +3743,20 @@ fun PochiSettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("gemini", "openai", "claude").forEach { prov ->
+                        AiProvider.entries.forEach { prov ->
+                            val active = selectedProvider == prov
                             Surface(
                                 shape = CircleShape,
-                                color = if (providerInput == prov) palette.pillActiveBg else palette.pillInactiveBg,
-                                modifier = Modifier.clickable { providerInput = prov }
+                                color = if (active) palette.pillActiveBg else palette.pillInactiveBg,
+                                modifier = Modifier.clickable {
+                                    selectedProvider = prov
+                                    apiKeyInput = PochiPrefs.getApiKey(context, prov)
+                                }
                             ) {
                                 Text(
-                                    text = prov.uppercase(),
+                                    text = prov.name,
                                     fontSize = 12.sp,
-                                    color = if (providerInput == prov) palette.pillActiveText else palette.textSecondary,
+                                    color = if (active) palette.pillActiveText else palette.textSecondary,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                             }
@@ -3844,8 +3781,8 @@ fun PochiSettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        PochiPrefs.setProvider(context, providerInput)
-                        PochiPrefs.setApiKey(context, apiKeyInput.trim())
+                        PochiPrefs.setProvider(context, selectedProvider)
+                        PochiPrefs.saveApiKey(context, selectedProvider, apiKeyInput.trim())
                         showApiDialog = false
                     }
                 ) {
@@ -3860,7 +3797,6 @@ fun PochiSettingsScreen(
         )
     }
 
-    // Permissions Quick-Grant Dialog
     if (showPermissionsDialog) {
         val permLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
