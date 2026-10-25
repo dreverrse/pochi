@@ -4,19 +4,57 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Outer Soft Shadow / Rim -->
     <path
-        android:fillColor="#F4F5F7"
-        android:pathData="M24,8 L84,8 C92.8,8 100,15.2 100,24 L100,84 C100,92.8 92.8,100 84,100 L24,100 C15.2,100 8,92.8 8,84 L8,24 C8,15.2 15.2,8 24,8 Z" />
+        android:fillColor="#08080B"
+        android:pathData="M28,10 L80,10 C90,10 98,18 98,28 L98,80 C98,90 90,98 80,98 L28,98 C18,98 10,90 10,80 L10,28 C10,18 18,10 28,10 Z" />
+
+    <!-- Main Matte-Black Squircle Body (App Icon Main from reference image) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:strokeColor="#111827"
-        android:strokeWidth="3.5"
+        android:fillColor="#121217"
+        android:strokeColor="#262632"
+        android:strokeWidth="1.5"
+        android:pathData="M28,12 L80,12 C88.8,12 96,19.2 96,28 L96,80 C96,88.8 88.8,96 80,96 L28,96 C19.2,96 12,88.8 12,80 L12,28 C12,19.2 19.2,12 28,12 Z" />
+
+    <!-- Subtle Top Gloss Highlight -->
+    <path
+        android:fillColor="#1B1B24"
+        android:pathData="M28,13 L80,13 C87,13 93,18 94,25 L14,25 C15,18 21,13 28,13 Z" />
+
+    <!-- Left Happy Curved Eye Soft Glow -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#33FFFFFF"
+        android:strokeWidth="12"
+        android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M26,48 L28,24 L44,36 L64,36 L80,24 L82,48 C85,68 76,82 54,82 C32,82 23,68 26,48 Z" />
+        android:pathData="M27,57 Q37,43 47,57" />
+
+    <!-- Right Happy Curved Eye Soft Glow -->
     <path
-        android:fillColor="#111827"
-        android:pathData="M42,52 a4.5,6.5 0 1,0 0.1,0 z" />
+        android:fillColor="#00000000"
+        android:strokeColor="#33FFFFFF"
+        android:strokeWidth="12"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M61,57 Q71,43 81,57" />
+
+    <!-- Left Happy Curved White Eye (^ ^) -->
     <path
-        android:fillColor="#111827"
-        android:pathData="M66,52 a4.5,6.5 0 1,0 0.1,0 z" />
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="8.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M27,57 Q37,43 47,57" />
+
+    <!-- Right Happy Curved White Eye (^ ^) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="8.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M61,57 Q71,43 81,57" />
 </vector>

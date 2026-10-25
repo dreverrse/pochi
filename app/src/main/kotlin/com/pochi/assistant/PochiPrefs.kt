@@ -13,6 +13,12 @@ enum class PochiLang(val code: String, val label: String, val shortBadge: String
     EN("en", "English", "EN")
 }
 
+data class TaskSubtask(
+    val id: String,
+    val title: String,
+    val isDone: Boolean = false
+)
+
 data class TodayTask(
     val id: String,
     val title: String,
@@ -22,7 +28,9 @@ data class TodayTask(
     val dayIndex: Int = 0, // 0 = Today, -3..+3 in weekly strip
     val isDone: Boolean = false,
     val isOverdue: Boolean = false,
-    val isHighPriority: Boolean = false
+    val isHighPriority: Boolean = false,
+    val notes: String = "",
+    val subtasks: List<TaskSubtask> = emptyList()
 ) {
     fun isCurrentlyOverdue(): Boolean {
         if (isDone) return false
@@ -37,6 +45,17 @@ data class TodayTask(
         return isOverdue
     }
 }
+
+data class DeckCollectionItem(
+    val id: String,
+    val title: String,
+    val category: String, // "Notes", "Bookmarks", "Files"
+    val itemCount: Int,
+    val updatedAgoEn: String,
+    val updatedAgoId: String,
+    val iconKey: String, // "ui", "code", "palette", "doc"
+    val description: String = ""
+)
 
 object NaturalTaskParser {
     // Splits multi-clause input in both English and Indonesian:
@@ -479,6 +498,10 @@ object PochiPrefs {
     private const val KEY_EXPENSES_JSON = "pochi_expenses_json"
     private const val KEY_DAILY_BUDGET = "pochi_daily_budget_rp"
     private const val KEY_WATER_GLASSES = "pochi_water_glasses_today"
+    private const val KEY_ONBOARDING_DONE = "pochi_onboarding_v2_done"
+    private const val KEY_ICON_STYLE = "pochi_icon_style"
+    private const val KEY_FONT_STYLE = "pochi_font_style"
+    private const val KEY_DECK_JSON = "pochi_deck_collections_json"
 
     private val _offsetXFlow = MutableStateFlow(0)
     val offsetXFlow: StateFlow<Int> = _offsetXFlow
@@ -508,8 +531,21 @@ object PochiPrefs {
     private val _screenAwarenessFlow = MutableStateFlow(false)
     val screenAwarenessFlow: StateFlow<Boolean> = _screenAwarenessFlow
 
-    private val _darkModeFlow = MutableStateFlow(true)
+    // Default to false (Light Mode) so the crisp white & pastel UI from the reference image shines out of the box!
+    private val _darkModeFlow = MutableStateFlow(false)
     val darkModeFlow: StateFlow<Boolean> = _darkModeFlow
+
+    private val _onboardingDoneFlow = MutableStateFlow(false)
+    val onboardingDoneFlow: StateFlow<Boolean> = _onboardingDoneFlow
+
+    private val _iconStyleFlow = MutableStateFlow("dark") // "dark", "light", "accent", "adaptive"
+    val iconStyleFlow: StateFlow<String> = _iconStyleFlow
+
+    private val _fontStyleFlow = MutableStateFlow("jakarta") // "jakarta", "grotesk", "editorial"
+    val fontStyleFlow: StateFlow<String> = _fontStyleFlow
+
+    private val _deckItemsFlow = MutableStateFlow<List<DeckCollectionItem>>(defaultDeckCollections())
+    val deckItemsFlow: StateFlow<List<DeckCollectionItem>> = _deckItemsFlow
 
     private val _providerFlow = MutableStateFlow(AiProvider.GEMINI)
     val providerFlow: StateFlow<AiProvider> = _providerFlow
@@ -534,7 +570,10 @@ object PochiPrefs {
         _offsetXFlow.value = prefs.getInt(KEY_OFFSET_X, 0)
         _offsetYFlow.value = prefs.getInt(KEY_OFFSET_Y, 0)
         _flushStatusBarFlow.value = prefs.getBoolean(KEY_FLUSH_STATUSBAR, true)
-        _darkModeFlow.value = prefs.getBoolean(KEY_DARK_MODE, true)
+        _darkModeFlow.value = prefs.getBoolean(KEY_DARK_MODE, false)
+        _onboardingDoneFlow.value = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
+        _iconStyleFlow.value = prefs.getString(KEY_ICON_STYLE, "dark") ?: "dark"
+        _fontStyleFlow.value = prefs.getString(KEY_FONT_STYLE, "jakarta") ?: "jakarta"
         _screenAwarenessFlow.value = prefs.getBoolean(KEY_SCREEN_AWARENESS, false)
         _notesFlow.value = prefs.getString(KEY_NOTES, "") ?: ""
         _focusSessionsFlow.value = prefs.getInt(KEY_FOCUS_SESSIONS, 2)
@@ -565,11 +604,117 @@ object PochiPrefs {
             _expensesFlow.value = defaultSampleExpenses()
         }
 
+        val savedDeckJson = prefs.getString(KEY_DECK_JSON, null)
+        if (!savedDeckJson.isNullOrBlank()) {
+            _deckItemsFlow.value = decodeDeckItems(savedDeckJson)
+        } else {
+            _deckItemsFlow.value = defaultDeckCollections()
+        }
+
         val savedPinned = prefs.getStringSet(KEY_PINNED_APPS, null)
         if (savedPinned != null) {
             _pinnedAppsFlow.value = savedPinned
         }
     }
+
+    fun setOnboardingDone(context: Context, done: Boolean) {
+        _onboardingDoneFlow.value = done
+        prefs(context).edit().putBoolean(KEY_ONBOARDING_DONE, done).apply()
+    }
+
+    fun setIconStyle(context: Context, style: String) {
+        _iconStyleFlow.value = style
+        prefs(context).edit().putString(KEY_ICON_STYLE, style).apply()
+    }
+
+    fun setFontStyle(context: Context, style: String) {
+        _fontStyleFlow.value = style
+        prefs(context).edit().putString(KEY_FONT_STYLE, style).apply()
+    }
+
+    fun saveDeckItems(context: Context, items: List<DeckCollectionItem>) {
+        _deckItemsFlow.value = items
+        val arr = JSONArray()
+        items.forEach { d ->
+            arr.put(
+                JSONObject().apply {
+                    put("id", d.id)
+                    put("title", d.title)
+                    put("category", d.category)
+                    put("itemCount", d.itemCount)
+                    put("updatedAgoEn", d.updatedAgoEn)
+                    put("updatedAgoId", d.updatedAgoId)
+                    put("iconKey", d.iconKey)
+                    put("description", d.description)
+                }
+            )
+        }
+        prefs(context).edit().putString(KEY_DECK_JSON, arr.toString()).apply()
+    }
+
+    private fun decodeDeckItems(json: String): List<DeckCollectionItem> = runCatching {
+        val arr = JSONArray(json)
+        buildList {
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                add(
+                    DeckCollectionItem(
+                        id = obj.optString("id", "deck_$i"),
+                        title = obj.optString("title", "Collection"),
+                        category = obj.optString("category", "Notes"),
+                        itemCount = obj.optInt("itemCount", 1),
+                        updatedAgoEn = obj.optString("updatedAgoEn", "Just now"),
+                        updatedAgoId = obj.optString("updatedAgoId", "Baru saja"),
+                        iconKey = obj.optString("iconKey", "ui"),
+                        description = obj.optString("description", "")
+                    )
+                )
+            }
+        }
+    }.getOrDefault(defaultDeckCollections())
+
+    private fun defaultDeckCollections(): List<DeckCollectionItem> = listOf(
+        DeckCollectionItem(
+            id = "deck_1",
+            title = "UI Inspiration",
+            category = "Bookmarks",
+            itemCount = 12,
+            updatedAgoEn = "2 hours ago",
+            updatedAgoId = "2 jam lalu",
+            iconKey = "ui",
+            description = "Dynamic Island motion studies, clean card layouts & micro-interactions."
+        ),
+        DeckCollectionItem(
+            id = "deck_2",
+            title = "Programming",
+            category = "Notes",
+            itemCount = 8,
+            updatedAgoEn = "1 day ago",
+            updatedAgoId = "1 hari lalu",
+            iconKey = "code",
+            description = "Kotlin Jetpack Compose 120fps Canvas shaders, coroutines & MCP hooks."
+        ),
+        DeckCollectionItem(
+            id = "deck_3",
+            title = "Design System",
+            category = "Files",
+            itemCount = 15,
+            updatedAgoEn = "3 days ago",
+            updatedAgoId = "3 hari lalu",
+            iconKey = "palette",
+            description = "Pochi squircle tokens, pastel palettes, typography scale & icon grid."
+        ),
+        DeckCollectionItem(
+            id = "deck_4",
+            title = "AI Research",
+            category = "Notes",
+            itemCount = 6,
+            updatedAgoEn = "5 days ago",
+            updatedAgoId = "5 hari lalu",
+            iconKey = "doc",
+            description = "On-device voice intent parsing, Gemini & Claude agent prompts."
+        )
+    )
 
     fun setLanguage(context: Context, lang: PochiLang) {
         _langFlow.value = lang
@@ -669,34 +814,69 @@ object PochiPrefs {
     private fun defaultSampleTasks(): List<TodayTask> = listOf(
         TodayTask(
             id = "sample_1",
-            title = "Sarapan pagi & minum air putih",
-            timeLabel = "7:30 AM",
-            hour24 = 7,
-            minute = 30,
-            dayIndex = 0,
-            isDone = false,
-            isOverdue = false,
-            isHighPriority = true
-        ),
-        TodayTask(
-            id = "sample_2",
-            title = "Fokus kerja / tugas utama hari ini",
-            timeLabel = "10:00 AM",
+            title = "Check emails",
+            timeLabel = "10:00",
             hour24 = 10,
             minute = 0,
             dayIndex = 0,
-            isDone = false,
-            isOverdue = false
+            isDone = true,
+            isOverdue = false,
+            isHighPriority = false,
+            notes = "Review inbox, reply to priority messages and clear notifications.",
+            subtasks = listOf(
+                TaskSubtask("st_1", "Check team updates", true),
+                TaskSubtask("st_2", "Reply to client inquiry", true)
+            )
+        ),
+        TodayTask(
+            id = "sample_2",
+            title = "Study UI Design",
+            timeLabel = "14:00",
+            hour24 = 14,
+            minute = 0,
+            dayIndex = 0,
+            isDone = true,
+            isOverdue = false,
+            isHighPriority = true,
+            notes = "Learn modern UI/UX design and create prototype for Pochi app.",
+            subtasks = listOf(
+                TaskSubtask("st_3", "Watch tutorial", true),
+                TaskSubtask("st_4", "Create mockup", false),
+                TaskSubtask("st_5", "Review design", false)
+            )
         ),
         TodayTask(
             id = "sample_3",
-            title = "Olahraga ringan / jalan sore",
-            timeLabel = "4:30 PM",
+            title = "Build Pochi App",
+            timeLabel = "16:00",
             hour24 = 16,
-            minute = 30,
+            minute = 0,
             dayIndex = 0,
-            isDone = true,
-            isOverdue = false
+            isDone = false,
+            isOverdue = false,
+            isHighPriority = true,
+            notes = "Implement Welcome Onboarding, Home, Agent, Focus, Deck & 120fps Dynamic Island.",
+            subtasks = listOf(
+                TaskSubtask("st_6", "Design Pochi squircle icon & eyes", true),
+                TaskSubtask("st_7", "Build 4-tab navigation & onboarding", true),
+                TaskSubtask("st_8", "Test voice listening & auto weather", false)
+            )
+        ),
+        TodayTask(
+            id = "sample_4",
+            title = "Workout",
+            timeLabel = "19:00",
+            hour24 = 19,
+            minute = 0,
+            dayIndex = 0,
+            isDone = false,
+            isOverdue = false,
+            isHighPriority = false,
+            notes = "Evening run, stretching & finish 8 glasses of water.",
+            subtasks = listOf(
+                TaskSubtask("st_9", "Warm up 5 mins", false),
+                TaskSubtask("st_10", "Cardio 20 mins", false)
+            )
         )
     )
 
@@ -704,6 +884,16 @@ object PochiPrefs {
         _tasksFlow.value = tasks
         val arr = JSONArray()
         tasks.forEach { t ->
+            val subArr = JSONArray()
+            t.subtasks.forEach { st ->
+                subArr.put(
+                    JSONObject().apply {
+                        put("id", st.id)
+                        put("title", st.title)
+                        put("isDone", st.isDone)
+                    }
+                )
+            }
             arr.put(
                 JSONObject().apply {
                     put("id", t.id)
@@ -715,6 +905,8 @@ object PochiPrefs {
                     put("isDone", t.isDone)
                     put("isOverdue", t.isOverdue)
                     put("isHighPriority", t.isHighPriority)
+                    put("notes", t.notes)
+                    put("subtasks", subArr)
                 }
             )
         }
@@ -726,6 +918,21 @@ object PochiPrefs {
         buildList {
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
+                val subArr = obj.optJSONArray("subtasks")
+                val subtasks = buildList {
+                    if (subArr != null) {
+                        for (j in 0 until subArr.length()) {
+                            val sObj = subArr.getJSONObject(j)
+                            add(
+                                TaskSubtask(
+                                    id = sObj.optString("id", "st_${i}_$j"),
+                                    title = sObj.optString("title", ""),
+                                    isDone = sObj.optBoolean("isDone", false)
+                                )
+                            )
+                        }
+                    }
+                }
                 add(
                     TodayTask(
                         id = obj.optString("id", "task_$i"),
@@ -736,7 +943,9 @@ object PochiPrefs {
                         dayIndex = obj.optInt("dayIndex", 0),
                         isDone = obj.optBoolean("isDone", false),
                         isOverdue = obj.optBoolean("isOverdue", false),
-                        isHighPriority = obj.optBoolean("isHighPriority", false)
+                        isHighPriority = obj.optBoolean("isHighPriority", false),
+                        notes = obj.optString("notes", ""),
+                        subtasks = subtasks
                     )
                 )
             }
