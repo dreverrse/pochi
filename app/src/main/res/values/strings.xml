@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="pochi_accessibility_description">Membaca teks di layar agar Pochi bisa memberi saran singkat untuk Tuan Andre. Hanya aktif jika diizinkan dan bisa dimatikan kapan saja.</string>
+    <string name="app_name">Pochi</string>
+    <string name="app_description">Your AI Companion for Today, Agent, Focus &amp; Deck. Featuring a 120fps Dynamic Island status-bar overlay and smart local-first assistance.</string>
+    <string name="pochi_accessibility_description">Membaca konteks layar agar Pochi bisa memberi saran dan aksi cepat secara instan. Hanya aktif jika diizinkan dan dapat dimatikan kapan saja.</string>
 </resources>

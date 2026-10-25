@@ -29,6 +29,26 @@
 
 </div>
 
+## 📦 Package Release & Specifications
+
+| Parameter | Specification |
+| :--- | :--- |
+| **Application Name** | **Pochi** ✦ |
+| **Package Name / ID** | `com.pochi.assistant` |
+| **Official Version** | `v1.0.0` (VersionCode: `1`) |
+| **Release Artifact** | [`Pochi-1.0.0.apk`](https://github.com/dreverrse/pochi/releases) |
+| **Package Checksum** | SHA-256 Verified (`.apk.sha256` attached in Releases) |
+| **Target Architectures** | Universal (`arm64-v8a`, `armeabi-v7a`, `x86_64`) |
+| **Minimum Android** | Android 8.0 (API 26 - Oreo) |
+| **Target Android** | Android 14+ (API 34) • *Tested on Android 16 (Nubia Neo 3 GT 5G)* |
+| **UI Framework** | 100% Kotlin Jetpack Compose (120fps Dynamic Island) |
+| **Author & Sole Collaborator** | [**@dreverrse**](https://github.com/dreverrse) |
+
+### 📝 Package Description
+> **Pochi** is an all-in-one smart Android companion and dynamic productivity layer. It transforms your Android status bar into an interactive, 120fps floating Dynamic Island assistant that reacts to your daily workflow. Built with a local-first, privacy-respecting architecture, Pochi unifies smart daily scheduling (**Today**), hardware & cloud assistant actions (**Agent**), focus timers with Pomodoro flow (**Focus**), and personal asset organization (**Deck**) into one fluid, cohesive experience.
+
+---
+
 ## ✦ Highlights & Core Features
 
 ### 1. ⚡ 120fps Floating Dynamic Island (Status-Bar Flush)
