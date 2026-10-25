@@ -458,23 +458,13 @@ object PochiAgent {
                 }
                 "CALL" -> {
                     val number = PochiContacts.resolveNumber(context, action.argument)
-                    if (number.isBlank()) {
-                        val intent = Intent(Intent.ACTION_DIAL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                        "Dialer telepon dibuka."
+                    val intent = if (number.isBlank()) {
+                        Intent(Intent.ACTION_DIAL)
                     } else {
-                        val hasCallPerm = ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.CALL_PHONE
-                        ) == PackageManager.PERMISSION_GRANTED
-                        val actionType = if (hasCallPerm) Intent.ACTION_CALL else Intent.ACTION_DIAL
-                        val intent = Intent(
-                            actionType,
-                            Uri.fromParts("tel", number, null)
-                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                        if (hasCallPerm) "Menghubungi $number..." else "Dialer dibuka untuk $number."
-                    }
+                        Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number, null))
+                    }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    if (number.isBlank()) "Dialer telepon dibuka." else "Membuka dialer untuk $number."
                 }
                 "SMS" -> {
                     val target = action.argument.substringBefore("|").trim()

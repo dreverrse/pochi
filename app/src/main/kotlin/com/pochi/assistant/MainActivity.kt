@@ -3827,9 +3827,7 @@ fun PochiSettingsScreen(
                                 permLauncher.launch(
                                     arrayOf(
                                         Manifest.permission.RECORD_AUDIO,
-                                        Manifest.permission.CALL_PHONE,
                                         Manifest.permission.READ_CONTACTS,
-                                        Manifest.permission.SEND_SMS,
                                         Manifest.permission.ACCESS_COARSE_LOCATION,
                                         Manifest.permission.ACCESS_FINE_LOCATION
                                     )
@@ -3837,7 +3835,7 @@ fun PochiSettingsScreen(
                             }
                     ) {
                         Text(
-                            text = "🎙️ 📍 📞 Grant Mic, Location & Call Permissions",
+                            text = "🎙️ 📍 Grant Mic, Contacts & Location",
                             fontFamily = fonts.titleFamily,
                             fontSize = 13.5.sp,
                             modifier = Modifier.padding(14.dp)

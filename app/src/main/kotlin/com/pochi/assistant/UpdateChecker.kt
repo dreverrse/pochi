@@ -135,25 +135,17 @@ object UpdateChecker {
         }
     }
 
+    fun openReleasePage(context: Context) {
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("https://github.com/$REPO/releases/latest")
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    }
+
     fun installApk(context: Context, apkFile: File) {
         if (!apkFile.exists()) {
-            Toast.makeText(context, "File pembaruan tidak ditemukan.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !context.packageManager.canRequestPackageInstalls()
-        ) {
-            Toast.makeText(
-                context,
-                "Izinkan 'Instal aplikasi tidak dikenal' untuk Pochi, lalu ketuk Pasang Sekarang",
-                Toast.LENGTH_LONG
-            ).show()
-            val intent = Intent(
-                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                Uri.parse("package:${context.packageName}")
-            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
+            openReleasePage(context)
             return
         }
 
@@ -169,12 +161,8 @@ object UpdateChecker {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(installIntent)
-        }.onFailure { e ->
-            Toast.makeText(
-                context,
-                "Gagal membuka pemasang paket: ${e.localizedMessage}",
-                Toast.LENGTH_LONG
-            ).show()
+        }.onFailure {
+            openReleasePage(context)
         }
     }
 
