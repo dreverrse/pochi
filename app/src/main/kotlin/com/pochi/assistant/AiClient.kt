@@ -18,12 +18,14 @@ enum class AiProvider(
 ) {
     GEMINI("Gemini", "gemini-2.5-flash", "AIza..."),
     OPENROUTER("OpenRouter", "openai/gpt-4o-mini", "sk-or-..."),
-    OPENCODE("OpenCode", "glm-5.3-flash", "API key OpenCode")
+    OPENCODE("OpenCode", "glm-5.3-flash", "API key OpenCode"),
+    INCEPTION("InceptionLabs", "mercury-3", "il_...")
 }
 
 object AiClient {
     private const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
     private const val OPENCODE_URL = "https://opencode.ai/inference/openai/v1/chat/completions"
+    private const val INCEPTION_URL = "https://api.inceptionlabs.ai/v1/chat/completions"
 
     suspend fun ask(
         provider: AiProvider,
@@ -69,6 +71,13 @@ object AiClient {
             )
             AiProvider.OPENCODE -> askOpenAiCompatible(
                 url = OPENCODE_URL,
+                apiKey = apiKey,
+                model = modelName,
+                prompt = fullPrompt,
+                referer = null
+            )
+            AiProvider.INCEPTION -> askOpenAiCompatible(
+                url = INCEPTION_URL,
                 apiKey = apiKey,
                 model = modelName,
                 prompt = fullPrompt,

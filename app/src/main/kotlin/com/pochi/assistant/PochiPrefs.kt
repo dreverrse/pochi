@@ -482,6 +482,7 @@ object PochiPrefs {
     private const val KEY_API = "gemini_api_key"
     private const val KEY_OPENROUTER = "openrouter_api_key"
     private const val KEY_OPENCODE = "opencode_api_key"
+    private const val KEY_INCEPTION = "inception_api_key"
     private const val KEY_NOTES = "pochi_saved_notes"
     private const val KEY_CITY = "pochi_weather_city"
     private const val KEY_OFFSET_X = "pochi_offset_x"
@@ -1123,6 +1124,7 @@ object PochiPrefs {
         AiProvider.GEMINI -> KEY_API
         AiProvider.OPENROUTER -> KEY_OPENROUTER
         AiProvider.OPENCODE -> KEY_OPENCODE
+        AiProvider.INCEPTION -> KEY_INCEPTION
     }
 
     private fun modelName(provider: AiProvider): String {

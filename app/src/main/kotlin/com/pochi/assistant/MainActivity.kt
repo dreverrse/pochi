@@ -4505,7 +4505,10 @@ fun PochiSettingsScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         AiProvider.entries.forEach { prov ->
                             val active = selectedProvider == prov
                             Surface(
@@ -4517,8 +4520,9 @@ fun PochiSettingsScreen(
                                 }
                             ) {
                                 Text(
-                                    text = prov.name,
+                                    text = prov.label,
                                     fontSize = 12.sp,
+                                    fontFamily = fonts.titleFamily,
                                     color = if (active) palette.pillActiveText else palette.textSecondary,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
@@ -4537,7 +4541,18 @@ fun PochiSettingsScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .background(palette.pillInactiveBg)
-                            .padding(14.dp)
+                            .padding(14.dp),
+                        decorationBox = { inner ->
+                            if (apiKeyInput.isEmpty()) {
+                                Text(
+                                    text = "API Key (${selectedProvider.keyHint})...",
+                                    fontFamily = fonts.monoFamily,
+                                    color = palette.textMuted,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            inner()
+                        }
                     )
                 }
             },

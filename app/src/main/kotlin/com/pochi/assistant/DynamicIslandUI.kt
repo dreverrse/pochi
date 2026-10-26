@@ -2515,9 +2515,9 @@ private fun TodayModuleView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -2526,7 +2526,7 @@ private fun TodayModuleView(
                 Text(
                     text = smartBanner.title,
                     color = accentAmber,
-                    fontSize = 12.sp,
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -2534,7 +2534,7 @@ private fun TodayModuleView(
                 Text(
                     text = smartBanner.subtitle,
                     color = textSecondary,
-                    fontSize = 10.sp,
+                    fontSize = 11.5.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2545,22 +2545,22 @@ private fun TodayModuleView(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(subtleDark)
-                    .border(1.dp, accentSky.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                    .border(1.dp, accentSky.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
                     .clickable { onAddWater() }
                     .padding(horizontal = 9.dp, vertical = 6.dp)
             ) {
                 Text(
                     text = "💧 $waterGlasses/8",
                     color = accentSky,
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "+",
                     color = Color.White,
-                    fontSize = 12.sp,
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
@@ -2570,9 +2570,9 @@ private fun TodayModuleView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -2591,21 +2591,21 @@ private fun TodayModuleView(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(3.dp),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable { onSelectDay(offset) }
                             .padding(horizontal = 3.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = dayLabel.take(1),
                             color = if (isSelected) Color.White else textSecondary,
-                            fontSize = 10.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                         // Kotak persegi panjang rounded (bukan lingkaran)
                         Box(
                             modifier = Modifier
                                 .size(width = 26.dp, height = 24.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(
                                     when {
                                         isSelected -> Color.White
@@ -2622,7 +2622,7 @@ private fun TodayModuleView(
                                     isToday -> Color.White
                                     else -> textPrimary
                                 },
-                                fontSize = 11.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
@@ -2650,7 +2650,7 @@ private fun TodayModuleView(
                     Text(
                         text = if (isId) "$remainingCount sisa" else "$remainingCount left",
                         color = textPrimary,
-                        fontSize = 12.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
@@ -2659,12 +2659,12 @@ private fun TodayModuleView(
                             else -> if (isId) "$doneCount beres" else "$doneCount done"
                         },
                         color = if (overdueCount > 0) accentAmber else accentEmerald,
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(28.dp)) {
-                    Canvas(modifier = Modifier.size(28.dp)) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp)) {
+                    Canvas(modifier = Modifier.size(40.dp)) {
                         val sw = 3.dp.toPx()
                         drawArc(
                             color = borderDark,
@@ -2701,16 +2701,16 @@ private fun TodayModuleView(
                 val active = taskFilter == filter
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(if (active) Color.White else surfaceDark)
-                        .border(1.dp, if (active) Color.White else borderDark, RoundedCornerShape(8.dp))
+                        .border(1.dp, if (active) Color.White else borderDark, RoundedCornerShape(14.dp))
                         .clickable { onSelectFilter(filter) }
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = label,
                         color = if (active) Color(0xFF0A0A0A) else textSecondary,
-                        fontSize = 11.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -2719,9 +2719,9 @@ private fun TodayModuleView(
             // Quick Auto-Routine Buttons
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(subtleDark)
-                    .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                    .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                     .clickable {
                         onQuickAddPresetTask(if (isId) "Sarapan sehat jam 7 pagi" else "Healthy breakfast at 7am")
                     }
@@ -2730,7 +2730,7 @@ private fun TodayModuleView(
                 Text(
                     text = if (isId) "+ Sarapan" else "+ Breakfast",
                     color = accentAmber,
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -2738,16 +2738,16 @@ private fun TodayModuleView(
             if (doneCount > 0) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(surfaceDark)
-                        .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                        .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                         .clickable { onClearCompleted() }
                         .padding(horizontal = 9.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = if (isId) "Hapus Selesai" else "Clear Done",
                         color = accentSky,
-                        fontSize = 11.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -2759,9 +2759,9 @@ private fun TodayModuleView(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 84.dp, max = 148.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(horizontal = 8.dp, vertical = 6.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(5.dp)
@@ -2780,7 +2780,7 @@ private fun TodayModuleView(
                             "No tasks yet. Type below (e.g. \"breakfast 7am, then 2pm meeting\")"
                         },
                         color = textSecondary,
-                        fontSize = 11.sp
+                        fontSize = 12.5.sp
                     )
                 }
             } else {
@@ -2789,8 +2789,8 @@ private fun TodayModuleView(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 40.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(subtleDark.copy(alpha = 0.7f))
                             .clickable { onToggleTask(task) }
                             .padding(horizontal = 10.dp, vertical = 7.dp),
@@ -2801,7 +2801,7 @@ private fun TodayModuleView(
                         Box(
                             modifier = Modifier
                                 .size(18.dp)
-                                .clip(RoundedCornerShape(5.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(if (task.isDone) accentEmerald else Color.Transparent)
                                 .border(
                                     width = 1.5.dp,
@@ -2810,7 +2810,7 @@ private fun TodayModuleView(
                                         isLate -> accentAmber
                                         else -> textSecondary
                                     },
-                                    shape = RoundedCornerShape(5.dp)
+                                    shape = RoundedCornerShape(8.dp)
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -2827,7 +2827,7 @@ private fun TodayModuleView(
                         Text(
                             text = task.title,
                             color = if (task.isDone) textSecondary else textPrimary,
-                            fontSize = 12.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.Medium,
                             textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None,
                             maxLines = 1,
@@ -2839,14 +2839,14 @@ private fun TodayModuleView(
                             Text(
                                 text = if (isId) "Telat" else "Overdue",
                                 color = accentAmber,
-                                fontSize = 10.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         } else if (task.timeLabel.isNotBlank()) {
                             Text(
                                 text = task.timeLabel,
                                 color = textSecondary,
-                                fontSize = 10.sp,
+                                fontSize = 11.5.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -2855,8 +2855,8 @@ private fun TodayModuleView(
                         if (!task.isDone) {
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(RoundedCornerShape(7.dp))
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(surfaceDark)
                                     .clickable { onStartFocusForTask(task) },
                                 contentAlignment = Alignment.Center
@@ -2872,8 +2872,8 @@ private fun TodayModuleView(
 
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(7.dp))
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(surfaceDark)
                                 .clickable { onDeleteTask(task) },
                             contentAlignment = Alignment.Center
@@ -2882,7 +2882,7 @@ private fun TodayModuleView(
                                 imageVector = Icons.Rounded.Close,
                                 contentDescription = "Delete",
                                 tint = textSecondary,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     }
@@ -2911,10 +2911,10 @@ private fun TodayModuleView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 42.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .heightIn(min = 50.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -2928,7 +2928,7 @@ private fun TodayModuleView(
             BasicTextField(
                 value = newTaskInput,
                 onValueChange = onNewTaskInputChange,
-                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                textStyle = TextStyle(color = textPrimary, fontSize = 13.5.sp),
                 cursorBrush = SolidColor(Color.White),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -2943,7 +2943,7 @@ private fun TodayModuleView(
                                 "Add schedule: \"breakfast 7am, then 2pm meeting\"..."
                             },
                             color = textSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -2954,7 +2954,7 @@ private fun TodayModuleView(
             Box(
                 modifier = Modifier
                     .height(30.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(Color.White)
                     .clickable { onSubmitTasks() }
                     .padding(horizontal = 12.dp),
@@ -2963,7 +2963,7 @@ private fun TodayModuleView(
                 Text(
                     text = if (isId) "Tambah" else "Add",
                     color = Color(0xFF0A0A0A),
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
@@ -2991,9 +2991,9 @@ private fun TodayProductivityChartCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(surfaceDark)
-            .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+            .border(1.dp, borderDark, RoundedCornerShape(16.dp))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -3005,13 +3005,13 @@ private fun TodayProductivityChartCard(
             Text(
                 text = if (isId) "📊 Grafik Produktivitas 7 Hari & Hidrasi" else "📊 7-Day Productivity & Hydration Chart",
                 color = textPrimary,
-                fontSize = 10.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = if (isId) "Air: $waterPct%" else "Water: $waterPct%",
                 color = accentSky,
-                fontSize = 10.sp,
+                fontSize = 11.5.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
             )
@@ -3057,7 +3057,7 @@ private fun TodayProductivityChartCard(
                     Text(
                         text = dayLabel.take(2),
                         color = if (isSel) Color.White else textSecondary,
-                        fontSize = 8.sp,
+                        fontSize = 9.5.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
@@ -3178,9 +3178,9 @@ private fun ChatAndVoiceModuleView(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(surfaceDark)
-                    .border(1.dp, accentSky.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                    .border(1.dp, accentSky.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
                     .padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -3197,7 +3197,7 @@ private fun ChatAndVoiceModuleView(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(subtleDark)
                                 .padding(horizontal = 10.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -3207,12 +3207,12 @@ private fun ChatAndVoiceModuleView(
                                 imageVector = Icons.Rounded.Search,
                                 contentDescription = null,
                                 tint = accentAmber,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                             BasicTextField(
                                 value = quickTargetInput,
                                 onValueChange = onQuickTargetChange,
-                                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                textStyle = TextStyle(color = textPrimary, fontSize = 13.5.sp),
                                 cursorBrush = SolidColor(accentAmber),
                                 singleLine = true,
                                 modifier = Modifier.weight(1f),
@@ -3221,7 +3221,7 @@ private fun ChatAndVoiceModuleView(
                                         Text(
                                             text = if (isId) "Cari dari ${installedApps.size} aplikasi di HP kamu..." else "Search ${installedApps.size} installed apps...",
                                             color = textSecondary,
-                                            fontSize = 11.sp
+                                            fontSize = 12.5.sp
                                         )
                                     }
                                     inner()
@@ -3237,16 +3237,16 @@ private fun ChatAndVoiceModuleView(
                             filteredApps.forEach { app ->
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(RoundedCornerShape(14.dp))
                                         .background(subtleDark)
-                                        .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                                        .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                                         .clickable { onLaunchAppDirect(app) }
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
                                     Text(
                                         text = "🚀 ${app.label}",
                                         color = textPrimary,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.5.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
@@ -3267,14 +3267,14 @@ private fun ChatAndVoiceModuleView(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(subtleDark)
                                     .padding(horizontal = 10.dp, vertical = 7.dp)
                             ) {
                                 BasicTextField(
                                     value = quickTargetInput,
                                     onValueChange = onQuickTargetChange,
-                                    textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                    textStyle = TextStyle(color = textPrimary, fontSize = 13.5.sp),
                                     cursorBrush = SolidColor(accentEmerald),
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
@@ -3283,7 +3283,7 @@ private fun ChatAndVoiceModuleView(
                                             Text(
                                                 text = if (isId) "Nama kontak atau nomor (0812...)..." else "Contact name or number...",
                                                 color = textSecondary,
-                                                fontSize = 11.sp
+                                                fontSize = 12.5.sp
                                             )
                                         }
                                         inner()
@@ -3294,7 +3294,7 @@ private fun ChatAndVoiceModuleView(
                             Box(
                                 modifier = Modifier
                                     .height(32.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(if (isCall) accentEmerald else if (isWa) Color(0xFF25D366) else accentSky)
                                     .clickable { onExecuteQuickComposer() }
                                     .padding(horizontal = 12.dp),
@@ -3304,7 +3304,7 @@ private fun ChatAndVoiceModuleView(
                                     imageVector = if (isCall) Icons.Rounded.Call else Icons.Rounded.Send,
                                     contentDescription = "Execute",
                                     tint = Color(0xFF0A0A0A),
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
                         }
@@ -3313,14 +3313,14 @@ private fun ChatAndVoiceModuleView(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(subtleDark)
                                     .padding(horizontal = 10.dp, vertical = 7.dp)
                             ) {
                                 BasicTextField(
                                     value = quickMessageInput,
                                     onValueChange = onQuickMessageChange,
-                                    textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                                    textStyle = TextStyle(color = textPrimary, fontSize = 13.5.sp),
                                     cursorBrush = SolidColor(accentSky),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -3331,7 +3331,7 @@ private fun ChatAndVoiceModuleView(
                                             Text(
                                                 text = if (isId) "Isi pesan yang ingin dikirim..." else "Message to send...",
                                                 color = textSecondary,
-                                                fontSize = 11.sp
+                                                fontSize = 12.5.sp
                                             )
                                         }
                                         inner()
@@ -3351,9 +3351,9 @@ private fun ChatAndVoiceModuleView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Color(0xFFEF4444).copy(alpha = 0.16f))
-                    .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(10.dp))
+                    .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(16.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -3370,7 +3370,7 @@ private fun ChatAndVoiceModuleView(
                         else "Listening... Say e.g. \"Open WhatsApp\" or \"Call Mom\""
                     },
                     color = textPrimary,
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -3384,9 +3384,9 @@ private fun ChatAndVoiceModuleView(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 104.dp, max = 160.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(horizontal = 8.dp, vertical = 8.dp)
                 .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -3399,12 +3399,12 @@ private fun ChatAndVoiceModuleView(
                     Column(
                         modifier = Modifier
                             .widthIn(max = 275.dp)
-                            .clip(RoundedCornerShape(9.dp))
+                            .clip(RoundedCornerShape(15.dp))
                             .background(if (msg.isUser) accentIndigo else subtleDark)
                             .border(
                                 1.dp,
                                 if (msg.isUser) accentIndigo else borderDark,
-                                RoundedCornerShape(9.dp)
+                                RoundedCornerShape(15.dp)
                             )
                             .padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -3417,20 +3417,20 @@ private fun ChatAndVoiceModuleView(
                                 Text(
                                     text = "POCHI • ${msg.actionBadge}",
                                     color = accentAmber,
-                                    fontSize = 9.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
                                     text = msg.timeLabel,
                                     color = textSecondary,
-                                    fontSize = 9.sp
+                                    fontSize = 10.5.sp
                                 )
                             }
                         }
                         Text(
                             text = msg.text,
                             color = Color.White,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -3440,7 +3440,7 @@ private fun ChatAndVoiceModuleView(
             if (isAiThinking) {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(9.dp))
+                        .clip(RoundedCornerShape(15.dp))
                         .background(subtleDark)
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -3450,12 +3450,12 @@ private fun ChatAndVoiceModuleView(
                         imageVector = Icons.Rounded.AutoAwesome,
                         contentDescription = null,
                         tint = accentSky,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                     Text(
                         text = if (isId) "Pochi sedang memproses..." else "Pochi is thinking...",
                         color = textSecondary,
-                        fontSize = 11.sp
+                        fontSize = 12.5.sp
                     )
                 }
             }
@@ -3465,10 +3465,10 @@ private fun ChatAndVoiceModuleView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 42.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .heightIn(min = 50.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -3476,13 +3476,13 @@ private fun ChatAndVoiceModuleView(
             // Microphone Voice Button (Bicara dengan Pochi)
             Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(if (isListeningVoice) Color(0xFFEF4444) else subtleDark)
                     .border(
                         1.dp,
                         if (isListeningVoice) Color(0xFFEF4444) else accentAmber.copy(alpha = 0.6f),
-                        RoundedCornerShape(8.dp)
+                        RoundedCornerShape(14.dp)
                     )
                     .clickable { onToggleVoiceMic() },
                 contentAlignment = Alignment.Center
@@ -3498,7 +3498,7 @@ private fun ChatAndVoiceModuleView(
             BasicTextField(
                 value = chatInput,
                 onValueChange = onChatInputChange,
-                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                textStyle = TextStyle(color = textPrimary, fontSize = 13.5.sp),
                 cursorBrush = SolidColor(Color.White),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -3513,7 +3513,7 @@ private fun ChatAndVoiceModuleView(
                                 "Chat / voice: \"open wa\", \"call Mom\", \"sms Budi: hi\"..."
                             },
                             color = textSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -3525,8 +3525,8 @@ private fun ChatAndVoiceModuleView(
             // Send Icon Button
             Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(Color.White)
                     .clickable { onSendChat() },
                 contentAlignment = Alignment.Center
@@ -3535,7 +3535,7 @@ private fun ChatAndVoiceModuleView(
                     imageVector = Icons.Rounded.Send,
                     contentDescription = "Send",
                     tint = Color(0xFF0A0A0A),
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(19.dp)
                 )
             }
         }
@@ -3555,9 +3555,9 @@ private fun QuickConnectActionChip(
     Row(
         modifier = Modifier
             .height(30.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(if (active) accentColor else surfaceDark)
-            .border(1.dp, if (active) accentColor else borderDark, RoundedCornerShape(8.dp))
+            .border(1.dp, if (active) accentColor else borderDark, RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -3567,12 +3567,12 @@ private fun QuickConnectActionChip(
             imageVector = icon,
             contentDescription = label,
             tint = if (active) Color(0xFF0A0A0A) else accentColor,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(17.dp)
         )
         Text(
             text = label,
             color = if (active) Color(0xFF0A0A0A) else Color(0xFFF8FAFC),
-            fontSize = 11.sp,
+            fontSize = 12.5.sp,
             fontWeight = FontWeight.Bold
         )
     }
@@ -3657,9 +3657,9 @@ private fun WeatherAndPrayerModuleView(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(11.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -3676,7 +3676,7 @@ private fun WeatherAndPrayerModuleView(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(RoundedCornerShape(9.dp))
+                            .clip(RoundedCornerShape(15.dp))
                             .background(subtleDark),
                         contentAlignment = Alignment.Center
                     ) {
@@ -3701,19 +3701,19 @@ private fun WeatherAndPrayerModuleView(
                             Text(
                                 text = if (isId) baseWeather.conditionId else baseWeather.conditionEn,
                                 color = accentSky,
-                                fontSize = 11.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(5.dp))
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(accentEmerald.copy(alpha = 0.16f))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = "📍 ${baseWeather.city} ($locationSourceLabel)",
                                     color = accentEmerald,
-                                    fontSize = 9.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -3727,7 +3727,7 @@ private fun WeatherAndPrayerModuleView(
                                 "Auto-located • Humidity $humidity% • Wind $windKmh km/h"
                             },
                             color = textSecondary,
-                            fontSize = 10.sp,
+                            fontSize = 11.5.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -3738,9 +3738,9 @@ private fun WeatherAndPrayerModuleView(
                 Box(
                     modifier = Modifier
                         .size(34.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(subtleDark)
-                        .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                        .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                         .clickable { onRefreshWeather() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -3770,9 +3770,9 @@ private fun WeatherAndPrayerModuleView(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(11.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
@@ -3788,7 +3788,7 @@ private fun WeatherAndPrayerModuleView(
                         "🕌 Prayer Schedule (${baseWeather.city})"
                     },
                     color = textPrimary,
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
@@ -3798,7 +3798,7 @@ private fun WeatherAndPrayerModuleView(
                         "Next: ${upcomingPrayer.nameEn} ${upcomingPrayer.formatted} ($remText)"
                     },
                     color = accentEmerald,
-                    fontSize = 10.sp,
+                    fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -3816,7 +3816,7 @@ private fun WeatherAndPrayerModuleView(
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(
                                 when {
                                     isNext -> accentEmerald.copy(alpha = 0.22f)
@@ -3827,7 +3827,7 @@ private fun WeatherAndPrayerModuleView(
                             .border(
                                 1.dp,
                                 if (isNext) accentEmerald else borderDark,
-                                RoundedCornerShape(8.dp)
+                                RoundedCornerShape(14.dp)
                             )
                             .clickable { onSchedulePrayerTask(item) }
                             .padding(vertical = 7.dp, horizontal = 3.dp)
@@ -3839,14 +3839,14 @@ private fun WeatherAndPrayerModuleView(
                                 isPassed -> textSecondary.copy(alpha = 0.65f)
                                 else -> textSecondary
                             },
-                            fontSize = 9.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1
                         )
                         Text(
                             text = item.formatted,
                             color = if (isPassed) textSecondary else textPrimary,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -3861,7 +3861,7 @@ private fun WeatherAndPrayerModuleView(
                                 isPassed -> textSecondary.copy(alpha = 0.6f)
                                 else -> accentSky
                             },
-                            fontSize = 8.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1
                         )
@@ -3891,9 +3891,9 @@ private fun WeatherHourlyChartCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(subtleDark)
-            .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+            .border(1.dp, borderDark, RoundedCornerShape(14.dp))
             .padding(horizontal = 9.dp, vertical = 7.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -3905,13 +3905,13 @@ private fun WeatherHourlyChartCard(
             Text(
                 text = if (isId) "📈 Grafik Suhu Harian (06:00–21:00)" else "📈 Hourly Temperature Chart (06:00–21:00)",
                 color = textSecondary,
-                fontSize = 9.sp,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = "Min ${temps.minOrNull() ?: 24}° • Max ${temps.maxOrNull() ?: 32}°",
                 color = accentAmber,
-                fontSize = 9.sp,
+                fontSize = 10.5.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
             )
@@ -3983,14 +3983,14 @@ private fun WeatherHourlyChartCard(
                     Text(
                         text = "${tempVal}°",
                         color = textPrimary,
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
                         text = hourLabel,
                         color = textSecondary,
-                        fontSize = 8.sp,
+                        fontSize = 9.5.sp,
                         fontFamily = FontFamily.Monospace
                     )
                 }
@@ -4038,9 +4038,9 @@ private fun WalletModuleView(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -4053,7 +4053,7 @@ private fun WalletModuleView(
                     Text(
                         text = if (isId) "Pengeluaran Hari Ini" else "Today's Spending",
                         color = textSecondary,
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
@@ -4076,12 +4076,12 @@ private fun WalletModuleView(
                                 if (isId) "Sisa: ${NaturalExpenseParser.formatRupiah(remainingBudgetRp)}" else "Left: ${NaturalExpenseParser.formatRupiah(remainingBudgetRp)}"
                             },
                             color = if (isOverBudget) Color(0xFFF87171) else accentEmerald,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(subtleDark)
                                 .clickable { onToggleEditBudget() }
                                 .padding(horizontal = 7.dp, vertical = 3.dp)
@@ -4089,7 +4089,7 @@ private fun WalletModuleView(
                             Text(
                                 text = if (isEditingBudget) (if (isId) "Simpan" else "Save") else (if (isId) "Atur" else "Target"),
                                 color = accentSky,
-                                fontSize = 10.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -4097,7 +4097,7 @@ private fun WalletModuleView(
                     Text(
                         text = if (isId) "Batas: ${NaturalExpenseParser.formatRupiah(dailyBudgetRp)}/hari" else "Limit: ${NaturalExpenseParser.formatRupiah(dailyBudgetRp)}/day",
                         color = textSecondary,
-                        fontSize = 10.sp
+                        fontSize = 11.5.sp
                     )
                 }
             }
@@ -4106,7 +4106,7 @@ private fun WalletModuleView(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(subtleDark)
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -4115,12 +4115,12 @@ private fun WalletModuleView(
                     Text(
                         text = if (isId) "Batas Harian (ribu Rp):" else "Daily Limit (k Rp):",
                         color = textSecondary,
-                        fontSize = 11.sp
+                        fontSize = 12.5.sp
                     )
                     BasicTextField(
                         value = budgetDraft,
                         onValueChange = onBudgetDraftChange,
-                        textStyle = TextStyle(color = accentSky, fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                        textStyle = TextStyle(color = accentSky, fontSize = 13.5.sp, fontWeight = FontWeight.Bold),
                         cursorBrush = SolidColor(accentSky),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
@@ -4167,7 +4167,7 @@ private fun WalletModuleView(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(7.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(subtleDark)
                                 .padding(horizontal = 6.dp, vertical = 5.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -4180,14 +4180,14 @@ private fun WalletModuleView(
                                 Text(
                                     text = cat,
                                     color = badgeColor,
-                                    fontSize = 9.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1
                                 )
                                 Text(
                                     text = "$pct%",
                                     color = textSecondary,
-                                    fontSize = 8.sp,
+                                    fontSize = 9.5.sp,
                                     fontFamily = FontFamily.Monospace
                                 )
                             }
@@ -4208,7 +4208,7 @@ private fun WalletModuleView(
                             Text(
                                 text = "${amt / 1000}rb",
                                 color = textPrimary,
-                                fontSize = 9.sp,
+                                fontSize = 10.5.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -4233,13 +4233,13 @@ private fun WalletModuleView(
             ).forEach { (label, amt, cat) ->
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(surfaceDark)
-                        .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                        .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                         .clickable { onQuickAddExpense(label.substringAfter(" "), amt, cat) }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Text(label, color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(label, color = textPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -4253,16 +4253,16 @@ private fun WalletModuleView(
             ).forEach { (walletName, pkgs) ->
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(subtleDark)
-                        .border(1.dp, accentSky.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .border(1.dp, accentSky.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
                         .clickable { onOpenPaymentApp(walletName, pkgs) }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "💳 $walletName",
                         color = accentSky,
-                        fontSize = 11.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -4274,9 +4274,9 @@ private fun WalletModuleView(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 72.dp, max = 128.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(horizontal = 8.dp, vertical = 6.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(5.dp)
@@ -4291,7 +4291,7 @@ private fun WalletModuleView(
                     Text(
                         text = if (isId) "Belum ada catatan pengeluaran hari ini." else "No expenses recorded today.",
                         color = textSecondary,
-                        fontSize = 11.sp
+                        fontSize = 12.5.sp
                     )
                 }
             } else {
@@ -4299,7 +4299,7 @@ private fun WalletModuleView(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(subtleDark.copy(alpha = 0.7f))
                             .padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -4307,21 +4307,21 @@ private fun WalletModuleView(
                     ) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(surfaceDark)
                                 .padding(horizontal = 7.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = item.category,
                                 color = accentAmber,
-                                fontSize = 10.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                         Text(
                             text = item.title,
                             color = textPrimary,
-                            fontSize = 12.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -4330,14 +4330,14 @@ private fun WalletModuleView(
                         Text(
                             text = NaturalExpenseParser.formatRupiah(item.amountRp),
                             color = accentEmerald,
-                            fontSize = 12.sp,
+                            fontSize = 13.5.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold
                         )
                         Box(
                             modifier = Modifier
                                 .size(24.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(surfaceDark)
                                 .clickable { onDeleteExpense(item) },
                             contentAlignment = Alignment.Center
@@ -4346,7 +4346,7 @@ private fun WalletModuleView(
                                 imageVector = Icons.Rounded.Close,
                                 contentDescription = "Delete",
                                 tint = textSecondary,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     }
@@ -4358,10 +4358,10 @@ private fun WalletModuleView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 42.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .heightIn(min = 50.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -4375,7 +4375,7 @@ private fun WalletModuleView(
             BasicTextField(
                 value = expenseInput,
                 onValueChange = onExpenseInputChange,
-                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                textStyle = TextStyle(color = textPrimary, fontSize = 13.5.sp),
                 cursorBrush = SolidColor(accentEmerald),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -4386,7 +4386,7 @@ private fun WalletModuleView(
                         Text(
                             text = if (isId) "Catat cepat: \"makan siang 25rb\" atau \"kopi 18k\"..." else "Quick log: \"lunch 25k\" or \"coffee 18k\"...",
                             color = textSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -4397,7 +4397,7 @@ private fun WalletModuleView(
             Box(
                 modifier = Modifier
                     .height(30.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(accentEmerald)
                     .clickable { onSubmitExpense() }
                     .padding(horizontal = 12.dp),
@@ -4406,7 +4406,7 @@ private fun WalletModuleView(
                 Text(
                     text = if (isId) "Catat" else "Save",
                     color = Color(0xFF0A0A0A),
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
@@ -4461,10 +4461,10 @@ private fun FocusModuleView(
                     val active = phase == pomodoroPhase
                     Box(
                         modifier = Modifier
-                            .heightIn(min = 32.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .heightIn(min = 42.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(if (active) Color.White else surfaceDark)
-                            .border(1.dp, if (active) Color.White else borderDark, RoundedCornerShape(8.dp))
+                            .border(1.dp, if (active) Color.White else borderDark, RoundedCornerShape(14.dp))
                             .clickable { onSelectPhase(phase) }
                             .padding(horizontal = 11.dp, vertical = 5.dp),
                         contentAlignment = Alignment.Center
@@ -4472,7 +4472,7 @@ private fun FocusModuleView(
                         Text(
                             text = phase.label(lang),
                             color = if (active) Color(0xFF0A0A0A) else textSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -4482,7 +4482,7 @@ private fun FocusModuleView(
             Text(
                 text = if (isId) "🔥 $completedSessions sesi" else "🔥 $completedSessions sessions",
                 color = accentAmber,
-                fontSize = 11.sp,
+                fontSize = 12.5.sp,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -4491,9 +4491,9 @@ private fun FocusModuleView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(10.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(16.dp))
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -4537,7 +4537,7 @@ private fun FocusModuleView(
                     Text(
                         text = linkedTask?.title ?: (if (isId) "Sesi Fokus Produktif" else "Deep Focus Session"),
                         color = textPrimary,
-                        fontSize = 12.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -4546,7 +4546,7 @@ private fun FocusModuleView(
                     if (linkedTask != null) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(7.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(accentEmerald.copy(alpha = 0.2f))
                                 .clickable { onCompleteLinkedTask(linkedTask) }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -4554,7 +4554,7 @@ private fun FocusModuleView(
                             Text(
                                 text = if (isId) "✓ Selesai" else "✓ Done",
                                 color = accentEmerald,
-                                fontSize = 10.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -4566,8 +4566,8 @@ private fun FocusModuleView(
                         val selected = preset == durationMinutes
                         Box(
                             modifier = Modifier
-                                .heightIn(min = 30.dp)
-                                .clip(RoundedCornerShape(7.dp))
+                                .heightIn(min = 40.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(if (selected) Color.White else subtleDark)
                                 .clickable { onSelectPreset(preset) }
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
@@ -4576,7 +4576,7 @@ private fun FocusModuleView(
                             Text(
                                 text = "${preset}m",
                                 color = if (selected) Color(0xFF0A0A0A) else textSecondary,
-                                fontSize = 11.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
@@ -4587,8 +4587,8 @@ private fun FocusModuleView(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 38.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .heightIn(min = 46.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(accentAmber)
                             .clickable { onToggleStartPause() }
                             .padding(vertical = 8.dp),
@@ -4600,16 +4600,16 @@ private fun FocusModuleView(
                                 else -> if (isId) "Mulai Fokus" else "Start Focus"
                             },
                             color = Color(0xFF0A0A0A),
-                            fontSize = 12.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
                     }
                     Box(
                         modifier = Modifier
-                            .heightIn(min = 38.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .heightIn(min = 46.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(subtleDark)
-                            .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                            .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                             .clickable { onReset() }
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center
@@ -4617,7 +4617,7 @@ private fun FocusModuleView(
                         Text(
                             text = if (isId) "Ulang" else "Reset",
                             color = textPrimary,
-                            fontSize = 12.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -4636,23 +4636,23 @@ private fun FocusModuleView(
                 Text(
                     text = if (isId) "Target:" else "Task:",
                     color = textSecondary,
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 tasks.take(6).forEach { t ->
                     val active = (linkedTask?.id == t.id)
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(if (active) subtleDark else surfaceDark)
-                            .border(1.dp, if (active) Color.White.copy(alpha = 0.5f) else borderDark, RoundedCornerShape(8.dp))
+                            .border(1.dp, if (active) Color.White.copy(alpha = 0.5f) else borderDark, RoundedCornerShape(14.dp))
                             .clickable { onSelectTask(t.id) }
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
                             text = t.title.take(22),
                             color = if (active) Color.White else textSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -4793,10 +4793,10 @@ private fun DeckModuleView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 38.dp)
-                .clip(RoundedCornerShape(9.dp))
+                .heightIn(min = 46.dp)
+                .clip(RoundedCornerShape(15.dp))
                 .background(surfaceDark)
-                .border(1.dp, borderDark, RoundedCornerShape(9.dp))
+                .border(1.dp, borderDark, RoundedCornerShape(15.dp))
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -4805,12 +4805,12 @@ private fun DeckModuleView(
                 imageVector = Icons.Rounded.Search,
                 contentDescription = null,
                 tint = accentAmber,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(19.dp)
             )
             BasicTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
-                textStyle = TextStyle(color = textPrimary, fontSize = 12.sp),
+                textStyle = TextStyle(color = textPrimary, fontSize = 13.5.sp),
                 cursorBrush = SolidColor(accentAmber),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
@@ -4825,7 +4825,7 @@ private fun DeckModuleView(
                         Text(
                             text = if (isId) "Cari & buka dari ${installedApps.size} aplikasi di HP..." else "Search & open from ${installedApps.size} installed apps...",
                             color = textSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -4839,7 +4839,7 @@ private fun DeckModuleView(
                     contentDescription = "Clear",
                     tint = textSecondary,
                     modifier = Modifier
-                        .size(16.dp)
+                        .size(19.dp)
                         .clickable { onSearchQueryChange("") }
                 )
             }
@@ -4853,9 +4853,9 @@ private fun DeckModuleView(
         ) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(if (showAllApps) accentIndigo.copy(alpha = 0.22f) else surfaceDark)
-                    .border(1.dp, if (showAllApps) accentIndigo else borderDark, RoundedCornerShape(8.dp))
+                    .border(1.dp, if (showAllApps) accentIndigo else borderDark, RoundedCornerShape(14.dp))
                     .clickable { onToggleShowAllApps() }
                     .padding(horizontal = 9.dp, vertical = 5.dp)
             ) {
@@ -4866,7 +4866,7 @@ private fun DeckModuleView(
                         if (isId) "Tampilkan Semua (${installedApps.size})" else "Show All (${installedApps.size})"
                     },
                     color = if (showAllApps) Color.White else accentAmber,
-                    fontSize = 10.sp,
+                    fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -4874,9 +4874,9 @@ private fun DeckModuleView(
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(surfaceDark)
-                        .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                        .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                         .clickable { onToggleFlushStatusBar() }
                         .padding(horizontal = 8.dp, vertical = 5.dp)
                 ) {
@@ -4887,28 +4887,28 @@ private fun DeckModuleView(
                             if (isId) "Melayang" else "Floating"
                         },
                         color = accentEmerald,
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(surfaceDark)
-                        .border(1.dp, borderDark, RoundedCornerShape(8.dp))
+                        .border(1.dp, borderDark, RoundedCornerShape(14.dp))
                         .clickable { onToggleCustomize() }
                         .padding(horizontal = 8.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = if (isCustomizing) (if (isId) "Selesai" else "Done") else (if (isId) "+ Pin" else "+ Pin"),
                         color = Color.White,
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color(0xFFEF4444).copy(alpha = 0.16f))
                         .clickable { onActionPowerOff() }
                         .padding(horizontal = 8.dp, vertical = 5.dp)
@@ -4916,7 +4916,7 @@ private fun DeckModuleView(
                     Text(
                         text = if (isId) "Off" else "Off",
                         color = Color(0xFFF87171),
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -4944,12 +4944,12 @@ private fun DeckModuleView(
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 60.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(if (isCustomizing && isPinned) accentIndigo.copy(alpha = 0.25f) else surfaceDark)
                                 .border(
                                     1.dp,
                                     if (isCustomizing && isPinned) accentIndigo else borderDark,
-                                    RoundedCornerShape(10.dp)
+                                    RoundedCornerShape(16.dp)
                                 )
                                 .clickable {
                                     if (isCustomizing) {
@@ -4963,14 +4963,14 @@ private fun DeckModuleView(
                             Box(
                                 modifier = Modifier
                                     .size(width = 32.dp, height = 28.dp)
-                                    .clip(RoundedCornerShape(7.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(subtleDark),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = app.label.take(2).uppercase(Locale.getDefault()),
                                     color = textPrimary,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }
@@ -4978,7 +4978,7 @@ private fun DeckModuleView(
                             Text(
                                 text = app.label,
                                 color = textPrimary,
-                                fontSize = 10.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -5119,75 +5119,101 @@ private fun CompactMediaBar(
     onPlayPause: () -> Unit,
     onNext: () -> Unit
 ) {
-    Row(
+    // Podcasts / Spotify style live-activity card: artwork tile + title, then a big colorful control bar
+    val mediaPurple = Color(0xFFBF5AF2)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 40.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(surfaceDark)
-            .border(1.dp, borderDark, RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(
-            imageVector = Icons.Rounded.GraphicEq,
-            contentDescription = null,
-            tint = accentIndigo,
-            modifier = Modifier.size(17.dp)
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = if (media.artist.isNotBlank()) "${media.title} — ${media.artist}" else media.title,
-                color = textPrimary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(7.dp))
-                .clickable { onPrev() },
-            contentAlignment = Alignment.Center
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = Icons.Rounded.SkipPrevious,
-                contentDescription = "Previous",
-                tint = textPrimary,
-                modifier = Modifier.size(18.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        Brush.linearGradient(listOf(Color(0xFFBF5AF2), Color(0xFF5E5CE6), Color(0xFF0A84FF)))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.GraphicEq,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = media.title.ifBlank { "Now Playing" },
+                    color = textPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (media.artist.isNotBlank()) {
+                    Text(
+                        text = media.artist,
+                        color = mediaPurple,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
-        Box(
+        Row(
             modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(7.dp))
-                .background(Color.White.copy(alpha = 0.12f))
-                .clickable { onPlayPause() },
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .height(52.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Brush.horizontalGradient(listOf(mediaPurple.copy(alpha = 0.28f), Color(0xFF2C2C2E))))
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                imageVector = if (media.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = "Play/Pause",
-                tint = Color.White,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(7.dp))
-                .clickable { onNext() },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.SkipNext,
-                contentDescription = "Next",
-                tint = textPrimary,
-                modifier = Modifier.size(18.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .clickable { onPrev() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.SkipPrevious, "Previous", tint = textPrimary, modifier = Modifier.size(26.dp))
+            }
+            Box(
+                modifier = Modifier
+                    .width(96.dp)
+                    .height(42.dp)
+                    .clip(RoundedCornerShape(21.dp))
+                    .background(mediaPurple)
+                    .clickable { onPlayPause() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (media.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = "Play/Pause",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .clickable { onNext() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.SkipNext, "Next", tint = textPrimary, modifier = Modifier.size(26.dp))
+            }
         }
     }
 }
@@ -5206,24 +5232,31 @@ private fun DeckShortcutTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = modifier
-            .heightIn(min = 58.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .heightIn(min = 78.dp)
+            .clip(RoundedCornerShape(20.dp))
             .background(surfaceDark)
-            .border(1.dp, borderDark, RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 4.dp)
+            .padding(vertical = 10.dp, horizontal = 4.dp)
     ) {
+        // Big colorful round icon button (FaceTime "Camera / Disable / Cancel" style)
         Box(
             modifier = Modifier
-                .size(width = 30.dp, height = 26.dp)
-                .clip(RoundedCornerShape(7.dp))
-                .background(Color(0xFF1E1E24)),
+                .size(44.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(accent),
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = icon, contentDescription = label, tint = accent, modifier = Modifier.size(16.dp))
+            Icon(imageVector = icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp))
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = label, color = Color(0xFFF8FAFC), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = label,
+            color = Color(0xFFF8FAFC),
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -5231,14 +5264,14 @@ private fun DeckShortcutTile(
 private fun MiniStatusButton(label: String, accent: Color, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .heightIn(min = 28.dp)
-            .clip(RoundedCornerShape(7.dp))
-            .background(accent.copy(alpha = 0.18f))
+            .heightIn(min = 40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(accent)
             .clickable { onClick() }
-            .padding(horizontal = 9.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
     }
 }
 
