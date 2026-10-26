@@ -53,3 +53,8 @@ captures/
 # Temporary scratch scripts
 scratch/
 
+
+# Keystore & secret signing (jangan pernah commit)
+*.jks
+*.p12
+*.keystore

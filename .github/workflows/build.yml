@@ -28,8 +28,22 @@ jobs:
         with:
           gradle-version: '8.10'
 
+      - name: Prepare signing keystore
+        if: secrets.POCHI_KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          echo "$POCHI_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/pochi-release.p12"
+          echo "Keystore disiapkan (PKCS12) di $RUNNER_TEMP/pochi-release.p12"
+        env:
+          POCHI_KEYSTORE_BASE64: ${{ secrets.POCHI_KEYSTORE_BASE64 }}
+
       - name: Build release APK
         run: gradle --no-daemon assembleRelease
+        env:
+          POCHI_KEYSTORE_FILE: ${{ runner.temp }}/pochi-release.p12
+          POCHI_KEYSTORE_PASSWORD: ${{ secrets.POCHI_KEYSTORE_PASSWORD }}
+          POCHI_KEYSTORE_ALIAS: ${{ secrets.POCHI_KEYSTORE_ALIAS }}
+          POCHI_KEYSTORE_KEY_PASSWORD: ${{ secrets.POCHI_KEYSTORE_KEY_PASSWORD }}
 
       - name: Upload APK (release)
         uses: actions/upload-artifact@v4

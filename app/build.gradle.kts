@@ -24,12 +24,14 @@ android {
     }
 
     signingConfigs {
-        if (rootProject.file("pochi-release.jks").exists()) {
+        val ksFile = System.getenv("POCHI_KEYSTORE_FILE")
+        if (ksFile != null && File(ksFile).exists()) {
             create("release") {
-                storeFile = rootProject.file("pochi-release.jks")
-                storePassword = "pochi-release"
-                keyAlias = "pochi"
-                keyPassword = "pochi-release"
+                storeFile = file(ksFile)
+                storeType = "PKCS12"
+                storePassword = System.getenv("POCHI_KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("POCHI_KEYSTORE_ALIAS") ?: ""
+                keyPassword = System.getenv("POCHI_KEYSTORE_KEY_PASSWORD") ?: ""
             }
         }
     }
