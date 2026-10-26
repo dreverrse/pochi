@@ -28,19 +28,20 @@ jobs:
         with:
           gradle-version: '8.10'
 
-      - name: Prepare signing keystore
-        if: secrets.POCHI_KEYSTORE_BASE64 != ''
+      - name: Build release APK
         shell: bash
         run: |
-          echo "$POCHI_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/pochi-release.p12"
-          echo "Keystore disiapkan (PKCS12) di $RUNNER_TEMP/pochi-release.p12"
+          set -euo pipefail
+          KS="$RUNNER_TEMP/pochi-release.p12"
+          if [ -n "${POCHI_KEYSTORE_BASE64:-}" ]; then
+            echo "$POCHI_KEYSTORE_BASE64" | base64 --decode > "$KS"
+            echo "Keystore signing disiapkan di $KS"
+          else
+            echo "Tidak ada secret keystore — fallback ke debug signing"
+          fi
+          POCHI_KEYSTORE_FILE="$KS" gradle --no-daemon assembleRelease
         env:
           POCHI_KEYSTORE_BASE64: ${{ secrets.POCHI_KEYSTORE_BASE64 }}
-
-      - name: Build release APK
-        run: gradle --no-daemon assembleRelease
-        env:
-          POCHI_KEYSTORE_FILE: ${{ runner.temp }}/pochi-release.p12
           POCHI_KEYSTORE_PASSWORD: ${{ secrets.POCHI_KEYSTORE_PASSWORD }}
           POCHI_KEYSTORE_ALIAS: ${{ secrets.POCHI_KEYSTORE_ALIAS }}
           POCHI_KEYSTORE_KEY_PASSWORD: ${{ secrets.POCHI_KEYSTORE_KEY_PASSWORD }}
