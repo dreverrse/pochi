@@ -39,8 +39,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -1019,7 +1022,13 @@ fun PochiIslandBot(
         else -> 168.dp
     }
     val collapsedHeight = if (isSlimEyeBox && !isFocusRunning && !mediaPlayback.isPlaying) 26.dp else 30.dp
-    val expandedWidth = (configuration.screenWidthDp.dp - 16.dp).coerceIn(328.dp, 396.dp)
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val expandedWidth = if (isLandscape) {
+        (configuration.screenWidthDp.dp - 32.dp).coerceIn(340.dp, 520.dp)
+    } else {
+        (configuration.screenWidthDp.dp - 16.dp).coerceIn(328.dp, 396.dp)
+    }
+    val maxExpandedHeight = (configuration.screenHeightDp.dp - 40.dp).coerceAtLeast(180.dp)
     var measuredExpandedHeightPx by remember { mutableIntStateOf(0) }
     val expandedHeight = with(density) {
         when (islandMode) {
@@ -1027,7 +1036,7 @@ fun PochiIslandBot(
             IslandMode.EXPANDED -> if (measuredExpandedHeightPx > 0) measuredExpandedHeightPx.toDp() else 420.dp
             IslandMode.COLLAPSED -> collapsedHeight
         }
-    }
+    }.coerceAtMost(maxExpandedHeight)
 
     // Mandatory 120fps spring specification
     val transition = updateTransition(targetState = islandMode, label = "island120fpsTransition")
@@ -1226,26 +1235,44 @@ fun PochiIslandBot(
                         .fillMaxSize()
                         .graphicsLayer { alpha = collapsedContentAlpha }
                         .pointerInput(Unit) {
-                            detectTapGestures(
-                                onTap = {
-                                    customEmote = PochiEmote.HAPPY
-                                    setMode(IslandMode.EXPANDED)
-                                },
-                                onLongPress = {
-                                    customEmote = PochiEmote.HMM
-                                    setMode(IslandMode.COMMAND_BAR)
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                var accumulatedX = 0f
+                                var accumulatedY = 0f
+                                var isDragging = false
+                                val touchSlop = viewConfiguration.touchSlop
+
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (change.changedToUp()) {
+                                        if (!isDragging) {
+                                            customEmote = PochiEmote.HAPPY
+                                            setMode(IslandMode.EXPANDED)
+                                        } else {
+                                            onDragEnd()
+                                        }
+                                        break
+                                    }
+                                    if (change.isConsumed) break
+
+                                    val dx = change.position.x - change.previousPosition.x
+                                    val dy = change.position.y - change.previousPosition.y
+                                    accumulatedX += dx
+                                    accumulatedY += dy
+
+                                    if (!isDragging) {
+                                        if (kotlin.math.hypot(accumulatedX, accumulatedY) > touchSlop) {
+                                            isDragging = true
+                                            change.consume()
+                                            onDragBubble(accumulatedX, accumulatedY)
+                                        }
+                                    } else {
+                                        change.consume()
+                                        onDragBubble(dx, dy)
+                                    }
                                 }
-                            )
-                        }
-                        .pointerInput(Unit) {
-                            detectDragGesturesAfterLongPress(
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    onDragBubble(dragAmount.x, dragAmount.y)
-                                },
-                                onDragEnd = { onDragEnd() },
-                                onDragCancel = { onDragEnd() }
-                            )
+                            }
                         }
                         .padding(horizontal = if (showOnlyEyes) 8.dp else 10.dp),
                     verticalAlignment = Alignment.CenterVertically,

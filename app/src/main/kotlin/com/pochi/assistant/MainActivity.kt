@@ -317,6 +317,11 @@ fun PochiAppRoot() {
                 focusRunning = false
                 if (focusPhase == 0) {
                     PochiPrefs.incrementFocusSessions(context)
+                    PochiDb.getInstance(context).insertFocusLog("Focus", 25, "Pomodoro Session")
+                } else if (focusPhase == 1) {
+                    PochiDb.getInstance(context).insertFocusLog("Short Break", 5, "Short Break")
+                } else {
+                    PochiDb.getInstance(context).insertFocusLog("Long Break", 15, "Long Break")
                 }
             }
         }
@@ -324,6 +329,24 @@ fun PochiAppRoot() {
 
     // Shared Agent chat messages
     val chatMessages = remember { mutableStateListOf<AgentChatMessage>() }
+
+    // Synchronize chat messages with SQLite database
+    LaunchedEffect(Unit) {
+        val saved = PochiDb.getInstance(context).getChatMessages()
+        if (saved.isNotEmpty()) {
+            chatMessages.clear()
+            saved.forEach { m ->
+                chatMessages.add(
+                    AgentChatMessage(
+                        id = m.id.hashCode().toLong(),
+                        text = m.text,
+                        isUser = m.sender == "user",
+                        time = m.formattedTime
+                    )
+                )
+            }
+        }
+    }
 
     // Splash auto-transition
     LaunchedEffect(destination) {
@@ -377,7 +400,7 @@ fun PochiAppRoot() {
                         iconStyle = iconStyle,
                         lang = lang,
                         onNext = {
-                            if (target.step < 2) {
+                            if (target.step < 3) {
                                 destination = AppDestination.Onboarding(target.step + 1)
                             } else {
                                 PochiPrefs.setOnboardingDone(context, true)
@@ -899,6 +922,9 @@ fun PochiOnboardingScreen(
     onNext: () -> Unit,
     onSkip: () -> Unit
 ) {
+    val context = LocalContext.current
+    var nameInput by remember { mutableStateOf(PochiPrefs.getUserName(context).ifBlank { "Andre" }) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -907,7 +933,7 @@ fun PochiOnboardingScreen(
             .navigationBarsPadding()
             .padding(horizontal = 28.dp, vertical = 20.dp)
     ) {
-        if (step < 2) {
+        if (step < 3) {
             Text(
                 text = if (lang == PochiLang.ID) "Lewati" else "Skip",
                 fontFamily = fonts.titleFamily,
@@ -925,12 +951,116 @@ fun PochiOnboardingScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 36.dp, bottom = 84.dp),
+                .padding(top = 28.dp, bottom = 88.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             when (step) {
                 0 -> {
+                    // STEP 0: PERSONALIZED NAME INPUT
+                    PochiSquircleMascot(
+                        width = 136.dp,
+                        height = 104.dp,
+                        cornerRadius = 32.dp,
+                        style = iconStyle,
+                        showPastelAura = true,
+                        interactive = true
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
+                    Text(
+                        text = if (lang == PochiLang.ID) "Siapa nama\npanggilanmu? ✨" else "What should\nPochi call you? ✨",
+                        fontFamily = fonts.displayFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 30.sp,
+                        lineHeight = 36.sp,
+                        letterSpacing = (-0.7).sp,
+                        textAlign = TextAlign.Center,
+                        color = Color(0xFF111827)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (lang == PochiLang.ID) {
+                            "Pochi akan menyapamu secara personal di setiap briefing & obrolan."
+                        } else {
+                            "Pochi will personalize your daily briefings, focus logs & chats."
+                        },
+                        fontFamily = fonts.bodyFamily,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        textAlign = TextAlign.Center,
+                        color = Color(0xFF6B7280)
+                    )
+                    Spacer(modifier = Modifier.height(22.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = Color.White,
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFE5E7EB)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(8.dp, RoundedCornerShape(22.dp), spotColor = Color.Black.copy(alpha = 0.06f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (nameInput.isEmpty()) {
+                                    Text(
+                                        text = if (lang == PochiLang.ID) "Ketik namamu di sini (misal: Andre)" else "Enter your name (e.g. Andre)",
+                                        fontFamily = fonts.bodyFamily,
+                                        fontSize = 15.sp,
+                                        color = Color(0xFF9CA3AF)
+                                    )
+                                }
+                                BasicTextField(
+                                    value = nameInput,
+                                    onValueChange = {
+                                        nameInput = it
+                                        if (it.isNotBlank()) {
+                                            PochiPrefs.setUserName(context, it.trim())
+                                        }
+                                    },
+                                    singleLine = true,
+                                    textStyle = TextStyle(
+                                        fontFamily = fonts.titleFamily,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 16.sp,
+                                        color = Color(0xFF111827)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFEFF6FF),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDBEAFE))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(text = "✦", color = Color(0xFF2563EB), fontSize = 12.sp)
+                            Text(
+                                text = if (lang == PochiLang.ID) "Preview: Halo, ${if (nameInput.isBlank()) "Andre" else nameInput.trim()}! 👋"
+                                else "Preview: Hello, ${if (nameInput.isBlank()) "Andre" else nameInput.trim()}! 👋",
+                                fontFamily = fonts.titleFamily,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 13.sp,
+                                color = Color(0xFF1D4ED8)
+                            )
+                        }
+                    }
+                }
+
+                1 -> {
+                    // STEP 1: WELCOME TO POCHI
                     PochiSquircleMascot(
                         width = 148.dp,
                         height = 114.dp,
@@ -952,9 +1082,9 @@ fun PochiOnboardingScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         text = if (lang == PochiLang.ID) {
-                            "Teman AI pintar untuk hari yang lebih\ncerdas dan produktif."
+                            "Halo ${nameInput.ifBlank { "kawan" }}! Teman AI pintar untuk hari yang lebih cerdas dan produktif."
                         } else {
-                            "Your AI companion for\na smarter and more\nproductive day."
+                            "Hello ${nameInput.ifBlank { "friend" }}! Your AI companion for a smarter and more productive day."
                         },
                         fontFamily = fonts.bodyFamily,
                         fontSize = 15.sp,
@@ -964,7 +1094,8 @@ fun PochiOnboardingScreen(
                     )
                 }
 
-                1 -> {
+                2 -> {
+                    // STEP 2: 4 HUBS (TODAY, AGENT, FOCUS, DECK)
                     Box(
                         modifier = Modifier.size(250.dp),
                         contentAlignment = Alignment.Center
@@ -1045,6 +1176,7 @@ fun PochiOnboardingScreen(
                 }
 
                 else -> {
+                    // STEP 3: GET STARTED CTA
                     Box(
                         modifier = Modifier.size(230.dp),
                         contentAlignment = Alignment.Center
@@ -1097,7 +1229,7 @@ fun PochiOnboardingScreen(
             }
         }
 
-        if (step < 2) {
+        if (step < 3) {
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -1110,7 +1242,7 @@ fun PochiOnboardingScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    repeat(3) { idx ->
+                    repeat(4) { idx ->
                         val active = idx == step
                         Box(
                             modifier = Modifier
@@ -1129,7 +1261,12 @@ fun PochiOnboardingScreen(
                         .shadow(10.dp, CircleShape)
                         .clip(CircleShape)
                         .background(Color(0xFF14151A))
-                        .clickable { onNext() },
+                        .clickable {
+                            if (step == 0 && nameInput.isNotBlank()) {
+                                PochiPrefs.setUserName(context, nameInput.trim())
+                            }
+                            onNext()
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -1339,8 +1476,25 @@ fun PochiHomeScreen(
     onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
+    val userName by PochiPrefs.userNameFlow.collectAsState()
     val tasks by PochiPrefs.tasksFlow.collectAsState()
+    val waterGlasses by PochiPrefs.waterGlassesFlow.collectAsState()
+    val expenses by PochiPrefs.expensesFlow.collectAsState()
+    val dailyBudget by PochiPrefs.dailyBudgetFlow.collectAsState()
+    val city by PochiPrefs.cityFlow.collectAsState()
     val islandRunning by DynamicIslandService.isRunning.collectAsState()
+
+    var showNotificationsDialog by remember { mutableStateOf(false) }
+    var showAddTaskDialog by remember { mutableStateOf(false) }
+    var newTaskTitle by remember { mutableStateOf("") }
+    var newTaskTime by remember { mutableStateOf("14:00") }
+    var newTaskPriority by remember { mutableStateOf(false) }
+
+    var showAddExpenseDialog by remember { mutableStateOf(false) }
+    var newExpenseTitle by remember { mutableStateOf("") }
+    var newExpenseAmount by remember { mutableStateOf("") }
+
+    var mascotReactionText by remember { mutableStateOf<String?>(null) }
 
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val greeting = remember(hour, lang) {
@@ -1353,6 +1507,7 @@ fun PochiHomeScreen(
 
     val doneCount = tasks.count { it.isDone }
     val totalCount = tasks.size.coerceAtLeast(1)
+    val totalSpentToday = expenses.sumOf { it.amountRp }
 
     Column(
         modifier = Modifier
@@ -1380,7 +1535,7 @@ fun PochiHomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "Pochi",
+                        text = userName,
                         fontFamily = fonts.displayFamily,
                         fontWeight = FontWeight.Black,
                         fontSize = 32.sp,
@@ -1390,12 +1545,13 @@ fun PochiHomeScreen(
                     Text(
                         text = "✦",
                         fontSize = 20.sp,
-                        color = palette.textSecondary
+                        color = palette.accentYellow
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Your AI companion\nfor Today, Agent, Focus & Deck.",
+                    text = if (lang == PochiLang.ID) "Asisten cerdas untuk Rencana, Obrolan, Fokus & Koleksi."
+                    else "Your AI companion for Today, Agent, Focus & Deck.",
                     fontFamily = fonts.bodyFamily,
                     fontSize = 13.5.sp,
                     lineHeight = 19.sp,
@@ -1410,12 +1566,12 @@ fun PochiHomeScreen(
                     .clip(CircleShape)
                     .background(palette.card)
                     .border(1.dp, palette.cardBorder, CircleShape)
-                    .clickable { onOpenSettings() },
+                    .clickable { showNotificationsDialog = true },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Notifications,
-                    contentDescription = "Settings & Notifications",
+                    contentDescription = "Notification Center",
                     tint = palette.textPrimary,
                     modifier = Modifier.size(21.dp)
                 )
@@ -1438,14 +1594,47 @@ fun PochiHomeScreen(
                 .height(172.dp),
             contentAlignment = Alignment.Center
         ) {
-            PochiSquircleMascot(
-                width = 152.dp,
-                height = 114.dp,
-                cornerRadius = 36.dp,
-                style = iconStyle,
-                showPastelAura = true,
-                interactive = true
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier.clickable {
+                        val reactions = if (lang == PochiLang.ID) {
+                            listOf("Semangat selalu ya! 🌟", "Pochi siap bantu kapan saja! ✨", "Sudah minum air belum? 💧", "Fokus selesaikan targetmu! 🎯")
+                        } else {
+                            listOf("You've got this! 🌟", "Ready to assist anytime! ✨", "Stay hydrated today! 💧", "Keep your focus sharp! 🎯")
+                        }
+                        mascotReactionText = reactions.random()
+                    }
+                ) {
+                    PochiSquircleMascot(
+                        width = 152.dp,
+                        height = 114.dp,
+                        cornerRadius = 36.dp,
+                        style = iconStyle,
+                        showPastelAura = true,
+                        interactive = true
+                    )
+                }
+                AnimatedVisibility(visible = mascotReactionText != null) {
+                    mascotReactionText?.let { msg ->
+                        Surface(
+                            shape = CircleShape,
+                            color = palette.pillActiveBg,
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .clickable { mascotReactionText = null }
+                        ) {
+                            Text(
+                                text = msg,
+                                fontFamily = fonts.titleFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = palette.pillActiveText,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -1508,25 +1697,40 @@ fun PochiHomeScreen(
                     .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenTodayDetail() },
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Today's Plan",
-                        fontFamily = fonts.titleFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp,
-                        color = palette.textPrimary
-                    )
-                    Text(
-                        text = "$doneCount/$totalCount completed",
-                        fontFamily = fonts.monoFamily,
-                        fontSize = 12.sp,
-                        color = palette.textSecondary
-                    )
+                    Column(modifier = Modifier.clickable { onOpenTodayDetail() }) {
+                        Text(
+                            text = "Today's Plan",
+                            fontFamily = fonts.titleFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = palette.textPrimary
+                        )
+                        Text(
+                            text = "$doneCount/$totalCount completed",
+                            fontFamily = fonts.monoFamily,
+                            fontSize = 12.sp,
+                            color = palette.textSecondary
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(palette.pillActiveBg)
+                            .clickable { showAddTaskDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Add Task",
+                            tint = palette.pillActiveText,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1640,6 +1844,457 @@ fun PochiHomeScreen(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // WATER TRACKER CARD
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            color = palette.card,
+            border = androidx.compose.foundation.BorderStroke(1.dp, palette.cardBorder)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(text = "💧", fontSize = 16.sp)
+                        Text(
+                            text = if (lang == PochiLang.ID) "Target Hidrasi Harian" else "Daily Hydration Tracker",
+                            fontFamily = fonts.titleFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = palette.textPrimary
+                        )
+                    }
+                    Text(
+                        text = "$waterGlasses/8 gelas",
+                        fontFamily = fonts.monoFamily,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF2563EB)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        repeat(8) { idx ->
+                            val filled = idx < waterGlasses
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(if (filled) Color(0xFF3B82F6) else palette.pillInactiveBg)
+                                    .clickable {
+                                        if (filled) {
+                                            val next = (waterGlasses - 1).coerceAtLeast(0)
+                                            PochiPrefs.resetWaterGlasses(context)
+                                            repeat(next) { PochiPrefs.addWaterGlass(context) }
+                                        } else {
+                                            PochiPrefs.addWaterGlass(context)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (filled) {
+                                    Text(text = "💧", fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(palette.pillInactiveBg)
+                                .clickable {
+                                    if (waterGlasses > 0) {
+                                        val next = waterGlasses - 1
+                                        PochiPrefs.resetWaterGlasses(context)
+                                        repeat(next) { PochiPrefs.addWaterGlass(context) }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "-", fontWeight = FontWeight.Black, fontSize = 16.sp, color = palette.textPrimary)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF3B82F6))
+                                .clickable { PochiPrefs.addWaterGlass(context) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "+", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // WALLET EXPENSES OVERVIEW CARD
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            color = palette.card,
+            border = androidx.compose.foundation.BorderStroke(1.dp, palette.cardBorder)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(text = "💰", fontSize = 16.sp)
+                        Text(
+                            text = if (lang == PochiLang.ID) "Dompet & Pengeluaran" else "Wallet & Expenses",
+                            fontFamily = fonts.titleFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = palette.textPrimary
+                        )
+                    }
+                    Text(
+                        text = "Rp %,d".format(Locale.GERMANY, totalSpentToday),
+                        fontFamily = fonts.monoFamily,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (totalSpentToday > dailyBudget) Color(0xFFEF4444) else palette.textPrimary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val budgetRatio = (totalSpentToday.toFloat() / dailyBudget.toFloat()).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(CircleShape)
+                        .background(palette.pillInactiveBg)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(budgetRatio)
+                            .height(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (totalSpentToday > dailyBudget) Color(0xFFEF4444)
+                                else Color(0xFF10B981)
+                            )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (lang == PochiLang.ID) "Batas: Rp %,d".format(Locale.GERMANY, dailyBudget)
+                        else "Limit: Rp %,d".format(Locale.GERMANY, dailyBudget),
+                        fontFamily = fonts.bodyFamily,
+                        fontSize = 12.sp,
+                        color = palette.textSecondary
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = palette.pillActiveBg,
+                        modifier = Modifier.clickable { showAddExpenseDialog = true }
+                    ) {
+                        Text(
+                            text = if (lang == PochiLang.ID) "+ Catat" else "+ Log",
+                            fontFamily = fonts.titleFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.5.sp,
+                            color = palette.pillActiveText,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showNotificationsDialog) {
+        val nextPrayer = remember(city) { PrayerScheduleHelper.getNextPrayer(city) }
+        val weather = remember(city) { WeatherHelper.getSnapshot(city) }
+
+        AlertDialog(
+            onDismissRequest = { showNotificationsDialog = false },
+            title = {
+                Text(
+                    text = if (lang == PochiLang.ID) "Pusat Notifikasi Pochi 🔔" else "Pochi Notification Center 🔔",
+                    fontFamily = fonts.titleFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "🕌 Jadwal Sholat ($city)",
+                                fontFamily = fonts.titleFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = palette.textPrimary
+                            )
+                            Text(
+                                text = "${nextPrayer.prayer.nameId} pukul ${nextPrayer.prayer.formatted} (${nextPrayer.remainingTextId})",
+                                fontFamily = fonts.bodyFamily,
+                                fontSize = 12.5.sp,
+                                color = palette.textSecondary
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "⛅ Cuaca Saat Ini (${weather.city} ${weather.tempC}°C)",
+                                fontFamily = fonts.titleFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = palette.textPrimary
+                            )
+                            Text(
+                                text = "${weather.conditionId} • ${weather.adviceId}",
+                                fontFamily = fonts.bodyFamily,
+                                fontSize = 12.5.sp,
+                                color = palette.textSecondary
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "💧 Hidrasi & Dompet",
+                                fontFamily = fonts.titleFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = palette.textPrimary
+                            )
+                            Text(
+                                text = "Air minum: $waterGlasses/8 gelas • Terpakai: Rp %,d / Rp %,d".format(Locale.GERMANY, totalSpentToday, dailyBudget),
+                                fontFamily = fonts.bodyFamily,
+                                fontSize = 12.5.sp,
+                                color = palette.textSecondary
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showNotificationsDialog = false }) {
+                    Text("Tutup")
+                }
+            }
+        )
+    }
+
+    if (showAddTaskDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddTaskDialog = false },
+            title = {
+                Text(
+                    text = if (lang == PochiLang.ID) "Tambah Rencana Hari Ini" else "Add Today's Task",
+                    fontFamily = fonts.titleFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BasicTextField(
+                        value = newTaskTitle,
+                        onValueChange = { newTaskTitle = it },
+                        textStyle = TextStyle(fontFamily = fonts.bodyFamily, fontSize = 14.sp, color = palette.textPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(palette.pillInactiveBg)
+                            .padding(12.dp),
+                        decorationBox = { inner ->
+                            if (newTaskTitle.isEmpty()) {
+                                Text("Judul tugas...", color = palette.textMuted, fontSize = 14.sp)
+                            }
+                            inner()
+                        }
+                    )
+                    BasicTextField(
+                        value = newTaskTime,
+                        onValueChange = { newTaskTime = it },
+                        textStyle = TextStyle(fontFamily = fonts.monoFamily, fontSize = 14.sp, color = palette.textPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(palette.pillInactiveBg)
+                            .padding(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newTaskTitle.isNotBlank()) {
+                            val newTask = TodayTask(
+                                id = "task_${System.currentTimeMillis()}",
+                                title = newTaskTitle.trim(),
+                                timeLabel = newTaskTime.trim(),
+                                isHighPriority = newTaskPriority
+                            )
+                            PochiDb.getInstance(context).saveTask(newTask)
+                            PochiPrefs.addTask(context, newTaskTitle.trim(), newTaskTime.trim())
+                            newTaskTitle = ""
+                        }
+                        showAddTaskDialog = false
+                    }
+                ) {
+                    Text("Simpan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddTaskDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    if (showAddExpenseDialog) {
+        var selectedCat by remember { mutableStateOf("Makan") }
+        AlertDialog(
+            onDismissRequest = { showAddExpenseDialog = false },
+            title = {
+                Text(
+                    text = if (lang == PochiLang.ID) "Catat Pengeluaran Baru" else "Log New Expense",
+                    fontFamily = fonts.titleFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BasicTextField(
+                        value = newExpenseTitle,
+                        onValueChange = { newExpenseTitle = it },
+                        textStyle = TextStyle(fontFamily = fonts.bodyFamily, fontSize = 14.sp, color = palette.textPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(palette.pillInactiveBg)
+                            .padding(12.dp),
+                        decorationBox = { inner ->
+                            if (newExpenseTitle.isEmpty()) {
+                                Text("Keperluan (misal: Makan Siang)...", color = palette.textMuted, fontSize = 14.sp)
+                            }
+                            inner()
+                        }
+                    )
+                    BasicTextField(
+                        value = newExpenseAmount,
+                        onValueChange = { newExpenseAmount = it },
+                        textStyle = TextStyle(fontFamily = fonts.monoFamily, fontSize = 14.sp, color = palette.textPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(palette.pillInactiveBg)
+                            .padding(12.dp),
+                        decorationBox = { inner ->
+                            if (newExpenseAmount.isEmpty()) {
+                                Text("Nominal Rp (misal: 25000)...", color = palette.textMuted, fontSize = 14.sp)
+                            }
+                            inner()
+                        }
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("Makan", "Jajan", "Transport", "Belanja").forEach { cat ->
+                            val active = selectedCat == cat
+                            Surface(
+                                shape = CircleShape,
+                                color = if (active) palette.pillActiveBg else palette.pillInactiveBg,
+                                modifier = Modifier.clickable { selectedCat = cat }
+                            ) {
+                                Text(
+                                    text = cat,
+                                    fontSize = 11.5.sp,
+                                    fontFamily = fonts.titleFamily,
+                                    color = if (active) palette.pillActiveText else palette.textSecondary,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val amount = newExpenseAmount.toLongOrNull() ?: 10000L
+                        val entry = ExpenseEntry(
+                            id = "exp_${System.currentTimeMillis()}",
+                            title = newExpenseTitle.ifBlank { "Pengeluaran" }.trim(),
+                            amountRp = amount,
+                            category = selectedCat,
+                            timeLabel = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                        )
+                        PochiDb.getInstance(context).saveExpense(entry)
+                        PochiPrefs.saveExpenses(context, listOf(entry) + expenses)
+                        newExpenseTitle = ""
+                        newExpenseAmount = ""
+                        showAddExpenseDialog = false
+                    }
+                ) {
+                    Text("Simpan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddExpenseDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
 
@@ -1750,10 +2405,14 @@ fun PochiAgentChatScreen(
         } else null
     }
 
+    val userName by PochiPrefs.userNameFlow.collectAsState()
+    var showChatMenu by remember { mutableStateOf(false) }
+
     fun submitPrompt(promptText: String) {
         val clean = promptText.trim()
         if (clean.isEmpty() || isThinking) return
         messages.add(AgentChatMessage(text = clean, isUser = true))
+        PochiDb.getInstance(context).insertChatMessage("user", clean)
         inputText = ""
         isThinking = true
         scope.launch {
@@ -1771,9 +2430,9 @@ fun PochiAgentChatScreen(
                 val apiKey = PochiPrefs.getApiKey(context, provider)
                 if (apiKey.isBlank()) {
                     if (lang == PochiLang.ID) {
-                        "✨ Aku mencatat pesanmu: \"$clean\".\nUntuk jawaban AI penuh (Gemini/OpenRouter/OpenCode), masukkan API Key di Settings > Data & Storage, atau gunakan perintah langsung seperti 'buka WhatsApp', 'telepon Budi', 'cuaca', atau 'fokus'."
+                        "✨ Halo $userName! Aku mencatat pesanmu: \"$clean\".\nUntuk respons AI cerdas langsung (Gemini 2.5/OpenRouter/OpenCode), pasang API Key di Pengaturan > Data & Storage, atau kamu bisa coba perintah cepat seperti 'telepon Budi', 'buka WhatsApp', 'cuaca', atau 'fokus 25 menit'."
                     } else {
-                        "✨ Got your prompt: \"$clean\".\nFor full LLM replies, set your API Key in Settings > Data & Storage, or try device commands like 'open WhatsApp', 'call Mom', 'weather', or 'start focus'."
+                        "✨ Hi $userName! Got your prompt: \"$clean\".\nFor full LLM generative replies, set your API Key in Settings > Data & Storage, or try device commands like 'call Mom', 'open WhatsApp', 'weather', or 'start focus'."
                     }
                 } else {
                     val model = PochiPrefs.getModel(context, provider)
@@ -1783,12 +2442,13 @@ fun PochiAgentChatScreen(
                             apiKey = apiKey,
                             model = model,
                             prompt = clean,
-                            contextNote = "MainActivity Pochi Agent Chat"
+                            contextNote = "MainActivity Pochi Agent Chat for user $userName"
                         )
                     }.getOrElse { "Gagal memproses pesan: ${it.localizedMessage}" }
                 }
             }
             messages.add(AgentChatMessage(text = reply, isUser = false))
+            PochiDb.getInstance(context).insertChatMessage("pochi", reply)
             isThinking = false
         }
     }
@@ -1877,7 +2537,7 @@ fun PochiAgentChatScreen(
             CircularIconButton(
                 icon = Icons.Rounded.Menu,
                 palette = palette,
-                onClick = onOpenDrawerHome
+                onClick = { showChatMenu = true }
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -1934,7 +2594,7 @@ fun PochiAgentChatScreen(
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp)
                 ) {
                     Text(
-                        text = "Hi! I'm Pochi ✨",
+                        text = if (lang == PochiLang.ID) "Hai $userName! Aku Pochi ✨" else "Hi $userName! I'm Pochi ✨",
                         fontFamily = fonts.titleFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -1946,7 +2606,7 @@ fun PochiAgentChatScreen(
                             if (lang == PochiLang.ID) "Mendengarkan suaramu... (Tanpa suara balasan)"
                             else "Listening to your voice... (Silent mode)"
                         } else {
-                            "How can I help you today?"
+                            if (lang == PochiLang.ID) "Ada yang bisa kubantu hari ini?" else "How can I help you today?"
                         },
                         fontFamily = fonts.titleFamily,
                         fontWeight = FontWeight.SemiBold,
@@ -2217,6 +2877,87 @@ fun PochiAgentChatScreen(
             confirmButton = {
                 TextButton(onClick = { showMoreActionsSheet = false }) {
                     Text("Close")
+                }
+            }
+        )
+    }
+
+    if (showChatMenu) {
+        AlertDialog(
+            onDismissRequest = { showChatMenu = false },
+            title = {
+                Text(
+                    text = if (lang == PochiLang.ID) "Menu Obrolan Pochi" else "Pochi Chat Menu",
+                    fontFamily = fonts.titleFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                PochiDb.getInstance(context).clearChatMessages()
+                                messages.clear()
+                                showChatMenu = false
+                                Toast.makeText(
+                                    context,
+                                    if (lang == PochiLang.ID) "Riwayat chat telah dibersihkan" else "Chat history cleared",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg
+                    ) {
+                        Text(
+                            text = if (lang == PochiLang.ID) "🗑️ Bersihkan Riwayat Chat" else "🗑️ Clear Chat History",
+                            fontFamily = fonts.titleFamily,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showChatMenu = false
+                                showMoreActionsSheet = true
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg
+                    ) {
+                        Text(
+                            text = if (lang == PochiLang.ID) "⚡ Buka Aksi Cepat" else "⚡ Quick Actions Launcher",
+                            fontFamily = fonts.titleFamily,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showChatMenu = false
+                                onOpenDrawerHome()
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg
+                    ) {
+                        Text(
+                            text = if (lang == PochiLang.ID) "🏠 Kembali ke Beranda" else "🏠 Return to Home",
+                            fontFamily = fonts.titleFamily,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showChatMenu = false }) {
+                    Text("Tutup")
                 }
             }
         )
@@ -3443,10 +4184,17 @@ fun PochiSettingsScreen(
     onReplayOnboarding: () -> Unit
 ) {
     val context = LocalContext.current
+    val userName by PochiPrefs.userNameFlow.collectAsState()
     val isDark by PochiPrefs.darkModeFlow.collectAsState()
     val fontStyle by PochiPrefs.fontStyleFlow.collectAsState()
     val islandRunning by DynamicIslandService.isRunning.collectAsState()
+    val flushStatusBar by PochiPrefs.flushStatusBarFlow.collectAsState()
 
+    var showEditNameDialog by remember { mutableStateOf(false) }
+    var editNameInput by remember { mutableStateOf(userName) }
+    var showIslandTunerDialog by remember { mutableStateOf(false) }
+    var showDatabaseDialog by remember { mutableStateOf(false) }
+    var showExportJsonDialog by remember { mutableStateOf<String?>(null) }
     var notificationsEnabled by remember { mutableStateOf(true) }
     var showApiDialog by remember { mutableStateOf(false) }
     var showPermissionsDialog by remember { mutableStateOf(false) }
@@ -3484,11 +4232,15 @@ fun PochiSettingsScreen(
 
         Spacer(modifier = Modifier.height(22.dp))
 
+        // USER PROFILE CARD
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(8.dp, RoundedCornerShape(22.dp), spotColor = Color.Black.copy(alpha = 0.06f))
-                .clickable { toggleDynamicIslandOverlay(context, lang) },
+                .clickable {
+                    editNameInput = userName
+                    showEditNameDialog = true
+                },
             shape = RoundedCornerShape(22.dp),
             color = palette.card,
             border = androidx.compose.foundation.BorderStroke(1.dp, palette.cardBorder)
@@ -3514,24 +4266,25 @@ fun PochiSettingsScreen(
                     )
                     Column {
                         Text(
-                            text = "Pochi",
+                            text = userName,
                             fontFamily = fonts.titleFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.5.sp,
+                            fontSize = 17.sp,
                             color = palette.textPrimary
                         )
                         Text(
-                            text = "Your AI Companion",
+                            text = if (lang == PochiLang.ID) "Pochi Companion • Ketuk untuk ubah nama" else "Pochi Companion • Tap to edit name",
                             fontFamily = fonts.bodyFamily,
-                            fontSize = 13.sp,
+                            fontSize = 12.5.sp,
                             color = palette.textSecondary
                         )
                     }
                 }
                 Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = palette.textMuted
+                    imageVector = Icons.Rounded.Edit,
+                    contentDescription = "Edit Name",
+                    tint = palette.textMuted,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -3656,6 +4409,16 @@ fun PochiSettingsScreen(
                 )
                 SettingsDivider(palette)
 
+                SettingsRowItem(
+                    icon = Icons.Rounded.Schedule,
+                    title = "Dynamic Island Position",
+                    valueText = if (flushStatusBar) "Flush" else "Custom Offset",
+                    palette = palette,
+                    fonts = fonts,
+                    onClick = { showIslandTunerDialog = true }
+                )
+                SettingsDivider(palette)
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3674,7 +4437,7 @@ fun PochiSettingsScreen(
                             modifier = Modifier.size(21.dp)
                         )
                         Text(
-                            text = "Notifications",
+                            text = "Notifications & Island",
                             fontFamily = fonts.titleFamily,
                             fontWeight = FontWeight.Medium,
                             fontSize = 15.sp,
@@ -3697,11 +4460,11 @@ fun PochiSettingsScreen(
 
                 SettingsRowItem(
                     icon = Icons.Rounded.Storage,
-                    title = "Data & Storage",
-                    valueText = PochiPrefs.getProvider(context).name,
+                    title = "Database & Storage",
+                    valueText = "SQLite Local",
                     palette = palette,
                     fonts = fonts,
-                    onClick = { showApiDialog = true }
+                    onClick = { showDatabaseDialog = true }
                 )
                 SettingsDivider(palette)
 
@@ -3886,6 +4649,260 @@ fun PochiSettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showPermissionsDialog = false }) {
                     Text("Done")
+                }
+            }
+        )
+    }
+
+    if (showEditNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditNameDialog = false },
+            title = {
+                Text(
+                    text = if (lang == PochiLang.ID) "Ubah Nama Pengguna" else "Change User Name",
+                    fontFamily = fonts.titleFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (lang == PochiLang.ID) "Pochi akan menyapamu dengan nama ini di seluruh aplikasi." else "Pochi will use this name to greet you across the app.",
+                        fontFamily = fonts.bodyFamily,
+                        fontSize = 13.sp,
+                        color = palette.textSecondary
+                    )
+                    BasicTextField(
+                        value = editNameInput,
+                        onValueChange = { editNameInput = it },
+                        textStyle = TextStyle(
+                            fontFamily = fonts.titleFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = palette.textPrimary
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(palette.pillInactiveBg)
+                            .padding(14.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (editNameInput.isNotBlank()) {
+                            PochiPrefs.setUserName(context, editNameInput.trim())
+                        }
+                        showEditNameDialog = false
+                    }
+                ) {
+                    Text("Simpan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditNameDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    if (showIslandTunerDialog) {
+        val currX by PochiPrefs.offsetXFlow.collectAsState()
+        val currY by PochiPrefs.offsetYFlow.collectAsState()
+        var tempX by remember(currX) { mutableIntStateOf(currX) }
+        var tempY by remember(currY) { mutableIntStateOf(currY) }
+
+        AlertDialog(
+            onDismissRequest = { showIslandTunerDialog = false },
+            title = {
+                Text(
+                    text = if (lang == PochiLang.ID) "Posisi Dynamic Island" else "Dynamic Island Position",
+                    fontFamily = fonts.titleFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (lang == PochiLang.ID) "Rapat di Bawah Status Bar" else "Flush Below Status Bar",
+                            fontFamily = fonts.bodyFamily,
+                            fontSize = 13.5.sp,
+                            color = palette.textPrimary
+                        )
+                        Switch(
+                            checked = flushStatusBar,
+                            onCheckedChange = { PochiPrefs.setFlushStatusBar(context, it) }
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "Posisi Vertikal Y: $tempY dp",
+                            fontFamily = fonts.titleFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { tempY = (tempY - 2).coerceAtLeast(-30) }) { Text("-2dp") }
+                            TextButton(onClick = { tempY = (tempY + 2).coerceAtMost(100) }) { Text("+2dp") }
+                            TextButton(onClick = { tempY = 0 }) { Text("Reset (0dp)") }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        PochiPrefs.saveOffsets(context, tempX, tempY)
+                        showIslandTunerDialog = false
+                    }
+                ) {
+                    Text("Terapkan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showIslandTunerDialog = false }) {
+                    Text("Tutup")
+                }
+            }
+        )
+    }
+
+    if (showDatabaseDialog) {
+        AlertDialog(
+            onDismissRequest = { showDatabaseDialog = false },
+            title = {
+                Text(
+                    text = if (lang == PochiLang.ID) "Database & Penyimpanan Lokal" else "Database & Local Storage",
+                    fontFamily = fonts.titleFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "📱 Status SQLite Android",
+                                fontFamily = fonts.titleFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = palette.textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = PochiDb.getInstance(context).getDbSummary(),
+                                fontFamily = fonts.monoFamily,
+                                fontSize = 11.5.sp,
+                                color = palette.textSecondary
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showDatabaseDialog = false
+                                showApiDialog = true
+                            }
+                    ) {
+                        Text(
+                            text = "🔑 AI Provider & API Key (${PochiPrefs.getProvider(context).name})",
+                            fontFamily = fonts.titleFamily,
+                            fontSize = 13.5.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val json = PochiDb.getInstance(context).exportBackupJson()
+                                showExportJsonDialog = json
+                            }
+                    ) {
+                        Text(
+                            text = "💾 Ekspor Data Cadangan (JSON)",
+                            fontFamily = fonts.titleFamily,
+                            fontSize = 13.5.sp,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.pillInactiveBg,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                PochiDb.getInstance(context).resetDatabase()
+                                Toast.makeText(context, "Database telah di-reset ke pengaturan awal", Toast.LENGTH_SHORT).show()
+                                showDatabaseDialog = false
+                            }
+                    ) {
+                        Text(
+                            text = "🔄 Reset Database ke Pengaturan Awal",
+                            fontFamily = fonts.titleFamily,
+                            fontSize = 13.5.sp,
+                            color = Color(0xFFEF4444),
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDatabaseDialog = false }) {
+                    Text("Tutup")
+                }
+            }
+        )
+    }
+
+    if (showExportJsonDialog != null) {
+        val jsonText = showExportJsonDialog ?: ""
+        AlertDialog(
+            onDismissRequest = { showExportJsonDialog = null },
+            title = {
+                Text(
+                    text = "Backup Database (JSON)",
+                    fontFamily = fonts.titleFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = jsonText,
+                        fontFamily = fonts.monoFamily,
+                        fontSize = 10.5.sp,
+                        color = palette.textSecondary
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showExportJsonDialog = null }) {
+                    Text("Selesai")
                 }
             }
         )

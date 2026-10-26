@@ -8,6 +8,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.database.ContentObserver
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
@@ -120,6 +121,9 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         // cutout (`y = 0`) without obstructing app toolbars below it.
         val collapsedWidthPx = (228 * density).toInt()
         val collapsedHeightPx = (34 * density).toInt()
+        val minTopY = getMinTopYPx()
+        val initialY = computeY(PochiPrefs.offsetYFlow.value)
+        val initialX = (PochiPrefs.offsetXFlow.value * density).toInt()
 
         params = WindowManager.LayoutParams(
             collapsedWidthPx,
@@ -129,8 +133,8 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = (PochiPrefs.offsetXFlow.value * density).toInt()
-            y = (PochiPrefs.offsetYFlow.value * density).toInt()
+            x = initialX
+            y = initialY
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 layoutInDisplayCutoutMode =
@@ -143,9 +147,19 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         }
 
         val screenWidthPx = resources.displayMetrics.widthPixels
-        val expandedWidthPx = (screenWidthPx - (16 * density).toInt())
-            .coerceIn((328 * density).toInt(), (396 * density).toInt())
-        val defaultExpandedHeightPx = (440 * density).toInt()
+        val screenHeightPx = resources.displayMetrics.heightPixels
+        val isLandscapeInit = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val expandedWidthPx = if (isLandscapeInit) {
+            (screenWidthPx - (32 * density).toInt()).coerceIn((320 * density).toInt(), (520 * density).toInt())
+        } else {
+            (screenWidthPx - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
+        }
+        val maxExpandedHeightPx = (screenHeightPx - minTopY - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
+        val defaultExpandedHeightPx = if (isLandscapeInit) {
+            (260 * density).toInt().coerceAtMost(maxExpandedHeightPx)
+        } else {
+            (440 * density).toInt().coerceAtMost(maxExpandedHeightPx)
+        }
 
         fun updateInteraction() {
             lastInteraction = System.currentTimeMillis()
@@ -182,21 +196,34 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         isIslandExpanded = expanded
                         collapseJob?.cancel()
                         heightJob?.cancel()
+                        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                        val curSw = resources.displayMetrics.widthPixels
+                        val curSh = resources.displayMetrics.heightPixels
+                        val curMinTop = getMinTopYPx()
+                        val curExpW = if (isLandscape) {
+                            (curSw - (32 * density).toInt()).coerceIn((320 * density).toInt(), (520 * density).toInt())
+                        } else {
+                            (curSw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
+                        }
+                        val curMaxExpH = (curSh - curMinTop - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
+                        val curDefExpH = if (isLandscape) {
+                            (260 * density).toInt().coerceAtMost(curMaxExpH)
+                        } else {
+                            (440 * density).toInt().coerceAtMost(curMaxExpH)
+                        }
+
                         if (expanded) {
-                            // Single window resize BEFORE Compose 120fps spring expansion starts
                             params.flags = expandedFlags
                             params.x = 0
-                            params.y = (PochiPrefs.offsetYFlow.value * density).toInt()
-                            params.width = expandedWidthPx
+                            params.y = curMinTop
+                            params.width = curExpW
                             params.height = if (expandedHeightPx > 0) {
-                                expandedHeightPx.coerceAtLeast((180 * density).toInt())
+                                expandedHeightPx.coerceIn((180 * density).toInt(), curMaxExpH)
                             } else {
-                                defaultExpandedHeightPx
+                                curDefExpH
                             }
                             applyLayout()
                         } else {
-                            // Immediately release touch focus so background apps remain responsive,
-                            // and shrink window container ONCE after Compose spring animation settles
                             params.flags = collapsedFlags
                             applyLayout()
                             collapseJob = serviceScope.launch {
@@ -204,7 +231,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                                 params.width = collapsedWidthPx
                                 params.height = collapsedHeightPx
                                 params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
-                                params.y = (PochiPrefs.offsetYFlow.value * density).toInt()
+                                params.y = computeY(PochiPrefs.offsetYFlow.value)
                                 applyLayout()
                             }
                         }
@@ -220,8 +247,18 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                             heightJob = serviceScope.launch {
                                 delay(260)
                                 if (isIslandExpanded) {
-                                    params.width = expandedWidthPx
-                                    params.height = expandedHeightPx.coerceAtLeast((160 * density).toInt())
+                                    val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                                    val curSw = resources.displayMetrics.widthPixels
+                                    val curSh = resources.displayMetrics.heightPixels
+                                    val curMinTop = getMinTopYPx()
+                                    val curExpW = if (isLandscape) {
+                                        (curSw - (32 * density).toInt()).coerceIn((320 * density).toInt(), (520 * density).toInt())
+                                    } else {
+                                        (curSw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
+                                    }
+                                    val curMaxExpH = (curSh - curMinTop - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
+                                    params.width = curExpW
+                                    params.height = expandedHeightPx.coerceIn((160 * density).toInt(), curMaxExpH)
                                     applyLayout()
                                 }
                             }
@@ -236,8 +273,11 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         if (!hiddenState.value && !isIslandExpanded) {
                             val sw = resources.displayMetrics.widthPixels
                             val sh = resources.displayMetrics.heightPixels
-                            params.x = (params.x + dx.toInt()).coerceIn(-sw / 2, sw / 2)
-                            params.y = (params.y + dy.toInt()).coerceIn(0, sh - params.height)
+                            val curMinTop = getMinTopYPx()
+                            val maxBottomY = (sh - params.height - (16 * density).toInt()).coerceAtLeast(curMinTop)
+                            // Allow flexible horizontal and vertical movement across the display
+                            params.x = (params.x + dx.toInt()).coerceIn(-sw / 2 + params.width / 4, sw / 2 - params.width / 4)
+                            params.y = (params.y + dy.toInt()).coerceIn(curMinTop, maxBottomY)
                             applyLayout()
                         }
                     },
@@ -270,7 +310,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                 if (::composeView.isInitialized && ::params.isInitialized) {
                     if (!isIslandExpanded && !hiddenState.value) {
                         params.x = (xDp * density).toInt()
-                        params.y = (yDp * density).toInt()
+                        params.y = computeY(yDp)
                         applyLayout()
                     }
                 }
@@ -349,20 +389,79 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         }
     }
 
+    private fun getStatusBarHeightPx(): Int {
+        var result = 0
+        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        if (resourceId > 0) {
+            result = resources.getDimensionPixelSize(resourceId)
+        }
+        if (result <= 0) {
+            result = (38 * resources.displayMetrics.density).toInt()
+        }
+        return result
+    }
+
+    private fun getMinTopYPx(): Int {
+        val density = resources.displayMetrics.density
+        // Ensures the island sits cleanly BELOW the phone infobar / status bar (never covered by clock/battery)
+        return getStatusBarHeightPx() + (6 * density).toInt()
+    }
+
+    private fun computeY(userOffsetYDp: Int): Int {
+        val density = resources.displayMetrics.density
+        val minTopY = getMinTopYPx()
+        val userPx = (userOffsetYDp * density).toInt()
+        return (minTopY + userPx).coerceAtLeast(minTopY)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!::composeView.isInitialized || !::params.isInitialized) return
+
+        val density = resources.displayMetrics.density
+        val sw = resources.displayMetrics.widthPixels
+        val sh = resources.displayMetrics.heightPixels
+        val isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val minTopY = getMinTopYPx()
+
+        // 1. Re-clamp horizontal position within new screen bounds
+        params.x = params.x.coerceIn(-sw / 2 + params.width / 4, sw / 2 - params.width / 4)
+
+        // 2. Re-clamp vertical position below infobar and within landscape bounds
+        val maxBottomY = (sh - params.height - (12 * density).toInt()).coerceAtLeast(minTopY)
+        params.y = params.y.coerceIn(minTopY, maxBottomY)
+
+        // 3. Responsive dimension adaptation when phone is tilted (miring / landscape)
+        if (isIslandExpanded) {
+            val expandedWidthPx = if (isLandscape) {
+                (sw - (32 * density).toInt()).coerceIn((320 * density).toInt(), (520 * density).toInt())
+            } else {
+                (sw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
+            }
+            val maxExpandedHeightPx = (sh - minTopY - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
+            params.width = expandedWidthPx
+            params.height = params.height.coerceIn((180 * density).toInt(), maxExpandedHeightPx)
+        } else {
+            params.width = (228 * density).toInt()
+            params.height = (34 * density).toInt()
+        }
+
+        applyLayout()
+    }
+
     private fun finishDrag(density: Float) {
         if (hiddenState.value || isIslandExpanded) return
         val screenWidthPx = resources.displayMetrics.widthPixels
-        val edgeMargin = (48 * density).toInt()
+        val edgeMargin = (16 * density).toInt()
         if (params.x > screenWidthPx / 2 - edgeMargin) {
             hideAtEdge(right = true, density = density)
         } else if (params.x < -(screenWidthPx / 2 - edgeMargin)) {
             hideAtEdge(right = false, density = density)
         } else {
-            PochiPrefs.saveOffsets(
-                this,
-                (params.x / density).toInt(),
-                (params.y / density).toInt()
-            )
+            val minTopY = getMinTopYPx()
+            val savedY = ((params.y - minTopY) / density).toInt().coerceAtLeast(0)
+            val savedX = (params.x / density).toInt()
+            PochiPrefs.saveOffsets(this, savedX, savedY)
         }
     }
 
@@ -375,6 +474,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         val peekHeightPx = (64 * density).toInt()
         val screenWidthPx = resources.displayMetrics.widthPixels
         val screenHeightPx = resources.displayMetrics.heightPixels
+        val minTopY = getMinTopYPx()
         params.flags = collapsedFlags
         params.width = peekWidthPx
         params.height = peekHeightPx
@@ -383,7 +483,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         } else {
             -(screenWidthPx / 2 - peekWidthPx / 2)
         }
-        params.y = params.y.coerceIn((24 * density).toInt(), screenHeightPx - peekHeightPx - (48 * density).toInt())
+        params.y = params.y.coerceIn(minTopY, screenHeightPx - peekHeightPx - (24 * density).toInt())
         applyLayout()
     }
 
@@ -394,7 +494,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         params.width = collapsedWidthPx
         params.height = collapsedHeightPx
         params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
-        params.y = (PochiPrefs.offsetYFlow.value * density).toInt()
+        params.y = computeY(PochiPrefs.offsetYFlow.value)
         applyLayout()
     }
 

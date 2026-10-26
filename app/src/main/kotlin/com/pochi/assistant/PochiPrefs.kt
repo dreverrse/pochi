@@ -502,6 +502,10 @@ object PochiPrefs {
     private const val KEY_ICON_STYLE = "pochi_icon_style"
     private const val KEY_FONT_STYLE = "pochi_font_style"
     private const val KEY_DECK_JSON = "pochi_deck_collections_json"
+    private const val KEY_USER_NAME = "pochi_user_name"
+
+    private val _userNameFlow = MutableStateFlow("Andre")
+    val userNameFlow: StateFlow<String> = _userNameFlow
 
     private val _offsetXFlow = MutableStateFlow(0)
     val offsetXFlow: StateFlow<Int> = _offsetXFlow
@@ -571,6 +575,7 @@ object PochiPrefs {
         _offsetYFlow.value = prefs.getInt(KEY_OFFSET_Y, 0)
         _flushStatusBarFlow.value = prefs.getBoolean(KEY_FLUSH_STATUSBAR, true)
         _darkModeFlow.value = prefs.getBoolean(KEY_DARK_MODE, false)
+        _userNameFlow.value = prefs.getString(KEY_USER_NAME, "Andre") ?: "Andre"
         _onboardingDoneFlow.value = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
         _iconStyleFlow.value = prefs.getString(KEY_ICON_STYLE, "dark") ?: "dark"
         _fontStyleFlow.value = prefs.getString(KEY_FONT_STYLE, "jakarta") ?: "jakarta"
@@ -615,6 +620,16 @@ object PochiPrefs {
         if (savedPinned != null) {
             _pinnedAppsFlow.value = savedPinned
         }
+    }
+
+    fun setUserName(context: Context, name: String) {
+        val clean = name.trim().ifBlank { "Andre" }
+        _userNameFlow.value = clean
+        prefs(context).edit().putString(KEY_USER_NAME, clean).apply()
+    }
+
+    fun getUserName(context: Context): String {
+        return prefs(context).getString(KEY_USER_NAME, "Andre") ?: "Andre"
     }
 
     fun setOnboardingDone(context: Context, done: Boolean) {
