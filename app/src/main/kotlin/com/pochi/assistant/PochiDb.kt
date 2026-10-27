@@ -155,7 +155,31 @@ class PochiDb private constructor(context: Context) : SQLiteOpenHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Migration logic if schema changes in future versions
+        // Migrasi defensif: pastikan kolom yang dikenal ada (tidak merusak data).
+        if (newVersion > oldVersion) {
+            ensureColumn(db, "tasks", "is_high_priority", "INTEGER")
+            ensureColumn(db, "tasks", "subtasks_json", "TEXT")
+            ensureColumn(db, "chat_messages", "is_starred", "INTEGER DEFAULT 0")
+            ensureColumn(db, "focus_logs", "task_title", "TEXT")
+            ensureColumn(db, "memories", "device_id", "TEXT")
+            ensureColumn(db, "memories", "updated_at", "INTEGER")
+        }
+    }
+
+    private fun ensureColumn(db: SQLiteDatabase, table: String, column: String, type: String) {
+        val exists = db.rawQuery("PRAGMA table_info($table)", null).use { c ->
+            var found = false
+            while (c.moveToNext()) {
+                if (c.getString(1) == column) {
+                    found = true
+                    break
+                }
+            }
+            found
+        }
+        if (!exists) {
+            runCatching { db.execSQL("ALTER TABLE $table ADD COLUMN $column $type") }
+        }
     }
 
     private fun seedInitialData(db: SQLiteDatabase) {
