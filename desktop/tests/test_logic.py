@@ -28,6 +28,7 @@ from integration.mock_adapter import MockAdapter  # noqa: E402
 from integration.router_adapter import parse_sse_line  # noqa: E402
 from integration.text import extract_text, model_short, sanitize  # noqa: E402
 from services.probes import gateway_status  # noqa: E402
+from services.memory import MemoryStore  # noqa: E402
 
 
 def check(name: str, fn) -> None:
@@ -178,7 +179,12 @@ def test_candidates() -> None:
 def test_controller_demo(app) -> None:
     cfg = Config(backend="demo", auto_collapse_seconds=0)
     bridge = MockAdapter(cfg)
-    ctl = Controller(cfg, bridge)
+    with tempfile.TemporaryDirectory() as tmp:
+        ctl = Controller(cfg, bridge, memory=MemoryStore(Path(tmp) / "memory.json"))
+        _run_controller_demo(app, ctl)
+
+
+def _run_controller_demo(app, ctl) -> None:
     states: list[str] = []
     replies: list[str] = []
     ctl.statusChanged.connect(states.append)
@@ -228,14 +234,15 @@ def test_controller_demo(app) -> None:
 def test_mock_cancel(app) -> None:
     cfg = Config(backend="demo", auto_collapse_seconds=0)
     bridge = MockAdapter(cfg)
-    ctl = Controller(cfg, bridge)
-    ctl.start()
-    assert ctl.send("halo")
-    ctl.cancel()
-    assert not wait_until(app, lambda: any(
-        m.role == "assistant" for m in ctl.messages), 0.8)
-    assert ctl.status == Status.IDLE
-    ctl.shutdown()
+    with tempfile.TemporaryDirectory() as tmp:
+        ctl = Controller(cfg, bridge, memory=MemoryStore(Path(tmp) / "memory.json"))
+        ctl.start()
+        assert ctl.send("halo")
+        ctl.cancel()
+        assert not wait_until(app, lambda: any(
+            m.role == "assistant" for m in ctl.messages), 0.8)
+        assert ctl.status == Status.IDLE
+        ctl.shutdown()
 
 
 def main() -> int:

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from app import theme
+from services.memory import MemoryStore
 
 
 class Status:
@@ -144,10 +145,15 @@ class Controller(QObject):
     replyReady = pyqtSignal(str)
     toast = pyqtSignal(str, str, str)         # title, message, level
 
-    def __init__(self, cfg, bridge, parent=None):
+    def __init__(self, cfg, bridge, parent=None, memory: MemoryStore | None = None):
         super().__init__(parent)
         self.cfg = cfg
         self.bridge = bridge
+        self.memory = memory if memory is not None else MemoryStore()
+        # ID sesi memisahkan percakapan berjalan dari memori sesi lama, agar
+        # konteks lama tidak terkirim dua kali (history UI + memori).
+        self._session_id = uuid.uuid4().hex[:12]
+        self._memory_seed: list[dict] | None = None
         self._status = Status.IDLE
         self._messages: list[ChatMessage] = []
         self._notices: list[Notice] = []
@@ -291,6 +297,18 @@ class Controller(QObject):
     def context_usage(self) -> tuple[int, int]:
         return self._context_used, self._context_size
 
+    def _history(self) -> list[dict]:
+        """Riwayat UI + konteks memori sesi/backend sebelumnya."""
+        history = [
+            {"role": m.role, "content": m.text}
+            for m in self._messages[-24:]
+            if m.role in ("user", "assistant") and not m.error and not m.streaming
+        ]
+        if self._memory_seed is None:
+            self._memory_seed = self.memory.seed_messages(
+                exclude_session=self._session_id)
+        return list(self._memory_seed) + history
+
     def send(self, text: str, files: list | tuple = ()) -> bool:
         text = (text or "").strip()
         if not text and not files:
@@ -301,12 +319,10 @@ class Controller(QObject):
         if self.busy:
             self.notify("Pochi masih bekerja", "Tunggu balasan atau hentikan dengan tombol stop.", "warning")
             return False
-        history = [
-            {"role": m.role, "content": m.text}
-            for m in self._messages[-24:]
-            if m.role in ("user", "assistant") and not m.error and not m.streaming
-        ]
+        history = self._history()
         self._messages.append(ChatMessage(role="user", text=text, files=tuple(files)))
+        self.memory.add("user", text, session=self._session_id,
+                        meta=self._connection.backend)
         self.messagesChanged.emit()
         self._pending_delta = ""
         self.set_status(Status.THINKING)
@@ -365,6 +381,9 @@ class Controller(QObject):
             final = text
             self._messages.append(
                 ChatMessage(role="assistant", text=text, meta=meta))
+        if final.strip():
+            self.memory.add("assistant", final, meta=meta,
+                            session=self._session_id)
         self.messagesChanged.emit()
         self._flash_success()
         self._set_activity(None)
@@ -547,7 +566,15 @@ class Controller(QObject):
             self.bridge.reset()
         except Exception:
             pass
-        self.notify("Percakapan direset", "Konteks UI dibersihkan.", "info")
+        self.notify("Percakapan direset",
+                    "Konteks UI dibersihkan; memori jangka panjang tetap disimpan.", "info")
+
+    def forget_memory(self) -> None:
+        """Hapus memori lintas sesi (dipakai tombol 'Hapus memori')."""
+        self.memory.clear()
+        self._memory_seed = []
+        self.notify("Memori dihapus",
+                    "Pochi tidak lagi mengingat percakapan dari sesi lama.", "info")
 
     @property
     def status_label(self) -> str:

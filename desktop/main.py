@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             "request_timeout": cfg.request_timeout,
             "hermes_command": cfg.hermes_command,
         }
-        dialog = SettingsDialog(cfg, island)
+        dialog = SettingsDialog(cfg, island, controller)
 
         def apply_saved():
             island.apply_config()

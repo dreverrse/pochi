@@ -61,6 +61,19 @@ Status: disetujui pemilik (Tuan Andre).
   tersimpan (opt-in, menghindari biaya tak terduga). Error 401/402 diberi
   pesan yang bisa ditindaklanjuti.
 
+### D10. Memori percakapan lintas backend
+- Keputusan: Semua backend (OpenRouter, Hermes, 9Router) berbagi satu memori
+  lokal di `~/.local/share/pochi-desktop/memory.json` (0600). Sesi baru
+  menerima ringkasan sesi sebelumnya (±1.600 karakter, 12 giliran terakhir);
+  Hermes menerimanya sebagai preamble prompt pertama karena sesi ACP-nya
+  sendiri. Giliran sesi berjalan dipisahkan lewat ID sesi agar tidak dobel.
+  Backend aktif: `openrouter` (model `openrouter/auto`).
+- Alasan: Permintaan pemilik 2026-10-28 — Pochi harus mengingat pengguna dan
+  pembahasan sebelumnya di semua backend, bukan hanya per sesi.
+- Implikasi: Memori hanya dikirim ke backend aktif sebagai konteks prompt,
+  tidak pernah di-upload terpisah. Tombol "Hapus memori" di Pengaturan
+  menghapus riwayat lama; reset percakapan hanya membersihkan UI.
+
 ## Antrian keputusan terbuka
 - Pemutar musik final (diperlukan untuk uji M1).
 - Batas ukuran file transfer antar perangkat (default PRD 100 MB).

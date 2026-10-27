@@ -124,18 +124,24 @@ def test_profiles() -> None:
 
 
 def test_candidates() -> None:
-    with sandbox() as root:
-        base = Config(backend="auto", hermes_command="__definitely_not_installed__")
+    import integration.auto_adapter as auto_module
+
+    original = auto_module.openrouter_api_key
+    base = Config(backend="auto", hermes_command="__definitely_not_installed__")
+    try:
+        auto_module.openrouter_api_key = lambda: ""
         labels = [label for _f, label in _candidates(base)]
         assert labels == ["9Router", "DEMO"], labels
-        os.environ["OPENROUTER_API_KEY"] = "kunci-uji"
+        auto_module.openrouter_api_key = lambda: "kunci-uji"
         labels = [label for _f, label in _candidates(base)]
         assert labels == ["9Router", "OpenRouter", "DEMO"], labels
-        assert [label for _f, label in _candidates(Config(backend="openrouter"))] \
-            == ["OpenRouter"]
-        bridge = create_bridge(Config(backend="openrouter"))
-        assert isinstance(bridge, OpenRouterAdapter)
-        bridge.stop()
+    finally:
+        auto_module.openrouter_api_key = original
+    assert [label for _f, label in _candidates(Config(backend="openrouter"))] \
+        == ["OpenRouter"]
+    bridge = create_bridge(Config(backend="openrouter"))
+    assert isinstance(bridge, OpenRouterAdapter)
+    bridge.stop()
 
 
 def test_sse_shapes() -> None:

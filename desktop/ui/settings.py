@@ -13,8 +13,8 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QFrame, QHBoxLayout,
-    QKeySequenceEdit, QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox,
-    QVBoxLayout, QWidget,
+    QKeySequenceEdit, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea,
+    QSpinBox, QVBoxLayout, QWidget,
 )
 
 from app import theme
@@ -39,12 +39,14 @@ BACKEND_LABELS = {
 class SettingsDialog(DialogShell):
     saved = pyqtSignal()
 
-    def __init__(self, cfg, parent=None):
+    def __init__(self, cfg, parent=None, controller=None):
         super().__init__("Pengaturan", "Tampilan, posisi, dan koneksi Pochi",
                          parent, width=500, height=600)
         self.cfg = cfg
+        self.controller = controller
         self._reset_position = False
         self._clear_or_key = False
+        self.memory = getattr(controller, "memory", None)
         self.setWindowTitle("Pengaturan Pochi")
 
         scroll = QScrollArea()
@@ -201,6 +203,25 @@ class SettingsDialog(DialogShell):
         note2.setObjectName("dim")
         v.addWidget(note2)
 
+        if self.memory is not None:
+            v.addWidget(Divider())
+            v.addWidget(self._section("Memori lintas backend"))
+            mem_row = QHBoxLayout()
+            mem_row.setSpacing(8)
+            self.memory_label = QLabel(
+                f"{self.memory.count} giliran tersimpan · dipakai OpenRouter, "
+                "Hermes, dan 9Router")
+            self.memory_label.setWordWrap(True)
+            self.memory_label.setObjectName("dim")
+            mem_row.addWidget(self.memory_label, 1)
+            self.forget_btn = QPushButton("Hapus memori")
+            self.forget_btn.setObjectName("ghost")
+            self.forget_btn.setToolTip(
+                "Hapus riwayat yang dipakai sebagai konteks sesi berikutnya")
+            self.forget_btn.clicked.connect(self._forget_memory)
+            mem_row.addWidget(self.forget_btn)
+            v.addLayout(mem_row)
+
         self.error = QLabel("")
         self.error.setWordWrap(True)
         self.error.setStyleSheet(
@@ -251,6 +272,25 @@ class SettingsDialog(DialogShell):
         self.or_key.clear()
         self._clear_or_key = True
         self.or_key.setPlaceholderText("Akan dihapus saat Simpan")
+
+    def _forget_memory(self):
+        if self.memory is None:
+            return
+        answer = QMessageBox.question(
+            self, "Hapus memori",
+            "Pochi akan lupa percakapan dari sesi lama. Percakapan yang "
+            "sedang tampil tidak berubah. Lanjutkan?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        if self.controller is not None:
+            self.controller.forget_memory()
+        else:
+            self.memory.clear()
+        self.memory_label.setText(
+            f"{self.memory.count} giliran tersimpan · dipakai OpenRouter, "
+            "Hermes, dan 9Router")
 
     def accept(self):
         key = self.toggle_key.keySequence().toString().strip()

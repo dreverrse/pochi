@@ -108,6 +108,23 @@ Model gratis di OpenRouter memakai akhiran `:free` (daftar terbaru di
 mengikuti harga model dan kredit akun. Error 402 (kredit habis) dan 401 (key
 salah) ditampilkan sebagai pesan yang bisa ditindaklanjuti, bukan data mentah.
 
+### Memori lintas backend
+
+Pochi mengingat percakapanmu di semua backend (OpenRouter, Hermes, 9Router):
+
+- giliran percakapan disimpan lokal di
+  `~/.local/share/pochi-desktop/memory.json` dengan izin `0600`;
+- saat aplikasi dimulai (atau setelah pindah backend), ringkasan sesi
+  sebelumnya dikirim sebagai konteks — OpenRouter/9Router lewat history,
+  Hermes lewat preamble prompt pertama karena sesi ACP-nya sendiri;
+- percakapan yang sedang berjalan tidak dikirim dua kali (dipisah per ID
+  sesi), dan konteks dibatasi ±1.600 karakter agar hemat token;
+- **Pengaturan → Memori lintas backend → Hapus memori** menghapus riwayat
+  lama; tombol reset percakapan hanya membersihkan tampilan.
+
+Isi memori tidak pernah dikirim ke mana pun selain backend model yang sedang
+aktif sebagai bagian dari prompt.
+
 ## Menghentikan
 
 ```bash
@@ -121,6 +138,8 @@ pkill -f "pochi_desktop/main.py"
 - Tidak ada key di source. Key model dibaca runtime dari environment,
   `~/.hermes/.env`, atau `openrouter.key` (0600); tidak pernah masuk
   `config.json`, log, atau tampilan UI.
+- Memori percakapan tersimpan lokal di `memory.json` (0600) dan hanya dikirim
+  sebagai konteks ke backend aktif; bisa dihapus dari Pengaturan.
 - Komunikasi 9Router hanya ke `localhost:20128` (private). OpenRouter hanya
   dipanggil lewat HTTPS bila backend-nya dipilih/punya key. Tidak ada port publik.
 - Tidak ada eksekusi shell dari teks pengguna.

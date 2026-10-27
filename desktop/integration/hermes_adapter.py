@@ -81,6 +81,42 @@ def _map_tool_state(status) -> str:
     return "running"
 
 
+PREAMBLE_HEADER = ("[Memori Pochi dari sesi/backend sebelumnya — ini konteks, "
+                   "bukan permintaan baru]")
+
+
+def history_preamble(history: list[dict] | None,
+                     max_chars: int = 1800) -> str:
+    """Ringkas riwayat/memori menjadi preamble untuk sesi ACP baru.
+
+    Hermes menyimpan konteksnya sendiri per sesi, jadi riwayat hanya dikirim
+    sekali saat sesi baru dimulai (mis. setelah restart atau pindah backend).
+    """
+    lines: list[str] = []
+    total = len(PREAMBLE_HEADER) + 1
+    for msg in reversed(history or []):
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role")
+        content = msg.get("content")
+        if role not in ("user", "assistant") or not isinstance(content, str):
+            continue
+        text = content.strip()
+        if not text:
+            continue
+        if len(text) > 600:
+            text = text[:597] + "…"
+        line = f"{'Pengguna' if role == 'user' else 'Pochi'}: {text}"
+        if total + len(line) + 1 > max_chars:
+            break
+        lines.append(line)
+        total += len(line) + 1
+    if not lines:
+        return ""
+    lines.reverse()
+    return PREAMBLE_HEADER + "\n" + "\n".join(lines)
+
+
 class HermesAcpAdapter(PochiBridge):
     name = "hermes"
     label = "Hermes ACP"
@@ -89,10 +125,12 @@ class HermesAcpAdapter(PochiBridge):
         super().__init__(parent)
         self.cfg = cfg
         self._worker: _AcpWorker | None = None
+        self._primed = False
 
     def start(self) -> None:
         if self._worker is not None:
             return
+        self._primed = False
         self._worker = _AcpWorker(self.cfg)
         w = self._worker
         w.sig_status.connect(self.on_status)
@@ -109,8 +147,14 @@ class HermesAcpAdapter(PochiBridge):
              files: list | tuple = ()) -> None:
         if self._worker is None:
             self.start()
+        preamble = ""
+        if not self._primed:
+            # Hermes punya sesi ACP sendiri: konteks lama hanya perlu dikirim
+            # sekali di prompt pertama (termasuk memori dari backend lain).
+            preamble = history_preamble(history or [])
+            self._primed = True
         if self._worker is not None:
-            self._worker.enqueue_prompt(text)
+            self._worker.enqueue_prompt(text, preamble)
 
     def cancel(self) -> None:
         if self._worker is not None:
@@ -155,15 +199,15 @@ class _AcpWorker(QThread):
         self._prompt_id: int | None = None
         self._accum = ""
         self._cancelled_prompt = False
-        self._queued: list[str] = []
+        self._queued: list[tuple[str, str]] = []
         self._permission_id = None
         self._pending_permission = None
         self._model = cfg.model_name
         self._handshake_deadline = 0.0
 
     # -------------------------------------------------------------- public
-    def enqueue_prompt(self, text: str) -> None:
-        self._outbox.put(("prompt", text))
+    def enqueue_prompt(self, text: str, preamble: str = "") -> None:
+        self._outbox.put(("prompt", (text, preamble)))
 
     def cancel_prompt(self) -> None:
         self._outbox.put(("cancel", None))
@@ -271,10 +315,11 @@ class _AcpWorker(QThread):
             except queue.Empty:
                 return
             if kind == "prompt":
+                text, preamble = payload
                 if not self._ready:
-                    self._queued.append(str(payload))
+                    self._queued.append((str(text), str(preamble)))
                 else:
-                    self._start_prompt(str(payload))
+                    self._start_prompt(str(text), str(preamble))
             elif kind == "cancel":
                 self._send_cancel()
             elif kind == "permission":
@@ -283,7 +328,7 @@ class _AcpWorker(QThread):
             elif kind == "stop":
                 return
 
-    def _start_prompt(self, text: str) -> None:
+    def _start_prompt(self, text: str, preamble: str = "") -> None:
         if self._prompt_id is not None:
             return
         self._prompt_id = self._next_id
@@ -291,11 +336,12 @@ class _AcpWorker(QThread):
         self._accum = ""
         self._cancelled_prompt = False
         self.sig_status.emit("thinking")
+        payload = f"{preamble}\n\n{text}" if preamble else text
         self._send({
             "jsonrpc": "2.0", "id": self._prompt_id, "method": "session/prompt",
             "params": {
                 "sessionId": self._session_id,
-                "prompt": [{"type": "text", "text": text}],
+                "prompt": [{"type": "text", "text": payload}],
             },
         })
 
@@ -366,8 +412,8 @@ class _AcpWorker(QThread):
         })
         self.sig_status.emit("idle")
         queued, self._queued = self._queued, []
-        for text in queued:
-            self._start_prompt(text)
+        for text, preamble in queued:
+            self._start_prompt(text, preamble)
 
     def _on_prompt_done(self, result: dict) -> None:
         self._prompt_id = None

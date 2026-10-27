@@ -28,6 +28,7 @@ from app.state import Controller, Status  # noqa: E402
 from integration.mock_adapter import MockAdapter  # noqa: E402
 from platform_x11.x11 import work_area  # noqa: E402
 from services.health import HealthService  # noqa: E402
+from services.memory import MemoryStore  # noqa: E402
 from services.media import MediaService  # noqa: E402
 from services.system import SystemMonitor  # noqa: E402
 from ui.dashboard import DashboardWindow  # noqa: E402
@@ -86,7 +87,7 @@ def main() -> int:
                  start_collapsed=True, reduce_motion=False,
                  toggle_key="Ctrl+Alt+F12")
     bridge = MockAdapter(cfg)
-    ctl = Controller(cfg, bridge)
+    ctl = Controller(cfg, bridge, memory=MemoryStore(Path(tmp.name) / "memory.json"))
     monitor = SystemMonitor(cfg)
     media = MediaService()
     health = HealthService(cfg)
