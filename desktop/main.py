@@ -5,7 +5,7 @@ Jalankan dengan Python sistem yang memiliki PyQt6:
     /usr/bin/python3 main.py
 
 Opsi:
-    --backend auto|hermes|9router|demo   paksa backend untuk sesi ini
+    --backend auto|hermes|9router|openrouter|demo   paksa backend untuk sesi ini
     --demo                                alias untuk --backend demo
     --no-tray                             jangan pasang ikon tray
     --dashboard                           buka dashboard saat mulai

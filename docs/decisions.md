@@ -49,6 +49,18 @@ Status: disetujui pemilik (Tuan Andre).
 - Detail: `docs/superpowers/specs/2026-10-28-pochi-desktop-redesign-design.md`
 - Menggantikan D6.
 
+### D9. Backend OpenRouter (cloud)
+- Keputusan: Tambah backend `openrouter` di samping Hermes/9Router/DEMO.
+  Model default `openrouter/auto`, bisa diganti di Pengaturan. API key
+  disimpan terpisah di `~/.config/pochi-desktop/openrouter.key` (0600),
+  dengan prioritas env `OPENROUTER_API_KEY` → `~/.hermes/.env` → file.
+  Key tidak pernah masuk `config.json`/log/UI (UI hanya menampilkan 4
+  karakter terakhir).
+- Alasan: Permintaan pemilik 2026-10-28 agar Pochi bisa memakai OpenRouter.
+- Implikasi: Mode `auto` hanya ikut fallback ke OpenRouter bila key sudah
+  tersimpan (opt-in, menghindari biaya tak terduga). Error 401/402 diberi
+  pesan yang bisa ditindaklanjuti.
+
 ## Antrian keputusan terbuka
 - Pemutar musik final (diperlukan untuk uji M1).
 - Batas ukuran file transfer antar perangkat (default PRD 100 MB).

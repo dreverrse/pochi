@@ -2,9 +2,11 @@
 
 UI hanya berbicara dengan ``PochiBridge``. Implementasi konkret:
 ``HermesAcpAdapter`` (Hermes Agent via ACP), ``RouterAdapter`` (9Router),
-``MockAdapter`` (DEMO), dan ``AutoAdapter`` (fallback terverifikasi).
+``OpenRouterAdapter`` (OpenRouter cloud), ``MockAdapter`` (DEMO), dan
+``AutoAdapter`` (fallback terverifikasi).
 
-Tidak ada API key di lapisan ini maupun di UI.
+Tidak ada API key di source, config, maupun di UI; key OpenRouter dibaca dari
+environment/.env/file 0600 saat adapter dibuat.
 """
 from __future__ import annotations
 

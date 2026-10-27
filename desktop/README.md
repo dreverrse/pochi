@@ -7,9 +7,10 @@ panel melebar menjadi **Chat** saat kamu mulai bertanya. Maskot Pochi punya
 15 ekspresi yang mengikuti status dan interaksi.
 
 Dibangun dengan **PyQt6** (Qt 6, native, ringan). Tidak ada API key di
-source; key model hanya dari env (`POCHI_API_KEY`) bila perlu. Font bundel
-Poppins ikut disebar di `assets/fonts/`; ikon digambar sendiri dengan
-QPainter (tanpa dependency ikon eksternal).
+source: key model dibaca saat runtime dari environment, `~/.hermes/.env`,
+atau file 0600 khusus OpenRouter. Font bundel Poppins ikut disebar di
+`assets/fonts/`; ikon digambar sendiri dengan QPainter (tanpa dependency
+ikon eksternal).
 
 ## Arsitektur (lapisan)
 
@@ -22,10 +23,10 @@ pochi_desktop/
     theme.py                 palet & stylesheet terpusat
   integration/
     bridge.py                kontrak PochiBridge (abstract)
-    auto_adapter.py          pilih backend otomatis (9Router→Hermes→demo)
+    auto_adapter.py          pilih backend otomatis (Hermes→9Router→OpenRouter→demo)
     mock_adapter.py          MockAdapter (mode tiruan, tanpa label demo)
     hermes_adapter.py        integrasi Hermes resmi (ACP)
-    router_adapter.py        klien OpenAI-compatible 9Router (localhost:20128)
+    router_adapter.py        klien OpenAI-compatible 9Router + OpenRouter
     text.py                  pemecah teks/streaming
   platform_x11/
     x11.py                   helper X11: geometri layar + posisi anchor
@@ -71,15 +72,41 @@ Butuh compositor untuk transparansi (xfwm4 compositing aktif).
   3 error berturut-turut Pochi kesal, dan 2 error membuatnya menangis.
   Klik maskot = poke, klik kanan = pet, klik dua kali = tertawa. Ekspresi
   interaktif kembali ke status setelah beberapa detik.
-- Pengaturan (`⋯`): posisi, skala, aksen, pintasan, reduce motion. Saat
-  reduce motion aktif, blink, siklus ekspresi, dan animasi panel dimatikan.
+- Pengaturan (`⋯`): posisi, skala, aksen, pintasan, reduce motion, backend,
+  model, serta API key OpenRouter (disimpan 0600). Saat reduce motion aktif,
+  blink, siklus ekspresi, dan animasi panel dimatikan.
 
 ## Backend
 
-- `auto` (default): mencoba 9Router → Hermes → fallback tiruan.
-- `hermes` / `9router`: integrasi nyata.
+- `auto` (default): Hermes ACP → 9Router → OpenRouter (hanya bila key sudah
+  tersimpan) → fallback tiruan.
+- `hermes` / `9router`: integrasi lokal yang sudah ada.
+- `openrouter`: cloud OpenAI-compatible (`https://openrouter.ai/api/v1`),
+  model default `openrouter/auto` dan bisa diganti di Pengaturan.
 - `demo`: mode tiruan (tanpa backend nyata).
 - Backend dipilih lewat `--backend` atau di pengaturan.
+
+### OpenRouter
+
+Isi API key di **Pengaturan → Backend & model → OpenRouter API key**. Key
+disimpan terpisah dari config di `~/.config/pochi-desktop/openrouter.key`
+dengan izin `0600`, dan tidak pernah ditampilkan lagi (hanya 4 karakter
+terakhir). Urutan pembacaan key:
+
+1. environment `OPENROUTER_API_KEY` (atau `POCHI_OPENROUTER_KEY`)
+2. `OPENROUTER_API_KEY` di `~/.hermes/.env`
+3. file `~/.config/pochi-desktop/openrouter.key`
+
+Contoh memakai env saja (tanpa menyimpan file):
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-... /usr/bin/python3 main.py --backend openrouter
+```
+
+Model gratis di OpenRouter memakai akhiran `:free` (daftar terbaru di
+<https://openrouter.ai/models?max_price=0>); tanpa akhiran itu pemakaian
+mengikuti harga model dan kredit akun. Error 402 (kredit habis) dan 401 (key
+salah) ditampilkan sebagai pesan yang bisa ditindaklanjuti, bukan data mentah.
 
 ## Menghentikan
 
@@ -91,6 +118,9 @@ pkill -f "pochi_desktop/main.py"
 
 ## Keamanan
 
-- Tidak ada key di source. Key model hanya dari env (`POCHI_API_KEY`).
-- Komunikasi model hanya ke `localhost:20128` (private). Tidak ada port publik.
+- Tidak ada key di source. Key model dibaca runtime dari environment,
+  `~/.hermes/.env`, atau `openrouter.key` (0600); tidak pernah masuk
+  `config.json`, log, atau tampilan UI.
+- Komunikasi 9Router hanya ke `localhost:20128` (private). OpenRouter hanya
+  dipanggil lewat HTTPS bila backend-nya dipilih/punya key. Tidak ada port publik.
 - Tidak ada eksekusi shell dari teks pengguna.

@@ -157,8 +157,18 @@ def test_gateway_probe() -> None:
 
 def test_candidates() -> None:
     cfg = Config(backend="auto", hermes_command="__definitely_not_installed__")
-    labels = [label for _factory, label in _candidates(cfg)]
-    assert labels == ["9Router", "DEMO"], labels
+    import integration.auto_adapter as auto_module
+
+    original = auto_module.openrouter_api_key
+    auto_module.openrouter_api_key = lambda: ""   # isolasi dari key mesin ini
+    try:
+        labels = [label for _factory, label in _candidates(cfg)]
+        assert labels == ["9Router", "DEMO"], labels
+        auto_module.openrouter_api_key = lambda: "kunci-uji"
+        labels = [label for _factory, label in _candidates(cfg)]
+        assert labels == ["9Router", "OpenRouter", "DEMO"], labels
+    finally:
+        auto_module.openrouter_api_key = original
     demo = [label for _f, label in _candidates(Config(backend="demo"))]
     assert demo == ["DEMO"]
     hermes = [label for _f, label in _candidates(Config(backend="hermes"))]

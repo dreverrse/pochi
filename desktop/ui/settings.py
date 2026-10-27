@@ -1,8 +1,9 @@
 """Dialog pengaturan Pochi — tampilan, posisi, interaksi, dan backend.
 
 Nilai disimpan ke ``~/.config/pochi-desktop/config.json``. Dialog ini tidak
-pernah menyimpan API key: kredensial model tetap dibaca runtime dari
-environment / ``~/.hermes/.env``.
+pernah menulis API key ke config: key OpenRouter disimpan terpisah di
+``openrouter.key`` (izin 0600), sedangkan kredensial lain tetap dibaca runtime
+dari environment / ``~/.hermes/.env``.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from app import theme
 from app.config import ANCHORS, BACKENDS
+from services.probes import openrouter_key_hint, save_openrouter_key
 from ui.components import DialogShell, Divider
 
 ANCHOR_LABELS = {
@@ -26,9 +28,10 @@ ANCHOR_LABELS = {
     "top-right": "Kanan atas",
 }
 BACKEND_LABELS = {
-    "auto": "Auto (Hermes → 9Router → DEMO)",
+    "auto": "Auto (Hermes → 9Router → OpenRouter → DEMO)",
     "hermes": "Hermes ACP saja",
     "9router": "9Router langsung",
+    "openrouter": "OpenRouter (cloud)",
     "demo": "DEMO (tanpa backend nyata)",
 }
 
@@ -41,6 +44,7 @@ class SettingsDialog(DialogShell):
                          parent, width=500, height=600)
         self.cfg = cfg
         self._reset_position = False
+        self._clear_or_key = False
         self.setWindowTitle("Pengaturan Pochi")
 
         scroll = QScrollArea()
@@ -161,6 +165,25 @@ class SettingsDialog(DialogShell):
         self.base.setPlaceholderText("http://127.0.0.1:20128/v1")
         bform.addRow("9Router base URL", self.base)
 
+        self.or_model = QLineEdit(cfg.openrouter_model)
+        self.or_model.setPlaceholderText("openrouter/auto")
+        bform.addRow("Model OpenRouter", self.or_model)
+
+        self.or_key = QLineEdit()
+        self.or_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.or_key.setPlaceholderText(
+            openrouter_key_hint() or "Belum ada key — tempel di sini")
+        self.or_key.textEdited.connect(self._on_or_key_edited)
+        key_row = QHBoxLayout()
+        key_row.setSpacing(6)
+        key_row.addWidget(self.or_key, 1)
+        self.clear_or_key = QPushButton("Hapus")
+        self.clear_or_key.setObjectName("ghost")
+        self.clear_or_key.setToolTip("Hapus API key OpenRouter yang tersimpan")
+        self.clear_or_key.clicked.connect(self._clear_openrouter_key)
+        key_row.addWidget(self.clear_or_key)
+        bform.addRow("OpenRouter API key", key_row)
+
         self.timeout = QSpinBox()
         self.timeout.setRange(15, 300)
         self.timeout.setSuffix(" dtk")
@@ -169,8 +192,10 @@ class SettingsDialog(DialogShell):
         v.addLayout(bform)
 
         note2 = QLabel(
-            "Kredensial tidak pernah disimpan di sini. 9Router memakai key "
-            "dari environment atau ~/.hermes/.env; Hermes membaca "
+            "Kredensial tidak ditulis ke config.json. Key OpenRouter disimpan "
+            "terpisah di ~/.config/pochi-desktop/openrouter.key (izin 0600); "
+            "environment OPENROUTER_API_KEY tetap diprioritaskan. 9Router "
+            "memakai key dari environment atau ~/.hermes/.env; Hermes membaca "
             "konfigurasinya sendiri. Perubahan backend diterapkan saat Simpan.")
         note2.setWordWrap(True)
         note2.setObjectName("dim")
@@ -218,6 +243,15 @@ class SettingsDialog(DialogShell):
         self._reset_position = True
         self.pos_label.setText("Mengikuti jangkar (saat Simpan)")
 
+    def _on_or_key_edited(self, _text: str):
+        # Mengetik key baru membatalkan permintaan hapus.
+        self._clear_or_key = False
+
+    def _clear_openrouter_key(self):
+        self.or_key.clear()
+        self._clear_or_key = True
+        self.or_key.setPlaceholderText("Akan dihapus saat Simpan")
+
     def accept(self):
         key = self.toggle_key.keySequence().toString().strip()
         if not key:
@@ -228,9 +262,28 @@ class SettingsDialog(DialogShell):
         if not model:
             self._fail("Nama model tidak boleh kosong.")
             return
+        or_model = self.or_model.text().strip()
+        if not or_model:
+            self._fail("Model OpenRouter tidak boleh kosong.")
+            return
+        new_key = self.or_key.text().strip()
+        if any(ch.isspace() for ch in new_key):
+            self._fail("API key OpenRouter tidak boleh mengandung spasi.")
+            return
+        if len(new_key) > 512:
+            self._fail("API key OpenRouter terlalu panjang.")
+            return
         parsed = urlsplit(base if "://" in base else "http://" + base)
         if not parsed.hostname:
             self._fail("Base URL 9Router tidak valid.")
+            return
+        try:
+            if new_key:
+                save_openrouter_key(new_key)
+            elif self._clear_or_key:
+                save_openrouter_key("")
+        except OSError as exc:
+            self._fail(f"Tidak bisa menyimpan API key OpenRouter: {exc}")
             return
 
         cfg = self.cfg
@@ -244,6 +297,7 @@ class SettingsDialog(DialogShell):
         cfg.backend = str(self.backend.currentData() or "auto")
         cfg.model_name = model
         cfg.model_base = base
+        cfg.openrouter_model = or_model
         cfg.request_timeout = self.timeout.value()
         if self._reset_position:
             cfg.reset_position()
@@ -253,6 +307,10 @@ class SettingsDialog(DialogShell):
         except Exception as exc:
             self._fail(f"Tidak bisa menyimpan konfigurasi: {exc}")
             return
+        self.or_key.clear()
+        self._clear_or_key = False
+        self.or_key.setPlaceholderText(
+            openrouter_key_hint() or "Belum ada key — tempel di sini")
         self.error.setVisible(False)
         self.saved.emit()
         super().accept()

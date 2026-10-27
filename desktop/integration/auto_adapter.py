@@ -3,7 +3,8 @@
 Urutan mode ``auto``:
   1. Hermes ACP  — jalur resmi, streaming + tool + izin
   2. 9Router     — model langsung lewat gateway lokal
-  3. DEMO        — mock berlabel jelas (tidak menyamar sebagai AI nyata)
+  3. OpenRouter  — cloud, hanya bila API key sudah tersimpan
+  4. DEMO        — mock berlabel jelas (tidak menyamar sebagai AI nyata)
 
 Jika sebuah kandidat gagal sebelum pernah menjawab, UI diberi tahu dan
 kandidat berikutnya dicoba. Setelah backend benar-benar menjawab, kegagalan
@@ -16,8 +17,8 @@ from PyQt6.QtCore import QTimer
 from integration.bridge import PochiBridge
 from integration.hermes_adapter import HermesAcpAdapter
 from integration.mock_adapter import MockAdapter
-from integration.router_adapter import RouterAdapter
-from services.probes import has_command
+from integration.router_adapter import OpenRouterAdapter, RouterAdapter
+from services.probes import has_command, openrouter_api_key
 
 START_TIMEOUT_MS = 35_000
 
@@ -188,6 +189,7 @@ class AutoAdapter(PochiBridge):
 def _candidates(cfg):
     hermes = (lambda c: HermesAcpAdapter(c), "Hermes ACP")
     router = (lambda c: RouterAdapter(c), "9Router")
+    openrouter = (lambda c: OpenRouterAdapter(c), "OpenRouter")
     demo = (lambda c: MockAdapter(c), "DEMO")
     if cfg.backend == "demo":
         return [demo]
@@ -195,10 +197,15 @@ def _candidates(cfg):
         return [hermes]
     if cfg.backend == "9router":
         return [router]
+    if cfg.backend == "openrouter":
+        return [openrouter]
     out = []
     if has_command(cfg.hermes_command):
         out.append(hermes)
     out.append(router)
+    # Cloud hanya ikut fallback kalau pengguna sudah menyimpan key (opt-in).
+    if openrouter_api_key():
+        out.append(openrouter)
     out.append(demo)
     return out
 
@@ -210,6 +217,7 @@ def create_bridge(cfg) -> PochiBridge:
     factory = {
         "hermes": lambda c: HermesAcpAdapter(c),
         "9router": lambda c: RouterAdapter(c),
+        "openrouter": lambda c: OpenRouterAdapter(c),
         "demo": lambda c: MockAdapter(c),
     }.get(cfg.backend, lambda c: AutoAdapter(c))
     return factory(cfg)

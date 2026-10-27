@@ -69,8 +69,8 @@ class MockAdapter(PochiBridge):
             body = (f"Pertanyaanmu: “{text.strip()[:120]}”. Aku belum memanggil model, "
                     "jadi ini bukan jawaban nyata.")
         else:
-            body = (f"Aku menerima: “{text.strip()[:120]}”. Hubungkan Hermes ACP atau "
-                    "9Router untuk jawaban nyata.")
+            body = (f"Aku menerima: “{text.strip()[:120]}”. Hubungkan Hermes ACP, "
+                    "9Router, atau OpenRouter untuk jawaban nyata.")
         return body
 
     def _tick(self) -> None:

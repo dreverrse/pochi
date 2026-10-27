@@ -148,7 +148,7 @@ class PochiCard(Card):
             f"color:{color.name()}; font-size:15px; font-weight:600;")
 
     def _on_connection(self, conn):
-        if conn.ok and conn.backend in ("hermes", "9router"):
+        if conn.ok and conn.backend in ("hermes", "9router", "openrouter"):
             color = theme.GREEN
         elif conn.backend == "demo":
             color = theme.AMBER
@@ -219,10 +219,13 @@ class ConnectionsCard(Card):
 
         self.hermes = ConnectionRow("spark", "Hermes ACP")
         self.router = ConnectionRow("globe", "9Router")
+        self.openrouter = ConnectionRow("globe", "OpenRouter")
         self.telegram = ConnectionRow("telegram", "Telegram")
         self.add(self.hermes)
         self.add(self.router)
+        self.add(self.openrouter)
         self.add(self.telegram)
+        self.openrouter.setVisible(False)
 
         foot = QHBoxLayout()
         foot.setSpacing(6)
@@ -251,6 +254,22 @@ class ConnectionsCard(Card):
                 "9Router · offline",
                 router.get("detail", "Tidak terjangkau"),
                 theme.RED, router.get("detail", ""))
+
+        or_info = data.get("openrouter") or {}
+        has_or = bool(data.get("openrouter_key"))
+        self.openrouter.setVisible(has_or)
+        if has_or:
+            if or_info.get("ok"):
+                self.openrouter.set_state(
+                    "OpenRouter · siap",
+                    f"{or_info.get('endpoint', '')} · "
+                    f"{or_info.get('latency_ms', 0)} ms",
+                    theme.GREEN, or_info.get("detail", ""))
+            else:
+                self.openrouter.set_state(
+                    "OpenRouter · offline",
+                    or_info.get("detail", "Tidak terjangkau"),
+                    theme.RED, or_info.get("detail", ""))
 
         tg_state = str(gateway.get("telegram") or "").lower()
         configured = bool(gateway.get("running")) and tg_state not in (

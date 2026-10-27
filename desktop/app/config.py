@@ -1,8 +1,10 @@
 """Pochi desktop — konfigurasi aplikasi.
 
-Disimpan di ``~/.config/pochi-desktop/config.json``. Tidak pernah menyimpan
-API key/token: kredensial model dibaca saat runtime dari environment atau
-``~/.hermes/.env`` (lihat ``integration/router_adapter.py``).
+Disimpan di ``~/.config/pochi-desktop/config.json``. File ini tidak pernah
+menyimpan API key/token: kredensial 9Router dibaca runtime dari environment
+atau ``~/.hermes/.env``, sedangkan key OpenRouter disimpan terpisah di
+``~/.config/pochi-desktop/openrouter.key`` dengan izin 0600 (lihat
+``services/probes.py`` dan ``integration/router_adapter.py``).
 """
 from __future__ import annotations
 
@@ -27,7 +29,8 @@ ACCENTS = {
 }
 
 ANCHORS = ("top-left", "top-center", "top-right")
-BACKENDS = ("auto", "hermes", "9router", "demo")
+BACKENDS = ("auto", "hermes", "9router", "openrouter", "demo")
+OPENROUTER_DEFAULT_MODEL = "openrouter/auto"
 
 
 @dataclass
@@ -51,10 +54,11 @@ class Config:
     system_poll_ms: int = 2000
 
     # ---- backend ---------------------------------------------------------
-    backend: str = "auto"                 # auto | hermes | 9router | demo
+    backend: str = "auto"                 # auto | hermes | 9router | openrouter | demo
     hermes_command: str = "hermes"
     model_base: str = "http://127.0.0.1:20128/v1"
     model_name: str = "inc/mercury-3"
+    openrouter_model: str = OPENROUTER_DEFAULT_MODEL
     request_timeout: int = 90
 
     # ---- interaksi -------------------------------------------------------
@@ -90,6 +94,8 @@ class Config:
         self.compact_width = min(260, max(140, int(self.compact_width)))
         self.system_poll_ms = min(10_000, max(800, int(self.system_poll_ms)))
         self.request_timeout = min(300, max(15, int(self.request_timeout)))
+        self.openrouter_model = (str(self.openrouter_model or "").strip()
+                                 or OPENROUTER_DEFAULT_MODEL)[:120]
 
     def save(self) -> None:
         self.apply_clamps()

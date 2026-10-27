@@ -9,7 +9,10 @@ import time
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
-from services.probes import gateway_status, has_command, router_status
+from services.probes import (
+    gateway_status, has_command, openrouter_api_key, openrouter_status,
+    router_status,
+)
 
 
 class HealthService(QObject):
@@ -41,11 +44,13 @@ class HealthService(QObject):
 
     def refresh(self) -> None:
         router = router_status(self.cfg.model_base)
-        gw = gateway_status()
+        has_or_key = bool(openrouter_api_key())
         now = time.time()
         data = {
             "router": router,
-            "gateway": gw,
+            "openrouter": openrouter_status() if has_or_key else {},
+            "openrouter_key": has_or_key,
+            "gateway": gateway_status(),
             "hermes_cli": has_command(self.cfg.hermes_command),
             "model": self.cfg.model_name,
             "checked_at": now,

@@ -1,9 +1,11 @@
-"""9Router (OpenAI-compatible lokal) — adapter fallback langsung ke model.
+"""Adapter model langsung (OpenAI-compatible) — 9Router lokal & OpenRouter.
 
-Dipakai bila Hermes ACP tidak tersedia. Kredensial dibaca server-side dari
-environment atau ``~/.hermes/.env`` dan tidak pernah dikirim ke UI/log.
-Streaming SSE diparse secara defensif karena beberapa gateway menambahkan
-``data: [DONE]`` di ekor baris.
+9Router dipakai bila Hermes ACP tidak tersedia; OpenRouter dipakai bila
+pengguna memilihnya (atau sudah menyimpan key dan mode auto perlu fallback).
+Kredensial dibaca server-side dari environment, ``~/.hermes/.env``, atau file
+0600 milik Pochi, dan tidak pernah dikirim ke UI/log. Streaming SSE diparse
+secara defensif karena beberapa gateway menambahkan ``data: [DONE]`` di ekor
+baris.
 """
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ import queue
 import socket
 import ssl
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -21,7 +24,9 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from integration.bridge import PochiBridge
 from integration.text import extract_text, sanitize
-from services.probes import router_api_key, router_status
+from services.probes import (
+    OPENROUTER_BASE, openrouter_api_key, router_api_key, router_status,
+)
 
 SYSTEM_PROMPT = (
     "Kamu adalah Pochi, asisten AI desktop pribadi di Linux. "
@@ -34,6 +39,20 @@ _IMG_MIME = {
     "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
     "gif": "image/gif", "bmp": "image/bmp", "webp": "image/webp",
 }
+
+
+@dataclass(frozen=True)
+class ProviderProfile:
+    """Detail satu penyedia OpenAI-compatible (base, model, key, label)."""
+
+    name: str
+    label: str
+    tag: str
+    base: str
+    model: str
+    key: str
+    where: str          # "Lokal" / "Cloud" untuk teks status
+    auth_hint: str      # saran saat 401/403, tanpa membocorkan key
 
 
 def _content_parts(text: str, files) -> list[dict]:
@@ -112,10 +131,19 @@ class RouterAdapter(PochiBridge):
         self.cfg = cfg
         self._worker: _RouterWorker | None = None
 
+    def profile(self) -> ProviderProfile:
+        return ProviderProfile(
+            name=self.name, label=self.label, tag="9ROUTER",
+            base=self.cfg.model_base, model=self.cfg.model_name,
+            key=router_api_key(), where="Lokal",
+            auth_hint=("9Router menolak kredensial. Periksa key di "
+                       "environment atau ~/.hermes/.env (tidak ditampilkan)."),
+        )
+
     def start(self) -> None:
         if self._worker is not None:
             return
-        self._worker = _RouterWorker(self.cfg)
+        self._worker = _RouterWorker(self.cfg, self.profile())
         w = self._worker
         w.sig_status.connect(self.on_status)
         w.sig_delta.connect(self.on_delta)
@@ -145,6 +173,22 @@ class RouterAdapter(PochiBridge):
                 w.wait(1500)
 
 
+class OpenRouterAdapter(RouterAdapter):
+    """OpenRouter (cloud, OpenAI-compatible) — key dari env/.env/file 0600."""
+
+    name = "openrouter"
+    label = "OpenRouter"
+
+    def profile(self) -> ProviderProfile:
+        return ProviderProfile(
+            name=self.name, label=self.label, tag="OPENROUTER",
+            base=OPENROUTER_BASE, model=self.cfg.openrouter_model,
+            key=openrouter_api_key(), where="Cloud",
+            auth_hint=("OpenRouter menolak API key. Buka Pengaturan → Backend "
+                       "& model untuk mengisi/mengganti key."),
+        )
+
+
 class _RouterWorker(QThread):
     sig_status = pyqtSignal(str)
     sig_delta = pyqtSignal(str)
@@ -153,9 +197,10 @@ class _RouterWorker(QThread):
     sig_connection = pyqtSignal(object)
     sig_usage = pyqtSignal(int, int)
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, profile: ProviderProfile):
         super().__init__()
         self.cfg = cfg
+        self.profile = profile
         self._jobs: queue.Queue = queue.Queue()
         self._stop_evt = threading.Event()
         self._cancel_evt = threading.Event()
@@ -197,24 +242,41 @@ class _RouterWorker(QThread):
                 if self._cancel_evt.is_set():
                     self.sig_status.emit("idle")
                 else:
-                    self.sig_error.emit(_friendly_error(exc))
+                    p = self.profile
+                    self.sig_error.emit(
+                        _friendly_error(exc, p.label, p.where.lower()))
             finally:
                 self._close()
 
     def _probe(self) -> None:
-        status = router_status(self.cfg.model_base, timeout=0.7)
+        p = self.profile
+        if p.name == "openrouter" and not p.key:
+            self.sig_connection.emit({
+                "backend": p.name, "label": p.label, "ok": False,
+                "model": p.model,
+                "detail": ("API key OpenRouter belum diisi. Buka Pengaturan → "
+                           "Backend & model."),
+                "latency_ms": 0,
+            })
+            return
+        status = router_status(p.base, timeout=0.7)
         self.sig_connection.emit({
-            "backend": "9router",
-            "label": "9Router",
+            "backend": p.name,
+            "label": p.label,
             "ok": bool(status["ok"]),
-            "model": self.cfg.model_name,
-            "detail": (f"Lokal · {status['latency_ms']} ms"
+            "model": p.model,
+            "detail": (f"{p.where} · {status['latency_ms']} ms"
                        if status["ok"] else status["detail"]),
             "latency_ms": status["latency_ms"],
         })
 
     # ------------------------------------------------------------- request
     def _run_prompt(self, text: str, history: list[dict], files: list) -> None:
+        p = self.profile
+        if not p.key and p.name == "openrouter":
+            self.sig_error.emit(
+                "API key OpenRouter belum diisi. Buka Pengaturan → Backend & model.")
+            return
         self.sig_status.emit("thinking")
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         for m in history or []:
@@ -227,22 +289,22 @@ class _RouterWorker(QThread):
         elif not messages or messages[-1].get("content") != text:
             messages.append({"role": "user", "content": text})
 
-        u = urlsplit(self.cfg.model_base if "://" in self.cfg.model_base
-                     else "http://" + self.cfg.model_base)
+        u = urlsplit(p.base if "://" in p.base else "http://" + p.base)
         host = u.hostname or "127.0.0.1"
         port = u.port or (443 if u.scheme == "https" else 80)
         base_path = (u.path or "").rstrip("/")
         path = f"{base_path}/chat/completions"
-        key = router_api_key()
         headers = {
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
             "User-Agent": "pochi-desktop/2.0",
         }
-        if key:
-            headers["Authorization"] = f"Bearer {key}"
+        if p.name == "openrouter":
+            headers["X-Title"] = "Pochi Desktop"
+        if p.key:
+            headers["Authorization"] = f"Bearer {p.key}"
         body = json.dumps({
-            "model": self.cfg.model_name,
+            "model": p.model,
             "messages": messages,
             "stream": True,
         }).encode("utf-8")
@@ -265,10 +327,12 @@ class _RouterWorker(QThread):
             except Exception:
                 pass
             if resp.status in (401, 403):
+                raise RouterError(p.auth_hint)
+            if resp.status == 402 and p.name == "openrouter":
                 raise RouterError(
-                    "9Router menolak kredensial. Periksa key di ~/.hermes/.env "
-                    "(tidak ditampilkan di UI).")
-            raise RouterError(f"9Router HTTP {resp.status}. {detail}".strip())
+                    "Saldo/kredit OpenRouter habis. Isi kredit atau pilih model "
+                    "gratis (akhiran :free) di Pengaturan.")
+            raise RouterError(f"{p.label} HTTP {resp.status}. {detail}".strip())
 
         ctype = (resp.getheader("Content-Type") or "").lower()
         if "text/event-stream" not in ctype:
@@ -289,7 +353,7 @@ class _RouterWorker(QThread):
                 if self._cancel_evt.is_set():
                     break
                 if accumulated.strip():
-                    self.sig_message.emit(accumulated.strip(), "9ROUTER")
+                    self.sig_message.emit(accumulated.strip(), p.tag)
                 else:
                     self.sig_error.emit(err)
                 return
@@ -310,20 +374,21 @@ class _RouterWorker(QThread):
         if self._cancel_evt.is_set():
             self.sig_status.emit("idle")
             return
-        self.sig_message.emit(text_out, "9ROUTER")
+        self.sig_message.emit(text_out, p.tag)
         if not usage_emitted:
             self.sig_usage.emit(max(0, len(text_out) // 4), 0)
 
     def _handle_plain(self, payload: str) -> None:
+        p = self.profile
         payload = payload.split("data: [DONE]", 1)[0].strip()
         try:
             obj = json.loads(payload)
         except Exception:
-            raise RouterError("Respons 9Router bukan JSON yang valid.")
+            raise RouterError(f"Respons {p.label} bukan JSON yang valid.")
         if obj.get("error"):
             err = obj["error"]
             msg = err.get("message") if isinstance(err, dict) else str(err)
-            raise RouterError(sanitize(msg or "9Router error", 200))
+            raise RouterError(sanitize(msg or f"{p.label} error", 200))
         choices = obj.get("choices") or []
         text = ""
         if choices and isinstance(choices[0], dict):
@@ -335,7 +400,7 @@ class _RouterWorker(QThread):
         if self._cancel_evt.is_set():
             self.sig_status.emit("idle")
             return
-        self.sig_message.emit(text, "9ROUTER")
+        self.sig_message.emit(text, p.tag)
 
     def _close(self) -> None:
         try:
@@ -356,13 +421,18 @@ class RouterError(RuntimeError):
     pass
 
 
-def _friendly_error(exc: Exception) -> str:
+def _friendly_error(exc: Exception, label: str = "9Router",
+                    where: str = "lokal") -> str:
     if isinstance(exc, (socket.timeout, TimeoutError)):
-        return "9Router timeout. Model terlalu lama merespons; coba lagi."
+        return f"{label} timeout. Model terlalu lama merespons; coba lagi."
     if isinstance(exc, ConnectionRefusedError):
-        return "9Router tidak berjalan di port lokal. Nyalakan 9Router lalu coba lagi."
+        if where == "lokal":
+            return f"{label} tidak berjalan di port lokal. Nyalakan {label} lalu coba lagi."
+        return f"Koneksi {label} ditolak server."
     if isinstance(exc, socket.gaierror):
-        return "Alamat 9Router tidak valid."
+        return f"Alamat {label} tidak valid atau DNS gagal."
+    if isinstance(exc, ssl.SSLError):
+        return f"TLS {label} gagal: {sanitize(str(exc), 160)}"
     if isinstance(exc, (http.client.HTTPException, OSError)):
-        return f"Koneksi 9Router gagal: {sanitize(str(exc), 160)}"
-    return sanitize(str(exc), 220) or "Terjadi kesalahan pada 9Router."
+        return f"Koneksi {label} gagal: {sanitize(str(exc), 160)}"
+    return sanitize(str(exc), 220) or f"Terjadi kesalahan pada {label}."
