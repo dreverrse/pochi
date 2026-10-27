@@ -15,7 +15,8 @@ from PyQt6.QtWidgets import QWidget
 
 from app.state import Status
 
-NORMAL, HAPPY, WORKING, ERROR = "normal", "happy", "working", "error"
+NORMAL, HAPPY, WORKING, ERROR, SLEEPING = \
+    "normal", "happy", "working", "error", "sleeping"
 
 EMOTE_BY_STATUS = {
     Status.IDLE: NORMAL,
@@ -42,6 +43,7 @@ class PochiMascot(QWidget):
         self._blinking = False
         self._blink_until = 0.0
         self._next_blink = time.monotonic() + random.uniform(2.2, 4.0)
+        self._sleeping = False
 
         w = int(self._size * 1.42) if self._backing else self._size
         self.setFixedSize(w, self._size)
@@ -77,12 +79,25 @@ class PochiMascot(QWidget):
         return QColor(Status.color(self.current_status()))
 
     def emote(self) -> str:
+        if self._sleeping:
+            return SLEEPING
         return EMOTE_BY_STATUS.get(self.current_status(), NORMAL)
 
     def set_reduce_motion(self, value: bool) -> None:
         self._reduce = bool(value)
         self._refresh_timer()
         self.update()
+
+    def set_sleeping(self, value: bool) -> None:
+        value = bool(value)
+        if value == self._sleeping:
+            return
+        self._sleeping = value
+        self._refresh_timer()
+        self.update()
+
+    def sleeping(self) -> bool:
+        return self._sleeping
 
     def _needs_motion(self) -> bool:
         return not self._reduce and self.isVisible()
@@ -158,6 +173,10 @@ class PochiMascot(QWidget):
             p.setBrush(_WHITE)
             p.drawEllipse(QRectF(lx - r, ey - r, r * 2, r * 2))
             p.drawEllipse(QRectF(rx - r, ey - r, r * 2, r * 2))
+        elif emote == SLEEPING:
+            self._sleep_lid(p, lx, ey, s, stroke)
+            self._sleep_lid(p, rx, ey, s, stroke)
+            self._draw_z(p, (lx + rx) * 0.5, ey - s * 0.42, s, stroke)
         else:
             ew = s * 0.15
             eh = s * 0.28
@@ -184,6 +203,29 @@ class PochiMascot(QWidget):
         p.setPen(QPen(_WHITE, stroke, Qt.PenStyle.SolidLine,
                       Qt.PenCapStyle.RoundCap))
         p.drawLine(QPointF(cx - half, cy), QPointF(cx + half, cy))
+
+    def _sleep_lid(self, p, cx, cy, s, stroke):
+        half_w = s * 0.10
+        half_h = s * 0.055
+        path = QPainterPath()
+        path.moveTo(cx - half_w, cy)
+        path.quadTo(cx, cy - half_h, cx + half_w, cy)
+        p.setPen(QPen(_WHITE, stroke, Qt.PenStyle.SolidLine,
+                      Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawPath(path)
+
+    def _draw_z(self, p, cx, cy, s, stroke):
+        w = s * 0.10
+        h = s * 0.16
+        p.setPen(QPen(_WHITE, stroke * 0.7, Qt.PenStyle.SolidLine,
+                      Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(cx - w / 2, cy - h / 2),
+                   QPointF(cx + w / 2, cy - h / 2))
+        p.drawLine(QPointF(cx + w / 2, cy - h / 2),
+                   QPointF(cx - w / 2, cy + h / 2))
+        p.drawLine(QPointF(cx - w / 2, cy + h / 2),
+                   QPointF(cx + w / 2, cy + h / 2))
 
     def _cross(self, p, cx, cy, s, stroke):
         r = s * 0.07

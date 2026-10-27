@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 from app import theme
 from app.state import Status
 from platform_x11.x11 import anchor_origin, work_area
+from services.fullscreen import FullscreenService
 from ui.activity import ActivityArea
 from ui.chat import ChatPanel
 from ui.components import Dot, EllipsisLabel, IconButton, icon_label
@@ -112,6 +113,14 @@ class IslandWindow(QWidget):
         self._idle = QTimer(self)
         self._idle.setSingleShot(True)
         self._idle.timeout.connect(self._auto_collapse)
+        self._sleep_timer = QTimer(self)
+        self._sleep_timer.setSingleShot(True)
+        self._sleep_timer.timeout.connect(self._go_sleep)
+
+        self._hidden_by_fullscreen = False
+        self._fullscreen = FullscreenService(2000, parent=self)
+        self._fullscreen.changed.connect(self._on_fullscreen)
+        self._fullscreen.start()
 
         self._anim = QPropertyAnimation(self, b"geometry", self)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
@@ -358,6 +367,7 @@ class IslandWindow(QWidget):
     def expand(self, animate: bool = True):
         if self._mode == "expanded":
             return
+        self._wake()
         self._mode = "expanded"
         self._compute_sizes()
         self._position_contents()
@@ -386,9 +396,14 @@ class IslandWindow(QWidget):
     def collapse(self, animate: bool = True):
         if self._mode == "collapsed":
             return
+        self._wake()
         self._mode = "collapsed"
         self._idle.stop()
         self.activity.stop_polling()
+        # jadwalkan tidur (30 dtk idle, hanya saat collapsed & tidak sibuk)
+        if not self.controller.busy and self._permission is None:
+            secs = getattr(self.cfg, "sleep_after_seconds", 30)
+            self._sleep_timer.start(int(max(5, secs) * 1000))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         eff = self._expanded.graphicsEffect()
         if eff is not None:
@@ -684,7 +699,17 @@ class IslandWindow(QWidget):
             e.acceptProposedAction()
 
     # ---------------------------------------------------------------- idle
+    def _go_sleep(self):
+        if not self.mascot.sleeping():
+            self.mascot.set_sleeping(True)
+
+    def _wake(self):
+        self._sleep_timer.stop()
+        if self.mascot.sleeping():
+            self.mascot.set_sleeping(False)
+
     def _reset_idle(self):
+        self._wake()
         if (self._mode != "expanded" or self._permission is not None
                 or self.controller.busy):
             self._idle.stop()
@@ -699,6 +724,18 @@ class IslandWindow(QWidget):
         if self._mode == "expanded" and not self.controller.busy \
                 and self._permission is None:
             self.collapse()
+
+    def _on_fullscreen(self, fs: bool) -> None:
+        if fs == self._hidden_by_fullscreen:
+            return
+        self._hidden_by_fullscreen = fs
+        if fs:
+            self.hide()
+            self._sleep_timer.stop()
+        else:
+            self.setVisible(True)
+            self.show_without_activating()
+            self.raise_()
 
     # -------------------------------------------------------------- config
     def apply_config(self):
