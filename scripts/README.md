@@ -1,8 +1,8 @@
 # scripts/
 
-Skrip build & jalankan satu perintah.
+Skrip build & jalankan satu perintah (desktop = PyQt6, dipilih setelah M0).
 
-- `build-linux.sh` — build desktop Linux (Tauri): install deps frontend + build release.
-- `dev-linux.sh` — jalankan mode pengembangan desktop (tauri dev).
+- `dev-linux.sh` — jalankan mode pengembangan (python sistem, DISPLAY=:0).
+- `build-linux.sh` — pastikan dependensi (.venv) lalu jalankan.
 - `build-android.sh` — (nanti) build APK debug di laptop Arch.
-- `test-linux.sh` — jalankan tes Rust & frontend.
+- `test-linux.sh` — jalankan tes unit & UI smoke (`tests/test_logic.py`, `tests/smoke.py`).

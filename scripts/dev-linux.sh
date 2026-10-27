@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Mode pengembangan desktop Linux (tauri dev, hot-reload).
+# Mode pengembangan Pochi Desktop (jalankan langsung pakai python sistem).
 set -euo pipefail
 cd "$(dirname "$0")/../desktop"
-export PATH="$HOME/.cargo/bin:$PATH"
-npm run tauri dev
+DISPLAY="${DISPLAY:-:0}" exec /usr/bin/python3 main.py

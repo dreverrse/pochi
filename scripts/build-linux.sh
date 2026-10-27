@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Satu perintah: build desktop Linux (Tauri) — rilis.
+# Satu perintah: jalankan Pochi Desktop (PyQt6).
+# Stack ringan (dipilih sesuai hasil M0): Python + PyQt6 di /usr/bin/python3.
 set -euo pipefail
 cd "$(dirname "$0")/../desktop"
 
-export PATH="$HOME/.cargo/bin:$PATH"
+# Pastikan dependensi (opsional, sekali saja)
+if [ ! -d .venv ]; then
+  python3 -m venv .venv
+  .venv/bin/pip install -r requirements.txt
+fi
 
-# 1. deps frontend
-npm install --no-audit --no-fund
-
-# 2. build rilis Tauri (juga build frontend)
-npm run tauri build
+DISPLAY="${DISPLAY:-:0}" exec .venv/bin/python3 main.py
