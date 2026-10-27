@@ -100,14 +100,14 @@ def qss(family: str = "Poppins") -> str:
         border-radius: 12px;
     }}
     QFrame#banner {{
-        background: rgba(167, 139, 250, 0.10);
-        border: 1px solid rgba(167, 139, 250, 0.35);
-        border-radius: 12px;
+        background: rgba(124, 92, 255, 0.10);
+        border: 1px solid rgba(124, 92, 255, 0.35);
+        border-radius: 14px;
     }}
     QFrame#errorBanner {{
-        background: rgba(244, 63, 94, 0.10);
-        border: 1px solid rgba(244, 63, 94, 0.35);
-        border-radius: 12px;
+        background: rgba(255, 92, 122, 0.10);
+        border: 1px solid rgba(255, 92, 122, 0.35);
+        border-radius: 14px;
     }}
     QFrame#divider {{
         background: {BORDER_SOFT.name()};
@@ -115,19 +115,20 @@ def qss(family: str = "Poppins") -> str:
         border: none;
     }}
     QFrame#bubbleUser {{
-        background: rgba(167, 139, 250, 0.14);
-        border: 1px solid rgba(167, 139, 250, 0.30);
-        border-radius: 14px;
+        background: rgba(124, 92, 255, 0.18);
+        border: 1px solid rgba(196, 181, 253, 0.30);
+        border-radius: 16px;
     }}
     QFrame#bubbleAssistant {{
-        background: {PANEL_2.name()};
-        border: 1px solid {BORDER_SOFT.name()};
-        border-radius: 14px;
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 {CARD_TOP.name()}, stop:1 {CARD_BOTTOM.name()});
+        border: 1px solid {BORDER.name()};
+        border-radius: 16px;
     }}
     QFrame#bubbleError {{
-        background: rgba(244, 63, 94, 0.10);
-        border: 1px solid rgba(244, 63, 94, 0.32);
-        border-radius: 14px;
+        background: rgba(255, 92, 122, 0.10);
+        border: 1px solid rgba(255, 92, 122, 0.32);
+        border-radius: 16px;
     }}
 
     /* ---------------------------------------------------------- teks */

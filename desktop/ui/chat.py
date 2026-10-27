@@ -176,11 +176,11 @@ class ChatPanel(QWidget):
         wl.setContentsMargins(18, 18, 18, 18)
         wl.setSpacing(8)
         wl.addStretch(1)
-        self.welcome_mascot = PochiMascot(size=64, show_backing=True)
+        self.welcome_mascot = PochiMascot(size=86, show_backing=True)
         wl.addWidget(self.welcome_mascot, 0, Qt.AlignmentFlag.AlignHCenter)
         self.welcome_title = QLabel("Halo, aku Pochi.")
         self.welcome_title.setStyleSheet(
-            f"color:{theme.TEXT.name()}; font-size:17px; font-weight:600;")
+            f"color:{theme.TEXT.name()}; font-size:18px; font-weight:700;")
         self.welcome_title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         wl.addWidget(self.welcome_title)
         self.welcome_sub = QLabel(
@@ -189,7 +189,7 @@ class ChatPanel(QWidget):
         self.welcome_sub.setWordWrap(True)
         self.welcome_sub.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.welcome_sub.setStyleSheet(
-            f"color:{theme.MUTED.name()}; font-size:11px;")
+            f"color:{theme.MUTED.name()}; font-size:10px; line-height:1.5;")
         wl.addWidget(self.welcome_sub)
         chips = QHBoxLayout()
         chips.setSpacing(6)
@@ -263,8 +263,8 @@ class ChatPanel(QWidget):
             row.addWidget(bubble)
         else:
             avatar = QLabel()
-            avatar.setPixmap(pochi_face_pixmap(18))
-            avatar.setFixedSize(18, 18)
+            avatar.setPixmap(pochi_face_pixmap(22))
+            avatar.setFixedSize(22, 22)
             avatar.setStyleSheet("background:transparent;")
             row.addWidget(avatar, 0, Qt.AlignmentFlag.AlignTop)
             row.addSpacing(6)

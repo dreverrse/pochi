@@ -118,11 +118,67 @@ def test_screenshot_ringkas():
     ctl.shutdown()
 
 
+def test_ringkas_does_not_steal_focus():
+    w, ctl, media, cfg = make_window()
+    w.expand()
+    assert not w.input.hasFocus()
+    w.collapse()
+    ctl.shutdown()
+
+
+def test_ask_bar_opens_chat():
+    w, ctl, media, cfg = make_window()
+    w.expand()
+    w.ask_bar.click()
+    assert w.page == "chat"
+    assert w.stack.currentIndex() == 1
+    w.collapse()
+    ctl.shutdown()
+
+
+def test_escape_chat_to_ringkas_to_collapsed():
+    w, ctl, media, cfg = make_window()
+    w.expand()
+    w.show_chat()
+    w._escape()
+    assert w.page == "ringkas" and w.mode == "expanded"
+    w._escape()
+    assert w.mode == "collapsed"
+    ctl.shutdown()
+
+
+def test_draft_survives_collapse():
+    w, ctl, media, cfg = make_window()
+    w.expand()
+    w.show_chat()
+    w.input.setText("setengah pesan")
+    w.collapse()
+    w.expand()
+    w.show_chat()
+    assert w.input.text() == "setengah pesan"
+    w.collapse()
+    ctl.shutdown()
+
+
+def test_rapid_toggle():
+    w, ctl, media, cfg = make_window()
+    for _ in range(5):
+        w.expand()
+        w.show_chat()
+        w.show_ringkas()
+        w.collapse()
+    assert w.mode == "collapsed"
+    ctl.shutdown()
+
+
 if __name__ == "__main__":
     failed = 0
     for fn in (test_open_ringkas, test_compact_capsule,
                test_ringkas_fits_small_screen, test_ringkas_empty_state,
-               test_long_title_elides, test_screenshot_ringkas):
+               test_long_title_elides, test_screenshot_ringkas,
+               test_ringkas_does_not_steal_focus, test_ask_bar_opens_chat,
+               test_escape_chat_to_ringkas_to_collapsed,
+               test_draft_survives_collapse, test_rapid_toggle):
         try:
             fn()
         except Exception as exc:

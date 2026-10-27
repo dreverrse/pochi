@@ -416,6 +416,7 @@ class IslandWindow(QWidget):
         foot.addWidget(self.foot_usage)
         hint = QLabel("Esc · tutup")
         hint.setStyleSheet(f"color:{theme.DIM.name()}; font-size:9px;")
+        self.footer_hint = hint
         foot.addWidget(hint)
         v.addLayout(foot)
 
@@ -462,6 +463,9 @@ class IslandWindow(QWidget):
     def _sync_tabs(self):
         self.ringkas_tab.setChecked(self._page == "ringkas")
         self.chat_tab.setChecked(self._page == "chat")
+        if hasattr(self, "footer_hint"):
+            self.footer_hint.setText(
+                "Esc · Ringkas" if self._page == "chat" else "Esc · tutup")
 
     def toggle(self):
         if self._mode == "collapsed":
