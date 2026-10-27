@@ -1282,7 +1282,7 @@ fun MemoryScreen() {
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.DeleteOutline,
+                            imageVector = Icons.Rounded.Delete,
                             contentDescription = "Hapus",
                             tint = Color(0xFFFF3B30),
                             modifier = Modifier.size(18.dp)
