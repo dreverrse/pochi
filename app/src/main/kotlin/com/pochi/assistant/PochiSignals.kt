@@ -138,4 +138,28 @@ object PochiSignals {
     fun updateAgentSession(transform: (AgentSessionState) -> AgentSessionState) {
         _agentSession.value = transform(_agentSession.value)
     }
+
+    fun playTapHaptic(context: android.content.Context) {
+        runCatching {
+            val v = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                v?.vibrate(android.os.VibrationEffect.createOneShot(18, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                v?.vibrate(18)
+            }
+        }
+    }
+
+    fun playSuccessHaptic(context: android.content.Context) {
+        runCatching {
+            val v = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                v?.vibrate(android.os.VibrationEffect.createWaveform(longArrayOf(0, 20, 60, 30), -1))
+            } else {
+                @Suppress("DEPRECATION")
+                v?.vibrate(40)
+            }
+        }
+    }
 }

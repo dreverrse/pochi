@@ -505,7 +505,7 @@ object PochiPrefs {
     private const val KEY_DECK_JSON = "pochi_deck_collections_json"
     private const val KEY_USER_NAME = "pochi_user_name"
 
-    private val _userNameFlow = MutableStateFlow("Andre")
+    private val _userNameFlow = MutableStateFlow("Tuan Andre")
     val userNameFlow: StateFlow<String> = _userNameFlow
 
     private val _offsetXFlow = MutableStateFlow(0)
@@ -576,7 +576,7 @@ object PochiPrefs {
         _offsetYFlow.value = prefs.getInt(KEY_OFFSET_Y, 0)
         _flushStatusBarFlow.value = prefs.getBoolean(KEY_FLUSH_STATUSBAR, true)
         _darkModeFlow.value = prefs.getBoolean(KEY_DARK_MODE, false)
-        _userNameFlow.value = prefs.getString(KEY_USER_NAME, "Andre") ?: "Andre"
+        _userNameFlow.value = prefs.getString(KEY_USER_NAME, "Tuan Andre") ?: "Tuan Andre"
         _onboardingDoneFlow.value = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
         _iconStyleFlow.value = prefs.getString(KEY_ICON_STYLE, "dark") ?: "dark"
         _fontStyleFlow.value = prefs.getString(KEY_FONT_STYLE, "jakarta") ?: "jakarta"
@@ -624,13 +624,13 @@ object PochiPrefs {
     }
 
     fun setUserName(context: Context, name: String) {
-        val clean = name.trim().ifBlank { "Andre" }
+        val clean = name.trim().ifBlank { "Tuan Andre" }
         _userNameFlow.value = clean
         prefs(context).edit().putString(KEY_USER_NAME, clean).apply()
     }
 
     fun getUserName(context: Context): String {
-        return prefs(context).getString(KEY_USER_NAME, "Andre") ?: "Andre"
+        return prefs(context).getString(KEY_USER_NAME, "Tuan Andre") ?: "Tuan Andre"
     }
 
     fun setOnboardingDone(context: Context, done: Boolean) {
@@ -810,6 +810,11 @@ object PochiPrefs {
         val next = _focusSessionsFlow.value + 1
         _focusSessionsFlow.value = next
         prefs(context).edit().putInt(KEY_FOCUS_SESSIONS, next).apply()
+    }
+
+    fun recordFocusSession(context: Context, mode: String = "Focus", durationMins: Int = 25) {
+        incrementFocusSessions(context)
+        PochiDb.getInstance(context).insertFocusLog(mode, durationMins, "Sesi Produktif Tuan Andre")
     }
 
     fun addWaterGlass(context: Context) {

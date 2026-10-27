@@ -34,6 +34,17 @@ data class FocusLogEntry(
         get() = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(completedAt))
 }
 
+data class PochiMemoryEntry(
+    val id: String,
+    val category: String,
+    val fact: String,
+    val updatedAt: Long,
+    val deviceId: String = "phone"
+) {
+    val formattedDate: String
+        get() = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(updatedAt))
+}
+
 class PochiDb private constructor(context: Context) : SQLiteOpenHelper(
     context.applicationContext,
     DATABASE_NAME,
@@ -127,6 +138,19 @@ class PochiDb private constructor(context: Context) : SQLiteOpenHelper(
             """.trimIndent()
         )
 
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS memories (
+                id TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                fact TEXT NOT NULL,
+                created_at INTEGER,
+                updated_at INTEGER,
+                device_id TEXT
+            )
+            """.trimIndent()
+        )
+
         seedInitialData(db)
     }
 
@@ -155,6 +179,17 @@ class PochiDb private constructor(context: Context) : SQLiteOpenHelper(
             put("task_title", "Setup Pochi")
         }
         db.insertWithOnConflict("focus_logs", null, cvFocus, SQLiteDatabase.CONFLICT_REPLACE)
+
+        // Seed initial memory: Tuan Andre
+        val cvMem1 = ContentValues().apply {
+            put("id", "mem_init_1")
+            put("category", "Profil")
+            put("fact", "Pengguna adalah Tuan Andre. Pochi selalu menyapa dan memanggilnya dengan hormat 'Tuan Andre'.")
+            put("created_at", now)
+            put("updated_at", now)
+            put("device_id", "phone")
+        }
+        db.insertWithOnConflict("memories", null, cvMem1, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     // ========================================================================
@@ -489,6 +524,84 @@ class PochiDb private constructor(context: Context) : SQLiteOpenHelper(
     }
 
     @Synchronized
+    fun getAllMemories(): List<PochiMemoryEntry> {
+        val list = mutableListOf<PochiMemoryEntry>()
+        val db = readableDatabase
+        val cursor = runCatching {
+            db.rawQuery("SELECT * FROM memories ORDER BY updated_at DESC", null)
+        }.getOrNull() ?: return emptyList()
+
+        cursor.use { c ->
+            val idxId = c.getColumnIndex("id")
+            val idxCat = c.getColumnIndex("category")
+            val idxFact = c.getColumnIndex("fact")
+            val idxUp = c.getColumnIndex("updated_at")
+            val idxDev = c.getColumnIndex("device_id")
+
+            while (c.moveToNext()) {
+                list.add(
+                    PochiMemoryEntry(
+                        id = if (idxId >= 0) c.getString(idxId) else "mem_${System.currentTimeMillis()}",
+                        category = if (idxCat >= 0) c.getString(idxCat) else "Fakta",
+                        fact = if (idxFact >= 0) c.getString(idxFact) else "",
+                        updatedAt = if (idxUp >= 0) c.getLong(idxUp) else System.currentTimeMillis(),
+                        deviceId = if (idxDev >= 0) c.getString(idxDev) ?: "phone" else "phone"
+                    )
+                )
+            }
+        }
+        return list
+    }
+
+    @Synchronized
+    fun saveMemory(category: String, fact: String, deviceId: String = "phone"): PochiMemoryEntry {
+        val now = System.currentTimeMillis()
+        val entry = PochiMemoryEntry(
+            id = "mem_${now}_${(100..999).random()}",
+            category = category.trim().ifBlank { "Fakta" },
+            fact = fact.trim(),
+            updatedAt = now,
+            deviceId = deviceId
+        )
+        val db = writableDatabase
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS memories (
+                id TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                fact TEXT NOT NULL,
+                created_at INTEGER,
+                updated_at INTEGER,
+                device_id TEXT
+            )
+            """.trimIndent()
+        )
+        val cv = ContentValues().apply {
+            put("id", entry.id)
+            put("category", entry.category)
+            put("fact", entry.fact)
+            put("created_at", now)
+            put("updated_at", now)
+            put("device_id", entry.deviceId)
+        }
+        db.insertWithOnConflict("memories", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        return entry
+    }
+
+    @Synchronized
+    fun deleteMemory(id: String) {
+        val db = writableDatabase
+        db.delete("memories", "id = ?", arrayOf(id))
+    }
+
+    @Synchronized
+    fun getMemoriesPrompt(): String {
+        val memories = getAllMemories()
+        if (memories.isEmpty()) return ""
+        return memories.take(15).joinToString("\n") { "• [${it.category}] ${it.fact}" }
+    }
+
+    @Synchronized
     fun getDbSummary(): String {
         val db = readableDatabase
         val countTasks = getCount(db, "tasks")
@@ -496,7 +609,8 @@ class PochiDb private constructor(context: Context) : SQLiteOpenHelper(
         val countExpenses = getCount(db, "expenses")
         val countChats = getCount(db, "chat_messages")
         val countFocus = getCount(db, "focus_logs")
-        return "SQLite: $countTasks tasks • $countDecks deck items • $countExpenses expenses • $countChats chats • $countFocus sessions"
+        val countMemories = runCatching { getCount(db, "memories") }.getOrDefault(0)
+        return "SQLite: $countTasks tasks • $countDecks deck items • $countExpenses expenses • $countChats chats • $countFocus sessions • $countMemories memories"
     }
 
     private fun getCount(db: SQLiteDatabase, table: String): Int {
@@ -514,6 +628,7 @@ class PochiDb private constructor(context: Context) : SQLiteOpenHelper(
         db.delete("expenses", null, null)
         db.delete("chat_messages", null, null)
         db.delete("focus_logs", null, null)
+        runCatching { db.delete("memories", null, null) }
         seedInitialData(db)
     }
 

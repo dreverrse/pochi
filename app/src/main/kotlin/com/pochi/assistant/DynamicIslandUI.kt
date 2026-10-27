@@ -5,7 +5,6 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.hardware.camera2.CameraManager
 import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
@@ -1068,7 +1067,7 @@ fun PochiIslandBot(
                                             .background(iosBlue)
                                             .clickable {
                                                 customEmote = PochiEmote.EXCITED
-                                                voicePartialText = if (isId) "Pochi siap membantumu!" else "Pochi is ready to help!"
+                                                voicePartialText = if (isId) "Pochi siap melayani Tuan Andre!" else "Pochi is ready for Tuan Andre!"
                                                 PochiSignals.playTapHaptic(context)
                                             },
                                         contentAlignment = Alignment.Center
@@ -1549,16 +1548,4 @@ private fun dispatchMediaKey(context: Context, keyCode: Int) {
     }
 }
 
-/**
- * Toggles camera torch / flashlight.
- */
-private fun setTorchState(context: Context, enabled: Boolean): Boolean {
-    return try {
-        val cm = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        val id = cm.cameraIdList.firstOrNull() ?: return false
-        cm.setTorchMode(id, enabled)
-        true
-    } catch (_: Exception) {
-        false
-    }
-}
+

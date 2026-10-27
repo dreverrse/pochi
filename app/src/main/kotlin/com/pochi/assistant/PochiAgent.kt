@@ -224,12 +224,15 @@ object PochiAgent {
             }
         }
 
-        // 7. Senter ("senter", "nyalakan senter", "matikan senter")
-        if (lower in listOf("senter", "nyalakan senter", "hidupkan senter", "senter on", "flashlight", "torch on")) {
-            return "Senter dinyalakan." to AgentAction("TORCH", "ON")
-        }
-        if (lower in listOf("matikan senter", "senter mati", "senter off", "torch off")) {
-            return "Senter dimatikan." to AgentAction("TORCH", "OFF")
+        // 7. Simpan Memori Tuan Andre ("ingat bahwa...", "ingat aku...", "ingat: ...")
+        val rememberPrefixes = listOf("ingat bahwa ", "ingat aku ", "ingat saya ", "ingat: ", "ingat ")
+        for (prefix in rememberPrefixes) {
+            if (lower.startsWith(prefix)) {
+                val fact = input.substring(prefix.length).trim()
+                if (fact.isNotEmpty()) {
+                    return "Saya simpan di memori saya, Tuan Andre." to AgentAction("REMEMBER", "Preferensi|$fact")
+                }
+            }
         }
 
         // 8. Kamera ("buka kamera", "kamera", "foto", "ambil foto")
@@ -374,7 +377,7 @@ object PochiAgent {
             "MAPS" -> "Membuka peta ke ${action.argument}"
             "CLIPBOARD" -> "Menyalin teks ke clipboard"
             "SAVE_NOTE" -> "Menyimpan ke catatan"
-            "TORCH" -> if (action.argument.equals("OFF", true)) "Mematikan senter" else "Menyalakan senter"
+            "REMEMBER" -> "Mencatat memori Tuan Andre: ${action.argument.substringAfter("|", action.argument)}"
             "SETTINGS" -> "Membuka pengaturan ${action.argument}"
             else -> "Menjalankan ${action.type}"
         }
@@ -555,16 +558,11 @@ object PochiAgent {
                     PochiPrefs.saveNotes(context, updated)
                     "Disimpan ke catatan."
                 }
-                "TORCH" -> {
-                    val turnOn = !action.argument.equals("OFF", ignoreCase = true)
-                    val camManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-                    val camId = camManager.cameraIdList.firstOrNull()
-                    if (camId != null) {
-                        camManager.setTorchMode(camId, turnOn)
-                        if (turnOn) "Senter menyala." else "Senter mati."
-                    } else {
-                        "Senter tidak tersedia."
-                    }
+                "REMEMBER" -> {
+                    val cat = if (action.argument.contains("|")) action.argument.substringBefore("|").trim() else "Fakta"
+                    val fact = action.argument.substringAfter("|", action.argument).trim()
+                    PochiDb.getInstance(context).saveMemory(cat, fact)
+                    "Saya catat di memori saya, Tuan Andre."
                 }
                 "SETTINGS" -> {
                     val actionIntent = when (action.argument.uppercase(Locale.US)) {

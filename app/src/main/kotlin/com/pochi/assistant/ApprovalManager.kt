@@ -11,7 +11,9 @@ data class ApprovalRequest(
     val rawCommand: String,
     val createdAtMillis: Long = System.currentTimeMillis(),
     val expiresInSeconds: Int = 120
-)
+) {
+    val prompt: String get() = friendlyTitle
+}
 
 private data class PendingAction(val context: Context, val action: AgentAction)
 
@@ -71,5 +73,9 @@ object ApprovalManager {
         pendingAction = null
         _lastDecision.value = "$reason (${req.friendlyTitle})"
         _activeRequest.value = null
+    }
+
+    fun respond(allow: Boolean) {
+        if (allow) confirmAllow() else confirmDeny()
     }
 }

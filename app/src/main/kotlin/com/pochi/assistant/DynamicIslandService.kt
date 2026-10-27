@@ -293,7 +293,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         finishDrag(density)
                     },
                     onPowerOffService = {
-                        turnOffTorch()
                         stopSelf()
                     }
                 )
@@ -507,13 +506,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         applyLayout()
     }
 
-    private fun turnOffTorch() {
-        runCatching {
-            val cm = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val id = cm.cameraIdList.firstOrNull() ?: return
-            cm.setTorchMode(id, false)
-        }
-    }
+
 
     private fun startAsForeground() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
