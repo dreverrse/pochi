@@ -17,20 +17,23 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
-    QLineEdit, QMenu, QPushButton, QVBoxLayout, QWidget,
+    QLineEdit, QMenu, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from app import theme
 from app.state import Status
 from platform_x11.x11 import anchor_origin, work_area
 from services.fullscreen import FullscreenService
-from ui.activity import ActivityArea
+from ui.activity import ActivityArea, AgendaCard
 from ui.chat import ChatPanel
-from ui.components import Dot, EllipsisLabel, IconButton, icon_label
+from ui.components import Dot, EllipsisLabel, IconButton, Pill, icon_label
 from ui.icons import make_icon
 from ui.mascot import PochiMascot
 
 SHADOW = 6
+COMPACT_SIZE = (236, 42)
+RINGKAS_SIZE = (560, 300)
+CHAT_SIZE = (430, 620)
 
 
 class DragHandle(QWidget):
@@ -91,6 +94,8 @@ class IslandWindow(QWidget):
         self.setAcceptDrops(True)
 
         self._mode = "collapsed"
+        self._page = "ringkas"
+        self._draft_text = ""
         self._drag: tuple[QPoint, QPoint] | None = None
         self._moved = False
         self._expanded_at = 0.0
@@ -140,13 +145,20 @@ class IslandWindow(QWidget):
     # ---------------------------------------------------------------- sizes
     def _compute_sizes(self):
         s = self.cfg.scale
-        self._compact_w = int(self.cfg.compact_width * s) + SHADOW * 2
-        self._compact_h = int(46 * s) + SHADOW * 2
+        self._compact_w = int(max(COMPACT_SIZE[0], self.cfg.compact_width) * s) + SHADOW * 2
+        self._compact_h = int(COMPACT_SIZE[1] * s) + SHADOW * 2
         area = work_area()
-        self._expanded_w = min(int(self.cfg.expanded_width * s) + SHADOW * 2,
-                               area.width() - 16)
-        self._expanded_h = min(int(self.cfg.expanded_height * s) + SHADOW * 2,
-                               area.height() - 16)
+        self._ringkas_w = min(int(RINGKAS_SIZE[0] * s) + SHADOW * 2,
+                              area.width() - 16)
+        self._ringkas_h = min(int(RINGKAS_SIZE[1] * s) + SHADOW * 2,
+                              area.height() - 16)
+        self._chat_w = min(int(CHAT_SIZE[0] * s) + SHADOW * 2,
+                           area.width() - 16)
+        self._chat_h = min(int(CHAT_SIZE[1] * s) + SHADOW * 2,
+                           area.height() - 16)
+        # Alias lama untuk smoke test/dashboard.
+        self._expanded_w = self._ringkas_w
+        self._expanded_h = self._ringkas_h
 
     def _custom_pos(self):
         return (self.cfg.pos_x, self.cfg.pos_y) if self.cfg.has_custom_position() else None
@@ -156,10 +168,18 @@ class IslandWindow(QWidget):
                              self.cfg.y_offset, self._custom_pos())
         return QRect(x, y, self._compact_w, self._compact_h)
 
-    def _expanded_rect(self) -> QRect:
-        x, y = anchor_origin(self.cfg.anchor, self._expanded_w, self._expanded_h,
+    def _ringkas_rect(self) -> QRect:
+        x, y = anchor_origin(self.cfg.anchor, self._ringkas_w, self._ringkas_h,
                              self.cfg.y_offset, self._custom_pos())
-        return QRect(x, y, self._expanded_w, self._expanded_h)
+        return QRect(x, y, self._ringkas_w, self._ringkas_h)
+
+    def _chat_rect(self) -> QRect:
+        x, y = anchor_origin(self.cfg.anchor, self._chat_w, self._chat_h,
+                             self.cfg.y_offset, self._custom_pos())
+        return QRect(x, y, self._chat_w, self._chat_h)
+
+    def _expanded_rect(self) -> QRect:
+        return self._chat_rect() if self._page == "chat" else self._ringkas_rect()
 
     def _panel_rect(self) -> QRect:
         return self.rect().adjusted(SHADOW, SHADOW, -SHADOW, -SHADOW)
@@ -183,6 +203,7 @@ class IslandWindow(QWidget):
             status_provider=lambda: self.controller.status,
             reduce_motion=self.cfg.reduce_motion,
             show_backing=False)
+        self.compact_mascot = self.mascot
         h.addWidget(self.mascot)
         h.addStretch(1)
 
@@ -199,52 +220,73 @@ class IslandWindow(QWidget):
     def _build_expanded(self):
         self._expanded = QWidget(self)
         v = QVBoxLayout(self._expanded)
-        v.setContentsMargins(14, 12, 14, 12)
-        v.setSpacing(8)
+        v.setContentsMargins(12, 10, 12, 10)
+        v.setSpacing(7)
 
         # ---- header (drag handle)
         self.header = DragHandle(self)
         self.header.dragFinished.connect(self._on_header_dragged)
         h = QHBoxLayout(self.header)
         h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(9)
-        self.status_dot_big = Dot(theme.MUTED, 9)
-        h.addWidget(self.status_dot_big)
+        h.setSpacing(7)
+
+        self.header_mascot = PochiMascot(
+            size=max(20, int(26 * self.cfg.scale)),
+            status_provider=lambda: self.controller.status,
+            reduce_motion=self.cfg.reduce_motion,
+            show_backing=True)
+        h.addWidget(self.header_mascot)
+
         titles = QVBoxLayout()
-        titles.setSpacing(1)
-        top = QHBoxLayout()
-        top.setSpacing(7)
+        titles.setSpacing(0)
+        name_row = QHBoxLayout()
+        name_row.setSpacing(6)
         name = QLabel("Pochi")
         name.setStyleSheet(
-            f"color:{theme.TEXT.name()}; font-size:14px; font-weight:700;")
+            f"color:{theme.TEXT.name()}; font-size:13px; font-weight:700;")
         name.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        top.addWidget(name)
-        self.model_chip = QLabel("—")
-        self.model_chip.setObjectName("pill")
-        self.model_chip.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        top.addWidget(self.model_chip)
-        top.addStretch(1)
-        titles.addLayout(top)
+        name_row.addWidget(name)
+        self.model_chip = Pill("—", "violet")
+        self.model_chip.setMaximumWidth(140)
+        self.model_chip.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        name_row.addWidget(self.model_chip)
+        name_row.addStretch(1)
+        titles.addLayout(name_row)
         status_row = QHBoxLayout()
         status_row.setSpacing(5)
         self.status_dot = Dot(theme.MUTED, 6)
         status_row.addWidget(self.status_dot)
         self.status_label = QLabel("Idle")
         self.status_label.setStyleSheet(
-            f"color:{theme.MUTED.name()}; font-size:10px; font-weight:500;")
-        self.status_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            f"color:{theme.MUTED.name()}; font-size:9px; font-weight:500;")
+        self.status_label.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         status_row.addWidget(self.status_label)
         self.status_detail = QLabel("Siap membantu")
         self.status_detail.setStyleSheet(
-            f"color:{theme.DIM.name()}; font-size:10px;")
-        self.status_detail.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            f"color:{theme.DIM.name()}; font-size:9px;")
+        self.status_detail.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         status_row.addWidget(self.status_detail)
         status_row.addStretch(1)
         titles.addLayout(status_row)
         h.addLayout(titles, 1)
-        self.btn_dashboard = IconButton("dashboard", "Dashboard", 30, 16)
-        self.btn_settings = IconButton("settings", "Pengaturan", 30, 16)
-        self.btn_close = IconButton("chevron-up", "Tutup (Esc)", 30, 16)
+
+        self.ringkas_tab = QPushButton("Ringkas")
+        self.chat_tab = QPushButton("Chat")
+        for b in (self.ringkas_tab, self.chat_tab):
+            b.setObjectName("segment")
+            b.setCheckable(True)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            h.addWidget(b)
+        self.ringkas_tab.setChecked(True)
+        self.ringkas_tab.clicked.connect(lambda: self.show_ringkas())
+        self.chat_tab.clicked.connect(lambda: self.show_chat(focus=True))
+
+        self.btn_dashboard = IconButton("dashboard", "Dashboard", 28, 15)
+        self.btn_settings = IconButton("settings", "Pengaturan", 28, 15)
+        self.btn_close = IconButton("chevron-up", "Tutup (Esc)", 28, 15)
         for b in (self.btn_dashboard, self.btn_settings, self.btn_close):
             h.addWidget(b)
         self.btn_dashboard.clicked.connect(self.dashboardRequested)
@@ -252,16 +294,64 @@ class IslandWindow(QWidget):
         self.btn_close.clicked.connect(lambda: self.collapse())
         v.addWidget(self.header)
 
-        # ---- aktivitas kontekstual
+        self.stack = QStackedWidget()
+        v.addWidget(self.stack, 1)
+
+        # ---- aktivitas (satu polling untuk media, lirik, AI, timer)
         self.activity = ActivityArea(self.controller, self.media,
                                      self.cfg.reduce_motion)
-        v.addWidget(self.activity)
+        self.music_card = self.activity.media_card
+        self.lyrics_panel = self.activity.lyrics_panel
+        self.ai_card = self.activity.ai
+        self.timer_card = self.activity.timer
 
-        # ---- percakapan
+        # ---- halaman Ringkas
+        self.ringkas_page = QWidget()
+        rl = QVBoxLayout(self.ringkas_page)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(8)
+        cards = QHBoxLayout()
+        cards.setSpacing(8)
+        self.agenda_card = AgendaCard(self.controller)
+        cards.addWidget(self.music_card, 3)
+        cards.addWidget(self.agenda_card, 2)
+        rl.addLayout(cards, 1)
+
+        self.ask_bar = QPushButton("Tanya Pochi…")
+        self.ask_bar.setObjectName("askBar")
+        self.ask_bar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.ask_bar.setFixedHeight(38)
+        self.ask_bar.setIcon(make_icon("spark", theme.VIOLET_LIGHT, 15))
+        self.ask_bar.setStyleSheet(
+            f"QPushButton#askBar {{"
+            f"background:{theme.CARD_TOP.name()};"
+            f"border:1px solid {theme.BORDER.name()};"
+            "border-radius:13px;"
+            f"color:{theme.MUTED.name()};"
+            "text-align:left; padding:0 14px; font-size:12px;"
+            "}"
+            f"QPushButton#askBar:hover {{"
+            f"border-color:{theme.VIOLET.name()};"
+            f"color:{theme.TEXT.name()};"
+            "}")
+        self.ask_bar.clicked.connect(lambda: self.show_chat(focus=True))
+        rl.addWidget(self.ask_bar)
+        self.stack.addWidget(self.ringkas_page)
+
+        # ---- halaman Chat
+        self.chat_page = QWidget()
+        cl = QVBoxLayout(self.chat_page)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(7)
+        cl.addWidget(self.ai_card)
+        cl.addWidget(self.timer_card)
+        cl.addWidget(self.lyrics_panel)
+
         self.chat = ChatPanel(self.controller)
         self.chat.setMinimumHeight(150)
         self.chat.sendRequested.connect(self._send_text)
-        v.addWidget(self.chat, 1)
+        self.chat_mascot = self.chat.welcome_mascot
+        cl.addWidget(self.chat, 1)
 
         # ---- izin tool
         self.permission = QFrame()
@@ -286,7 +376,7 @@ class IslandWindow(QWidget):
         self.perm_buttons = QHBoxLayout()
         self.perm_buttons.setSpacing(6)
         pv.addLayout(self.perm_buttons)
-        v.addWidget(self.permission)
+        cl.addWidget(self.permission)
 
         # ---- composer
         row = QHBoxLayout()
@@ -307,7 +397,9 @@ class IslandWindow(QWidget):
         self.btn_send.setObjectName("send")
         self.btn_send.clicked.connect(self._send)
         row.addWidget(self.btn_send)
-        v.addLayout(row)
+        cl.addLayout(row)
+        self.stack.addWidget(self.chat_page)
+        self.stack.setCurrentIndex(0)
 
         # ---- footer
         foot = QHBoxLayout()
@@ -322,11 +414,12 @@ class IslandWindow(QWidget):
         self.foot_usage.setStyleSheet(
             f"color:{theme.DIM.name()}; font-size:9px;")
         foot.addWidget(self.foot_usage)
-        hint = QLabel("Enter kirim · Esc tutup")
+        hint = QLabel("Esc · tutup")
         hint.setStyleSheet(f"color:{theme.DIM.name()}; font-size:9px;")
         foot.addWidget(hint)
         v.addLayout(foot)
 
+        self.status_dot_big = self.status_dot
         self.controller.usageChanged.connect(self._on_usage)
 
     # ------------------------------------------------------------- shortcut
@@ -350,13 +443,25 @@ class IslandWindow(QWidget):
             self._esc = None
 
     def _escape(self):
-        if self._mode == "expanded":
+        if self._mode != "expanded":
+            return
+        if self._page == "chat":
+            self.show_ringkas()
+        else:
             self.collapse()
 
     # ---------------------------------------------------------------- mode
     @property
     def mode(self) -> str:
         return self._mode
+
+    @property
+    def page(self) -> str:
+        return self._page
+
+    def _sync_tabs(self):
+        self.ringkas_tab.setChecked(self._page == "ringkas")
+        self.chat_tab.setChecked(self._page == "chat")
 
     def toggle(self):
         if self._mode == "collapsed":
@@ -369,6 +474,9 @@ class IslandWindow(QWidget):
             return
         self._wake()
         self._mode = "expanded"
+        self._page = "ringkas"
+        self.stack.setCurrentIndex(0)
+        self._sync_tabs()
         self._compute_sizes()
         self._position_contents()
         self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -381,22 +489,51 @@ class IslandWindow(QWidget):
         eff.setOpacity(0.0)
         self.raise_()
         try:
-            self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, False)
-            self.activateWindow()
+            # Ringkas tidak merebut fokus keyboard aplikasi lain.
+            self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         except Exception:
             pass
         self._expanded_at = time.monotonic()
-        self._start_geo(self._expanded_rect(), animate)
+        self._start_geo(self._ringkas_rect(), animate)
         self._fade_anim(eff, 0.0, 1.0, 150, keep=False)
-        QTimer.singleShot(self._duration(animate) + 40, self._focus_input)
         self.activity.start_polling()
         self.expandedChanged.emit(True)
+        self._reset_idle()
+
+    def show_ringkas(self, animate: bool = True):
+        if self._mode != "expanded":
+            self.expand(animate)
+            return
+        self._draft_text = self.input.text()
+        self._page = "ringkas"
+        self.stack.setCurrentIndex(0)
+        self._sync_tabs()
+        self._compute_sizes()
+        self._position_contents()
+        self._start_geo(self._ringkas_rect(), animate)
+        self._reset_idle()
+
+    def show_chat(self, focus: bool = True, animate: bool = True):
+        if self._mode != "expanded":
+            self.expand(animate)
+        self._page = "chat"
+        self.stack.setCurrentIndex(1)
+        self._sync_tabs()
+        if not self.input.text() and self._draft_text:
+            self.input.setText(self._draft_text)
+        self._compute_sizes()
+        self._position_contents()
+        self._start_geo(self._chat_rect(), animate)
+        if focus:
+            delay = 0 if self._duration(animate) == 0 else self._duration(animate) + 40
+            QTimer.singleShot(delay, self._focus_input)
         self._reset_idle()
 
     def collapse(self, animate: bool = True):
         if self._mode == "collapsed":
             return
         self._wake()
+        self._draft_text = self.input.text()
         self._mode = "collapsed"
         self._idle.stop()
         self.activity.stop_polling()
@@ -465,7 +602,7 @@ class IslandWindow(QWidget):
         self._pending = ""
 
     def _focus_input(self):
-        if self._mode == "expanded":
+        if self._mode == "expanded" and self._page == "chat":
             self.input.setFocus(Qt.FocusReason.OtherFocusReason)
 
     # --------------------------------------------------------------- events
@@ -477,7 +614,7 @@ class IslandWindow(QWidget):
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key.Key_Escape and self._mode == "expanded":
-            self.collapse()
+            self._escape()
             return
         super().keyPressEvent(e)
 
@@ -617,7 +754,11 @@ class IslandWindow(QWidget):
             text += f" · {conn.model}"
         self.foot_conn.setText(text)
         self.foot_conn.setToolTip(conn.detail or text)
-        self.model_chip.setText(conn.model or self.cfg.model_name)
+        model = conn.model or self.cfg.model_name
+        short = model.split("/")[-1]
+        if len(short) > 18:
+            short = short[:17] + "…"
+        self.model_chip.setText(short)
         self.model_chip.setToolTip(
             f"{conn.label}\n{conn.detail}\n{conn.model}".strip())
         self.update()
@@ -743,7 +884,8 @@ class IslandWindow(QWidget):
         self._compute_sizes()
         self._position_contents()
         self.activity.ai.dots.set_reduce_motion(self.cfg.reduce_motion)
-        self.mascot.set_reduce_motion(self.cfg.reduce_motion)
+        for mascot in (self.mascot, self.header_mascot, self.chat_mascot):
+            mascot.set_reduce_motion(self.cfg.reduce_motion)
         self._setup_shortcut()
         on_top = bool(self.cfg.always_on_top)
         if bool(self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint) != on_top:
@@ -761,8 +903,6 @@ class IslandWindow(QWidget):
         self.raise_()
         if self._mode != "expanded":
             self.expand()
-        else:
-            self._focus_input()
 
     def show_without_activating(self):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
@@ -774,25 +914,34 @@ class IslandWindow(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         panel = QRectF(self.rect().adjusted(SHADOW, SHADOW, -SHADOW, -SHADOW))
         expanded = self._mode == "expanded"
-        radius = 32.0 if expanded else panel.height() / 2.0
+        radius = 30.0 if expanded else panel.height() / 2.0
 
         # bayangan lembut agar island tampak mengambang
         p.setPen(Qt.PenStyle.NoPen)
         for i in range(3, 0, -1):
-            p.setBrush(QColor(0, 0, 0, 8 + i * 4))
+            p.setBrush(QColor(0, 0, 0, 10 + i * 5))
             r = panel.adjusted(-i, -i + 1.5, i, i + 1.5)
             p.drawRoundedRect(r, radius + i, radius + i)
 
-        # badan island: hitam murni (ala iOS/Android)
-        p.setBrush(QColor("#000000"))
+        # badan island: hitam keunguan (identitas baru)
+        p.setBrush(QColor(theme.PANEL))
         p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(panel, radius, radius)
 
+        # rim ungu tipis agar terbaca di wallpaper terang maupun gelap
+        if expanded:
+            rim = QColor(theme.VIOLET)
+            rim.setAlpha(70)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(rim, 1.6))
+            p.drawRoundedRect(panel.adjusted(0.8, 0.8, -0.8, -0.8),
+                              radius - 0.8, radius - 0.8)
+
         # hairline border
-        border = QColor("#26262B")
+        border = QColor(theme.BORDER)
         if self._status in (Status.SUCCESS, Status.ERROR):
             border = Status.color(self._status)
-            border.setAlpha(150)
+            border.setAlpha(170)
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.setPen(QPen(border, 1))
         p.drawRoundedRect(panel.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)

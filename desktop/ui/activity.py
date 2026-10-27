@@ -5,7 +5,12 @@ hanya saat ada pemutar MPRIS, dan kartu timer hanya saat timer aktif.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QTimer
+from datetime import date, timedelta
+
+from PyQt6.QtCore import QRect, Qt, QTimer
+from PyQt6.QtGui import (
+    QColor, QLinearGradient, QPainter, QPainterPath, QPixmap,
+)
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QSizePolicy, QVBoxLayout, QWidget,
 )
@@ -13,9 +18,39 @@ from PyQt6.QtWidgets import (
 from app import theme
 from app.state import Activity, Task
 from services.lyric_service import LyricsService
-from ui.components import Dot, EllipsisLabel, IconButton, PulseDots, icon_label
+from ui.components import (
+    Dot, EllipsisLabel, IconButton, Pill, PulseDots, SoftCard, icon_label,
+)
 from ui.icons import make_icon
 from ui.lyrics import LyricsPanel
+
+_MONTHS = ("JAN", "FEB", "MAR", "APR", "MEI", "JUN",
+           "JUL", "AGU", "SEP", "OKT", "NOV", "DES")
+_DAYS = ("Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min")
+
+
+def _fmt_us(us: int) -> str:
+    total = max(0, int(us)) // 1_000_000
+    return f"{total // 60}:{total % 60:02d}"
+
+
+def _cover_pixmap(size: int = 48) -> QPixmap:
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    rect = QRect(0, 0, size, size)
+    path = QPainterPath()
+    path.addRoundedRect(0.0, 0.0, float(size), float(size), 14.0, 14.0)
+    grad = QLinearGradient(0, 0, size, size)
+    grad.setColorAt(0.0, theme.VIOLET)
+    grad.setColorAt(1.0, theme.CYAN)
+    p.fillPath(path, grad)
+    icon = make_icon("music", QColor("#F5F3FF"), int(size * 0.46))
+    icon.paint(p, rect, Qt.AlignmentFlag.AlignCenter)
+    p.end()
+    return pm
+
 
 
 class _Strip(QFrame):
@@ -92,53 +127,201 @@ class AIActivityCard(_Strip):
         self.setVisible(True)
 
 
-class MediaCard(_Strip):
+class MediaCard(SoftCard):
+    """Kartu pemutar musik ringkas; tetap tampil dengan empty state."""
+
     def __init__(self, media, on_lyrics=None, parent=None):
-        super().__init__(parent)
+        super().__init__(padding=12, parent=parent)
         self.media = media
-        h = QHBoxLayout(self)
-        h.setContentsMargins(10, 7, 8, 7)
-        h.setSpacing(9)
-        self.icon = icon_label("music", theme.CYAN, 16)
-        h.addWidget(self.icon)
+        self.setObjectName("ringkasCard")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        self.content = QWidget()
+        c = QVBoxLayout(self.content)
+        c.setContentsMargins(0, 0, 0, 0)
+        c.setSpacing(7)
+
+        top = QHBoxLayout()
+        top.setSpacing(9)
+        self.cover = QLabel()
+        self.cover.setFixedSize(48, 48)
+        self.cover.setPixmap(_cover_pixmap(48))
+        top.addWidget(self.cover)
         v = QVBoxLayout()
         v.setSpacing(1)
         self.title = EllipsisLabel("")
         self.title.setStyleSheet(
-            f"color:{theme.TEXT.name()}; font-size:11px; font-weight:600;")
+            f"color:{theme.TEXT.name()}; font-size:12px; font-weight:600;")
         self.artist = EllipsisLabel("")
         self.artist.setStyleSheet(
             f"color:{theme.MUTED.name()}; font-size:10px;")
         v.addWidget(self.title)
         v.addWidget(self.artist)
-        h.addLayout(v, 1)
-        self.prev = IconButton("prev", "Sebelumnya", 26, 12)
-        self.play = IconButton("pause", "Putar / jeda", 28, 13, theme.TEXT)
-        self.next = IconButton("next", "Berikutnya", 26, 12)
+        top.addLayout(v, 1)
+        c.addLayout(top)
+
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 1000)
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(3)
+        c.addWidget(self.progress)
+
+        row = QHBoxLayout()
+        row.setSpacing(2)
+        self.time_now = QLabel("0:00")
+        self.time_now.setStyleSheet(
+            f"color:{theme.DIM.name()}; font-size:9px;")
+        row.addWidget(self.time_now)
+        row.addStretch(1)
+        self.prev = IconButton("prev", "Sebelumnya", 24, 12)
+        self.play = IconButton("pause", "Putar / jeda", 26, 13, theme.TEXT)
+        self.next = IconButton("next", "Berikutnya", 24, 12)
         self.lyrics_btn = IconButton(
-            "lyrics", "Tampilkan / sembunyikan lirik", 26, 12)
+            "lyrics", "Tampilkan / sembunyikan lirik", 24, 12)
         if on_lyrics is not None:
             self.lyrics_btn.clicked.connect(on_lyrics)
         else:
             self.lyrics_btn.setEnabled(False)
         for b in (self.prev, self.play, self.next, self.lyrics_btn):
-            h.addWidget(b)
+            row.addWidget(b)
+        row.addStretch(1)
+        self.time_end = QLabel("0:00")
+        self.time_end.setStyleSheet(
+            f"color:{theme.DIM.name()}; font-size:9px;")
+        row.addWidget(self.time_end)
+        c.addLayout(row)
+
+        self.body.addWidget(self.content)
+
+        self.empty = QLabel("Tidak ada media\nPutar lagu di desktop untuk melihatnya di sini.")
+        self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty.setWordWrap(True)
+        self.empty.setStyleSheet(
+            f"color:{theme.MUTED.name()}; font-size:10px; line-height:1.4;")
+        self.body.addWidget(self.empty, 1)
+
         self.prev.clicked.connect(media.previous)
         self.play.clicked.connect(media.play_pause)
         self.next.clicked.connect(media.next)
-        self.setVisible(False)
+        self.set_media({})
 
     def set_media(self, data: dict) -> None:
         if not data or not data.get("available"):
-            self.setVisible(False)
+            self.content.setVisible(False)
+            self.empty.setVisible(True)
             return
-        self.title.setText(str(data.get("title") or "Tanpa judul"))
+        self.empty.setVisible(False)
+        self.content.setVisible(True)
+        title = str(data.get("title") or "Tanpa judul")
         artist = str(data.get("artist") or "")
         album = str(data.get("album") or "")
         detail = " · ".join(x for x in (artist, album) if x)
+        self.title.setText(title)
+        self.title.setToolTip(title)
         self.artist.setText(detail or "Media")
+        self.artist.setToolTip(detail or "Media")
         self.play.set_icon_name("pause" if data.get("playing") else "play")
-        self.setVisible(True)
+        length = int(data.get("length_us") or 0)
+        position = int(data.get("position_us") or 0)
+        if length > 0:
+            self.progress.setValue(max(0, min(1000, int(position * 1000 / length))))
+        else:
+            self.progress.setValue(0)
+        self.time_now.setText(_fmt_us(position))
+        self.time_end.setText(_fmt_us(length))
+
+
+class AgendaCard(SoftCard):
+    """Tanggal hari ini, strip minggu, dan task terdekat."""
+
+    def __init__(self, controller, parent=None):
+        super().__init__(padding=12, parent=parent)
+        self.controller = controller
+        self.setObjectName("ringkasCard")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        head = QHBoxLayout()
+        head.setSpacing(9)
+        left = QVBoxLayout()
+        left.setSpacing(0)
+        today = date.today()
+        month = QLabel(_MONTHS[today.month - 1])
+        month.setStyleSheet(
+            f"color:{theme.VIOLET_LIGHT.name()}; font-size:9px;"
+            "font-weight:700; letter-spacing:1px;")
+        left.addWidget(month)
+        self.day = QLabel(str(today.day))
+        self.day.setStyleSheet(
+            f"color:{theme.TEXT.name()}; font-size:26px; font-weight:700;")
+        left.addWidget(self.day)
+        head.addLayout(left)
+        right = QVBoxLayout()
+        right.setSpacing(3)
+        self.weekday = QLabel(_DAYS[today.weekday()])
+        self.weekday.setStyleSheet(
+            f"color:{theme.MUTED.name()}; font-size:10px; font-weight:600;")
+        right.addWidget(self.weekday)
+        right.addWidget(Pill("Hari ini", "violet"))
+        right.addStretch(1)
+        head.addLayout(right, 1)
+        self.body.addLayout(head)
+
+        strip = QHBoxLayout()
+        strip.setSpacing(3)
+        start = today - timedelta(days=2)
+        self.day_chips: list[QLabel] = []
+        for i in range(5):
+            d = start + timedelta(days=i)
+            chip = QLabel(f"{_DAYS[d.weekday()]}\n{d.day}")
+            chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            chip.setFixedHeight(32)
+            if d == today:
+                chip.setStyleSheet(
+                    f"background:rgba(124, 92, 255, 0.22);"
+                    f"border:1px solid rgba(196, 181, 253, 0.45);"
+                    f"border-radius:9px; color:{theme.TEXT.name()};"
+                    "font-size:9px; font-weight:600;")
+            else:
+                chip.setStyleSheet(
+                    f"color:{theme.MUTED.name()}; font-size:9px;")
+            strip.addWidget(chip, 1)
+            self.day_chips.append(chip)
+        self.body.addLayout(strip)
+
+        eyebrow = QLabel("AGENDA TERDEKAT")
+        eyebrow.setStyleSheet(
+            f"color:{theme.DIM.name()}; font-size:9px; font-weight:700;"
+            "letter-spacing:1px;")
+        self.body.addWidget(eyebrow)
+        self.next_text = QLabel("Tidak ada agenda")
+        self.next_text.setWordWrap(True)
+        self.next_text.setStyleSheet(
+            f"color:{theme.TEXT.name()}; font-size:11px; font-weight:600;")
+        self.body.addWidget(self.next_text, 1)
+
+        self._tick = QTimer(self)
+        self._tick.setInterval(1000)
+        self._tick.timeout.connect(self.refresh)
+        controller.tasksChanged.connect(self.refresh)
+        self.refresh()
+
+    def refresh(self) -> None:
+        tasks = sorted((t for t in self.controller.tasks if not t.done),
+                       key=lambda t: t.remaining())
+        if not tasks:
+            self.next_text.setText("Tidak ada agenda")
+            self.next_text.setToolTip("")
+            self._tick.stop()
+            return
+        task = tasks[0]
+        text = f"{task.label} · {self.controller.format_task(task)}"
+        if len(tasks) > 1:
+            text += f"  +{len(tasks) - 1}"
+        self.next_text.setText(text)
+        self.next_text.setToolTip(text)
+        if not self._tick.isActive():
+            self._tick.start()
+
 
 
 class TimerCard(_Strip):
