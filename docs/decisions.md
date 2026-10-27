@@ -33,10 +33,21 @@ Status: disetujui pemilik (Tuan Andre).
 ### D6. Maskot Pochi
 - Keputusan: Ekspresi dan ikon Pochi dipertahankan apa adanya dari repo (tidak digambar ulang, tidak meniru maskot lain). Aset disalin dari repo Android.
 - Alasan: Instruksi eksplisit pemilik: "untuk ekspresi atau icon pochi jangan dirubah".
+- Status: **digantikan D8** (2026-10-28).
 
 ### D7. Struktur monorepo
 - Keputusan: Pakai repo pochi yang sudah ada sebagai monorepo. Tambah `desktop/` (Linux), `shared/` (spesifikasi protokol & vektor), `docs/`, `scripts/`. Folder `app/` (Android) tidak dipindahkan.
 - Alasan: Sesuai PRD Bagian 3. Jangan pindahkan `app/` tanpa persetujuan.
+
+### D8. Redesign desktop: 15 ekspresi + UI "Ringkas"
+- Keputusan: Ekspresi Pochi digambar ulang mengikuti blueprint 15 ekspresi.
+  UI desktop memakai bahasa visual baru (ungu/indigo, squircle, kartu) dan
+  mode buka **Ringkas** (kartu musik + agenda) yang mekar ke Chat.
+- Alasan: Instruksi pemilik 2026-10-28 — "ubah ekspresi dan desain UI"
+  sesuai referensi gambar.
+- Cakupan: desktop Linux dulu; Android menyusul dengan token yang sama.
+- Detail: `docs/superpowers/specs/2026-10-28-pochi-desktop-redesign-design.md`
+- Menggantikan D6.
 
 ## Antrian keputusan terbuka
 - Pemutar musik final (diperlukan untuk uji M1).
