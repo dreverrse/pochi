@@ -797,6 +797,7 @@ class IslandWindow(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         if not payload:
+            self._permission = None
             self.permission.setVisible(False)
             self._reset_idle()
             return

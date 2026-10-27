@@ -184,6 +184,19 @@ def test_permission_opens_chat():
     ctl.shutdown()
 
 
+def test_permission_clear():
+    w, ctl, media, cfg = make_window()
+    w.expand()
+    w._on_permission({"title": "Baca file", "detail": "x",
+                      "options": [{"id": "allow", "label": "Izinkan",
+                                   "kind": "allow"}]})
+    w._on_permission(None)
+    assert w._permission is None
+    assert not w.permission.isVisible()
+    w.collapse()
+    ctl.shutdown()
+
+
 def test_status_sets_mascot():
     w, ctl, media, cfg = make_window()
     w._on_status(Status.SUCCESS)
@@ -201,7 +214,8 @@ if __name__ == "__main__":
                test_ringkas_does_not_steal_focus, test_ask_bar_opens_chat,
                test_escape_chat_to_ringkas_to_collapsed,
                test_draft_survives_collapse, test_rapid_toggle,
-               test_permission_opens_chat, test_status_sets_mascot):
+               test_permission_opens_chat, test_permission_clear,
+               test_status_sets_mascot):
         try:
             fn()
         except Exception as exc:
