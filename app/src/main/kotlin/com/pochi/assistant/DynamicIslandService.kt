@@ -121,6 +121,9 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         // cutout (`y = 0`) without obstructing app toolbars below it.
         val collapsedWidthPx = (228 * density).toInt()
         val collapsedHeightPx = (34 * density).toInt()
+        // Dynamic Island bounding box (200dp x 36dp) sits cleanly below the status bar
+        val collapsedWidthPx = (200 * density).toInt()
+        val collapsedHeightPx = (36 * density).toInt()
         val minTopY = getMinTopYPx()
         val initialY = computeY(PochiPrefs.offsetYFlow.value)
         val initialX = (PochiPrefs.offsetXFlow.value * density).toInt()
@@ -157,8 +160,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         val maxExpandedHeightPx = (screenHeightPx - minTopY - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
         val defaultExpandedHeightPx = if (isLandscapeInit) {
             (260 * density).toInt().coerceAtMost(maxExpandedHeightPx)
+            (210 * density).toInt().coerceAtMost(maxExpandedHeightPx)
         } else {
             (440 * density).toInt().coerceAtMost(maxExpandedHeightPx)
+            (230 * density).toInt().coerceAtMost(maxExpandedHeightPx)
         }
 
         fun updateInteraction() {
@@ -208,8 +213,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         val curMaxExpH = (curSh - curMinTop - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
                         val curDefExpH = if (isLandscape) {
                             (260 * density).toInt().coerceAtMost(curMaxExpH)
+                            (210 * density).toInt().coerceAtMost(curMaxExpH)
                         } else {
                             (440 * density).toInt().coerceAtMost(curMaxExpH)
+                            (230 * density).toInt().coerceAtMost(curMaxExpH)
                         }
 
                         if (expanded) {
@@ -444,6 +451,8 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         } else {
             params.width = (228 * density).toInt()
             params.height = (34 * density).toInt()
+            params.width = (200 * density).toInt()
+            params.height = (36 * density).toInt()
         }
 
         applyLayout()
