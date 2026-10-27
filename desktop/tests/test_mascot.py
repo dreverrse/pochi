@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 from app.state import Status
 from ui.mascot import (EMOTES, SLEEP_AFTER, PochiMascot, emote_for_status,
@@ -55,10 +56,17 @@ def test_reduce_motion_has_no_timer():
     assert not w._timer.isActive()
 
 
+def test_interactive_mascot():
+    w = PochiMascot(size=64, interactive=True)
+    assert not w.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    assert w.poke() == "wink"
+
+
 if __name__ == "__main__":
     failed = 0
     for fn in (test_mapping, test_all_15_render, test_poke_cycle,
-               test_idle_emote_is_known, test_reduce_motion_has_no_timer):
+               test_idle_emote_is_known, test_reduce_motion_has_no_timer,
+               test_interactive_mascot):
         try:
             fn()
         except Exception as exc:

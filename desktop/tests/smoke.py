@@ -131,16 +131,21 @@ def main() -> int:
                                              island._expanded_h), eg
         assert area.contains(eg), (area, eg)
         assert island._expanded.isVisible() and not island._compact.isVisible()
-        assert island.input.isVisible()
-        grab(island, "2_expanded_empty.png")
+        assert island.ask_bar.isVisible()
+        assert island.music_card.isVisible()
+        grab(island, "9_ringkas.png")
+        island.show_chat()
+        assert wait_until(lambda: island._anim.state()
+                          == QAbstractAnimation.State.Stopped, 1.0)
+        APP.processEvents()
+        grab(island, "10_chat_new.png")
         print("    expanded geometry:", eg)
 
         # ------------------------------------------------------- demo streaming
         assert ctl.send("halo Pochi, apa kabar?")
         assert ctl.status in (Status.THINKING, Status.WORKING)
         APP.processEvents()
-        assert island.activity.isVisible()
-        assert island.activity.ai.isVisible()
+        assert island.ai_card.isVisible()
         assert island.btn_send.property("busy") == "true"
         assert wait_until(lambda: any(
             m.role == "assistant" and not m.streaming
@@ -156,13 +161,13 @@ def main() -> int:
         # --------------------------------------------------------------- timer
         task = ctl.add_timer(120, "Istirahat")
         APP.processEvents()
-        assert island.activity.isVisible()
-        assert island.activity.timer.isVisible()
+        assert island.timer_card.isVisible()
+        assert island.agenda_card.next_text.text() != "Tidak ada agenda"
         assert task.remaining() > 0
         grab(island, "4_timer.png")
         ctl.remove_task(task.id)
         APP.processEvents()
-        assert not island.activity.isVisible()
+        assert not island.timer_card.isVisible()
 
         # ----------------------------------------------------------- permission
         ctl._on_permission({
@@ -192,7 +197,9 @@ def main() -> int:
         # ------------------------------------------------------ Escape & close btn
         assert island.mode == "expanded"
         QTest.keyClick(island.input, Qt.Key.Key_Escape)
-        assert island.mode == "collapsed", "Esc harus menutup panel"
+        assert island.page == "ringkas", "Esc dari Chat harus ke Ringkas"
+        QTest.keyClick(island, Qt.Key.Key_Escape)
+        assert island.mode == "collapsed", "Esc dari Ringkas harus menutup panel"
         QTest.qWait(300)
 
         QTest.mouseClick(island, Qt.MouseButton.LeftButton,
@@ -297,7 +304,7 @@ def main() -> int:
 
         # --------------------------------------------------------------- media
         if not media.snapshot().get("available"):
-            assert not island.activity.media_card.isVisible()
+            assert "Tidak ada media" in island.music_card.empty.text()
 
         grab(island, "8_final_collapsed.png")
         print("\nALL UI SMOKE TESTS PASSED")

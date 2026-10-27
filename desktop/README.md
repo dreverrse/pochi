@@ -1,15 +1,15 @@
 # Pochi Desktop (Dynamic Island)
 
 Overlay asisten pribadi Pochi untuk Linux (EndeavourOS / X11). Terinspirasi
-Dynamic Island iPhone: saat idle tampil sebagai kapsul hitam ramping di tepi
-atas layar, dan melebar jadi panel chat saat diklik. Wajah Pochi (mata putih
-di atas persegi matte-hitam) dipakai konsisten di kapsul, dashboard, dan
-avatar chat.
+Dynamic Island iPhone: saat idle tampil sebagai kapsul ungu-hitam ramping di
+tepi atas layar. Klik kapsul membuka panel **Ringkas** (musik + agenda), lalu
+panel melebar menjadi **Chat** saat kamu mulai bertanya. Maskot Pochi punya
+15 ekspresi yang mengikuti status dan interaksi.
 
 Dibangun dengan **PyQt6** (Qt 6, native, ringan). Tidak ada API key di
 source; key model hanya dari env (`POCHI_API_KEY`) bila perlu. Font bundel
-Poppins ikut disebar di `assets/fonts/`; ikon memakai emoji Noto Color Emoji
-yang tersedia di sistem.
+Poppins ikut disebar di `assets/fonts/`; ikon digambar sendiri dengan
+QPainter (tanpa dependency ikon eksternal).
 
 ## Arsitektur (lapisan)
 
@@ -32,11 +32,11 @@ pochi_desktop/
   services/
     system.py, health.py, media.py, probes.py   data nyata (/proc, power)
   ui/
-    island.py                jendela overlay frameless: kapsul + panel expanded
-    mascot.py                wajah Pochi (mata putih, status via bentuk mata)
+    island.py                jendela overlay frameless: kapsul + Ringkas + Chat
+    mascot.py                mesin 15 ekspresi Pochi (QPainter)
     chat.py                  panel percakapan + drag & drop file/gambar
-    activity.py              area aktivitas kontekstual
-    components.py            komponen bersama (IconButton, Dot, Card, dll)
+    activity.py              kartu musik + agenda (data nyata)
+    components.py            komponen bersama (Pill, SoftCard, Sparkline, dll)
     dashboard.py, settings.py, timer_dialog.py, tray.py, icons.py, fonts.py
 ```
 
@@ -57,14 +57,21 @@ Butuh compositor untuk transparansi (xfwm4 compositing aktif).
 
 ## Interaksi
 
-- **Idle**: kapsul hitam murni dengan dua mata Pochi + label status. Titik
- /kapsul bisa **digeser** (posisi tersimpan) dan diklik untuk melebar.
-- Klik kapsul → melebar jadi panel chat. `Esc` / alihkan fokus → menutup.
+- **Idle**: kapsul gelap dengan maskot Pochi + label status. Kapsul bisa
+  **digeser** (posisi tersimpan) dan diklik untuk membuka **Ringkas**.
+- **Ringkas**: kartu musik (judul, artis, progress, kontrol) dan kartu agenda
+  (tanggal, strip hari, timer/task terdekat). Ringkas tidak merebut fokus
+  keyboard. Klik bar "Tanya Pochi…" untuk pindah ke **Chat**.
 - **Chat**: ketik pesan, atau **seret gambar/file** ke panel (drag & drop) —
-  lampiran tampil sebagai chip thumbnail sebelum dikirim. Muka Pochi muncul
-  di empty state dan sebagai avatar tiap balasan.
-- Status: idle putih, sibuk biru, sukses hijau, error merah.
-- Pengaturan (`⋯`): posisi, skala, aksen, pintasan, reduce motion.
+  lampiran tampil sebagai chip thumbnail sebelum dikirim. Draft pesan tetap
+  ada saat panel ditutup.
+- `Esc`: Chat → Ringkas → tutup. Alihkan fokus ke luar panel juga menutup,
+  kecuali saat ada permintaan izin tool.
+- Status: idle netral, sibuk berpikir, sukses senang, error sedih; setelah
+  3 error berturut-turut Pochi kesal. Poke/pet maskot di dashboard memutar
+  ekspresi interaktif (wink → senang → terkejut → malu, dan love).
+- Pengaturan (`⋯`): posisi, skala, aksen, pintasan, reduce motion. Saat
+  reduce motion aktif, blink, siklus ekspresi, dan animasi panel dimatikan.
 
 ## Backend
 

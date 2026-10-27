@@ -21,7 +21,8 @@ from app import theme
 from app.state import Status
 from platform_x11.x11 import work_area
 from ui.components import (
-    Card, DialogShell, Dot, EllipsisLabel, IconButton, MetricRow, icon_label,
+    Card, DialogShell, Dot, EllipsisLabel, IconButton, MetricRow, Sparkline,
+    icon_label,
 )
 from ui.icons import make_icon
 from ui.mascot import PochiMascot
@@ -64,7 +65,8 @@ class PochiCard(Card):
         row.setSpacing(10)
         self.mascot = PochiMascot(
             size=42, status_provider=lambda: controller.status,
-            reduce_motion=controller.cfg.reduce_motion, show_backing=True)
+            reduce_motion=controller.cfg.reduce_motion, show_backing=True,
+            interactive=True)
         row.addWidget(self.mascot, 0, Qt.AlignmentFlag.AlignTop)
         v = QVBoxLayout()
         v.setSpacing(2)
@@ -634,6 +636,12 @@ class SystemCard(Card):
         self.add(self.ram)
         self.add(self.disk)
 
+        # Riwayat CPU nyata dari monitor; kosong sampai data pertama datang.
+        self.cpu_history: list[float] = []
+        self.spark = Sparkline(theme.CYAN)
+        self.spark.setFixedHeight(26)
+        self.add(self.spark)
+
         foot = QHBoxLayout()
         foot.setSpacing(6)
         self.temp = QLabel("Suhu —")
@@ -652,6 +660,10 @@ class SystemCard(Card):
     def update_data(self, data: dict):
         cpu = data.get("cpu_percent")
         self.cpu.set_value(cpu, f"{cpu:.0f}%" if cpu is not None else "—")
+        if cpu is not None:
+            self.cpu_history = (self.cpu_history + [float(cpu)])[-40:]
+            if len(self.cpu_history) >= 2:
+                self.spark.set_values(self.cpu_history)
         mem = data.get("mem_percent")
         mem_text = "—"
         if mem is not None:

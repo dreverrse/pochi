@@ -317,7 +317,7 @@ _ICONS: dict[str, tuple] = {
 }
 
 
-def icon_pixmap(name: str, size: int = 18, color: str | QColor = "#94A3B8",
+def icon_pixmap(name: str, size: int = 18, color: str | QColor = "#9A94AE",
                 dpr: float = 2.0) -> QPixmap:
     col = QColor(color) if isinstance(color, str) else QColor(color)
     px = QPixmap(int(size * dpr), int(size * dpr))
@@ -329,7 +329,7 @@ def icon_pixmap(name: str, size: int = 18, color: str | QColor = "#94A3B8",
     return px
 
 
-def make_icon(name: str, color: str | QColor = "#94A3B8", size: int = 18) -> QIcon:
+def make_icon(name: str, color: str | QColor = "#9A94AE", size: int = 18) -> QIcon:
     return QIcon(icon_pixmap(name, size, color))
 
 
@@ -344,10 +344,10 @@ def pochi_face_pixmap(size: int = 64) -> QPixmap:
     corner = s * 0.24
     body = QRectF(pad, pad, s - pad * 2, s - pad * 2)
     p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QColor("#0A0A0A"))
+    p.setBrush(QColor("#12101A"))
     p.drawRoundedRect(body, corner, corner)
     p.setBrush(Qt.BrushStyle.NoBrush)
-    p.setPen(QPen(QColor("#26262E"), max(1.0, s * 0.03)))
+    p.setPen(QPen(QColor(124, 92, 255, 140), max(1.0, s * 0.03)))
     p.drawRoundedRect(body, corner, corner)
     gw = s * 0.14
     gh = s * 0.28

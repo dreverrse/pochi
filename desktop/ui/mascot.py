@@ -87,12 +87,13 @@ def idle_emote(rng: random.Random | None = None) -> str:
 class PochiMascot(QWidget):
     def __init__(self, size: int = 44, status_provider=None,
                  reduce_motion: bool = False, show_backing: bool = True,
-                 parent=None):
+                 interactive: bool = False, parent=None):
         super().__init__(parent)
         self._size = max(12, int(size))
         self._status_provider = status_provider
         self._reduce = bool(reduce_motion)
         self._backing = bool(show_backing)
+        self._interactive = bool(interactive)
         self._status = Status.IDLE
         self._blinking = False
         self._blink_until = 0.0
@@ -108,7 +109,12 @@ class PochiMascot(QWidget):
 
         w = int(self._size * 1.42) if self._backing else self._size
         self.setFixedSize(w, self._size)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        if not self._interactive:
+            self.setAttribute(
+                Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        else:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setToolTip("Klik: poke · Klik kanan: pet")
         self.setAccessibleName("Pochi mascot")
 
         self._timer = QTimer(self)
@@ -175,6 +181,16 @@ class PochiMascot(QWidget):
     def pet(self) -> str:
         self.set_emote("love")
         return "love"
+
+    def mousePressEvent(self, e):
+        if self._interactive:
+            if e.button() == Qt.MouseButton.RightButton:
+                self.pet()
+            elif e.button() == Qt.MouseButton.LeftButton:
+                self.poke()
+            e.accept()
+            return
+        super().mousePressEvent(e)
 
     def set_reduce_motion(self, value: bool) -> None:
         self._reduce = bool(value)
