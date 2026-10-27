@@ -103,6 +103,7 @@ class IslandWindow(QWidget):
         self._fade: QPropertyAnimation | None = None
         self._pending = ""
         self._status = Status.IDLE
+        self._error_count = 0
         self._connection_ok = False
         self._permission = None
         self._shortcut = None
@@ -200,7 +201,7 @@ class IslandWindow(QWidget):
 
         self.mascot = PochiMascot(
             size=max(24, int(28 * self.cfg.scale)),
-            status_provider=lambda: self.controller.status,
+            status_provider=lambda: self._status,
             reduce_motion=self.cfg.reduce_motion,
             show_backing=False)
         self.compact_mascot = self.mascot
@@ -232,7 +233,7 @@ class IslandWindow(QWidget):
 
         self.header_mascot = PochiMascot(
             size=max(20, int(26 * self.cfg.scale)),
-            status_provider=lambda: self.controller.status,
+            status_provider=lambda: self._status,
             reduce_motion=self.cfg.reduce_motion,
             show_backing=True)
         h.addWidget(self.header_mascot)
@@ -686,6 +687,8 @@ class IslandWindow(QWidget):
     def _on_focus_changed(self, _old, new):
         if self._mode != "expanded":
             return
+        if self._permission is not None:
+            return
         if time.monotonic() - self._expanded_at < 0.5:
             return
         if not self._inside(new):
@@ -701,6 +704,10 @@ class IslandWindow(QWidget):
     # --------------------------------------------------------------- status
     def _on_status(self, status: str):
         self._status = status
+        if status == Status.ERROR:
+            self._error_count += 1
+        elif status in (Status.IDLE, Status.SUCCESS):
+            self._error_count = 0
         color = Status.color(status)
         label = Status.LABELS.get(status, status)
         suffix = "…" if status in (Status.THINKING, Status.WORKING,
@@ -717,6 +724,11 @@ class IslandWindow(QWidget):
             "Pochi" if status == Status.IDLE else label + suffix)
         self.compact_label.setStyleSheet(
             f"color:{color.name()}; font-size:11px; font-weight:600;")
+        for mascot in (self.compact_mascot, self.header_mascot,
+                       self.chat_mascot):
+            mascot.set_status(status)
+            if status == Status.ERROR and self._error_count >= 3:
+                mascot.set_emote("annoyed")
         busy = self.controller.busy
         self._set_busy(busy)
         if busy or self._permission is not None:
@@ -727,6 +739,8 @@ class IslandWindow(QWidget):
             self.update()
 
     def _set_busy(self, busy: bool):
+        if not hasattr(self, "btn_send"):
+            return
         self.btn_send.set_icon_name("stop" if busy else "send",
                                     theme.TEXT if busy else theme.BG)
         self.btn_send.setToolTip("Hentikan" if busy else "Kirim (Enter)")
@@ -809,6 +823,7 @@ class IslandWindow(QWidget):
         self.perm_buttons.addStretch(1)
         self.permission.setVisible(True)
         self._idle.stop()
+        self.show_chat(focus=False)
 
     # ------------------------------------------------------------------ chat
     def _send(self):

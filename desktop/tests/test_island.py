@@ -9,7 +9,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 from app import theme
 from app.config import Config
-from app.state import Controller
+from app.state import Controller, Status
 from integration.mock_adapter import MockAdapter
 from platform_x11.x11 import work_area
 from ui.island import IslandWindow
@@ -171,6 +171,28 @@ def test_rapid_toggle():
     ctl.shutdown()
 
 
+def test_permission_opens_chat():
+    w, ctl, media, cfg = make_window()
+    w.expand()
+    w._on_permission({"title": "Baca file", "detail": "x",
+                      "options": [{"id": "allow", "label": "Izinkan",
+                                   "kind": "allow"}]})
+    assert w.page == "chat"
+    assert w.permission.isVisible()
+    assert not w._idle.isActive()
+    w.collapse()
+    ctl.shutdown()
+
+
+def test_status_sets_mascot():
+    w, ctl, media, cfg = make_window()
+    w._on_status(Status.SUCCESS)
+    assert w.compact_mascot.current_emote() in {"happy", "excited"}
+    w._on_status(Status.ERROR)
+    assert w.compact_mascot.current_emote() in {"sad", "angry"}
+    ctl.shutdown()
+
+
 if __name__ == "__main__":
     failed = 0
     for fn in (test_open_ringkas, test_compact_capsule,
@@ -178,7 +200,8 @@ if __name__ == "__main__":
                test_long_title_elides, test_screenshot_ringkas,
                test_ringkas_does_not_steal_focus, test_ask_bar_opens_chat,
                test_escape_chat_to_ringkas_to_collapsed,
-               test_draft_survives_collapse, test_rapid_toggle):
+               test_draft_survives_collapse, test_rapid_toggle,
+               test_permission_opens_chat, test_status_sets_mascot):
         try:
             fn()
         except Exception as exc:
