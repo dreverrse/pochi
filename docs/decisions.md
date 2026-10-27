@@ -6,10 +6,13 @@ Setiap keputusan yang mengubah arsitektur dicatat di sini beserta alasannya.
 
 Status: disetujui pemilik (Tuan Andre).
 
-### D1. Stack desktop Linux: Tauri 2 (Rust + UI web)
-- Keputusan: Memakai Tauri 2 dengan backend Rust dan UI web (TypeScript/Svelte, atau vanilla bila lebih ringan).
-- Alasan: Sesuai rekomendasi PRD; animasi notch mudah dibuat dengan CSS; pemilik kuat di web UI; backend Rust ringan untuk D-Bus & jaringan.
-- Catatan lingkungan: X11 + XFCE (xfwm4) di laptop. webkit2gtk-4.1, gtk3, gtk-layer-shell, base-devel sudah terpasang. Rust belum terpasang (dipasang via rustup di level user, tanpa sudo).
+### D1. Stack desktop Linux: PyQt6 (Python) — dipilih ulang
+- Keputusan awal (sebelum M0): Tauri 2 (Rust + UI web) sesuai rekomendasi PRD.
+- Keputusan AKHIR (setelah uji M0, tanggal 2026-10-27): **PyQt6 (Python)** untuk desktop Linux.
+- Alasan (hasil ukur M0 di laptop pemilik, X11/XFCE, 3,6 GB RAM 2 core):
+  - Tauri 2 + WebKitGTK: total RSS **±419 MB** (main 161 + WebProcess 197 + Network 70), CPU idle ±2–5%. Kriteria M0 PRD (<150 MB, <1% CPU) tidak terpenuhi.
+  - PyQt6 (python) di laptop sama: RSS ±160 MB, jauh lebih ringan, sudah berfungsi (notch, drag, maskot, systemd). Dev lebih cepat tanpa toolchain berat.
+- Implikasi: PRD tetap menjadi sumber kebenaran fitur/perilaku; hanya implementasi desktop beralih dari web UI ke PyQt6. Struktur monorepo tetap (`desktop/`, `shared/`, `docs/`, `scripts/`).
 
 ### D2. Cakupan fitur Linux v1
 - Keputusan: Fitur Agent AI dan Deck TIDAK termasuk di versi Linux 1.0 (tetap ada di Android).
