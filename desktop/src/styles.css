@@ -1,0 +1,107 @@
+/* Pochi notch — latar jendela transparan */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#notch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+/* Kapsul hitam (squircle) */
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 320px;
+  height: 64px;
+  padding: 0 20px;
+  background: #000;
+  border-radius: 32px;
+  border: 1px solid #26262b;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Kilau kaca di bagian atas */
+.pill::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 55%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+
+/* Mata Pochi: dua ellips putih yang menyala */
+.eyes {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.eye {
+  width: 12px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+  animation: blink 4.2s infinite;
+}
+
+.eye:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+@keyframes blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.08); }
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.clock {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.date {
+  color: #8e8e93;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Titik halaman (placeholder) */
+.dots {
+  display: flex;
+  gap: 6px;
+  opacity: 0.7;
+}
+
+.dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.4;
+}
