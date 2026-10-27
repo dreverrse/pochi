@@ -383,25 +383,24 @@ class TimerCard(_Strip):
 
 
 class ActivityArea(QWidget):
-    """Tumpukan kartu aktivitas; menyembunyikan dirinya saat kosong."""
+    """Tumpukan kartu aktivitas; anak-anaknya dipindah ke halaman island."""
 
-    def __init__(self, controller, media, reduce_motion=False, parent=None):
+    def __init__(self, controller, media, reduce_motion=False,
+                 on_needs_chat=None, on_layout_changed=None, parent=None):
         super().__init__(parent)
         self.controller = controller
         self.media = media
-        v = QVBoxLayout(self)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(6)
-        self.ai = AIActivityCard(controller, reduce_motion)
+        self._on_needs_chat = on_needs_chat
+        self._on_layout_changed = on_layout_changed
+        # Tidak memakai layout sendiri: setiap anak akan dipindah ke layout
+        # halaman island. Layout perantara akan ikut mengelola widget yang
+        # sudah di-reparent dan membuat ukuran kacau.
+        self.ai = AIActivityCard(controller, reduce_motion, parent=self)
         self.lyrics_service = LyricsService(media, parent=self)
-        self.lyrics_panel = LyricsPanel(media, self.lyrics_service)
-        self.media_card = MediaCard(media, on_lyrics=self._toggle_lyrics)
-        self.timer = TimerCard(controller)
-        v.addWidget(self.ai)
-        v.addWidget(self.media_card)
-        v.addWidget(self.lyrics_panel)
-        v.addWidget(self.timer)
-        self.setVisible(False)
+        self.lyrics_panel = LyricsPanel(media, self.lyrics_service, parent=self)
+        self.media_card = MediaCard(media, on_lyrics=self._toggle_lyrics,
+                                    parent=self)
+        self.timer = TimerCard(controller, parent=self)
 
         self._tick = QTimer(self)
         self._tick.setInterval(1000)
@@ -410,11 +409,27 @@ class ActivityArea(QWidget):
         controller.activityChanged.connect(self._on_activity)
         controller.tasksChanged.connect(self._on_tasks)
         media.changed.connect(self._on_media)
-        self.lyrics_panel.close_btn.clicked.connect(self.lyrics_panel.close_panel)
+        self.lyrics_panel.close_btn.clicked.connect(self._close_lyrics)
+
+    def _close_lyrics(self) -> None:
+        self.lyrics_panel.close_panel()
+        if self._on_layout_changed is not None:
+            self._on_layout_changed()
 
     def _toggle_lyrics(self) -> None:
-        self.lyrics_panel.toggle()
-        self._update_visible()
+        panel = self.lyrics_panel
+        if not panel.isVisible() and panel.is_open():
+            # Lirik sudah terbuka tetapi halaman Chat tersembunyi: tampilkan
+            # halamannya, jangan malah menutup panel.
+            if self._on_needs_chat is not None:
+                self._on_needs_chat()
+            return
+        if not panel.isVisible() and self._on_needs_chat is not None:
+            # Panel lirik tinggal di halaman Chat; pastikan halaman itu tampil.
+            self._on_needs_chat()
+        panel.toggle()
+        if self._on_layout_changed is not None:
+            self._on_layout_changed()
 
     def start_polling(self) -> None:
         self.media.acquire("island")
@@ -423,18 +438,11 @@ class ActivityArea(QWidget):
     def stop_polling(self) -> None:
         self.media.release("island")
 
-    def _update_visible(self):
-        self.setVisible(any(not w.isHidden() for w in
-                            (self.ai, self.media_card, self.timer,
-                             self.lyrics_panel)))
-
     def _on_activity(self, act):
         self.ai.set_activity(act)
-        self._update_visible()
 
     def _on_media(self, data):
         self.media_card.set_media(data)
-        self._update_visible()
 
     def _on_tasks(self):
         tasks = [t for t in self.controller.tasks if not t.done]
@@ -446,7 +454,6 @@ class ActivityArea(QWidget):
         else:
             self.timer.set_task(None)
             self._tick.stop()
-        self._update_visible()
 
     def _on_tick(self):
         self._on_tasks()

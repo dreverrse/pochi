@@ -50,6 +50,10 @@ class LyricsPanel(QFrame):
         self._active = -1
         self._pos_anchor: tuple[float, int] | None = None
         self._playing = False
+        # Status buka eksplisit: ``isVisible()`` selalu False saat halaman
+        # Chat sedang tidak ditampilkan, jadi tidak boleh dipakai sebagai
+        # penentu toggle.
+        self._open = False
 
         v = QVBoxLayout(self)
         v.setContentsMargins(10, 6, 10, 8)
@@ -94,6 +98,9 @@ class LyricsPanel(QFrame):
         self._empty.setStyleSheet(f"color:{theme.DIM.name()}; font-size:11px;")
         self._empty.setFixedHeight(120)
         v.addWidget(self._empty)
+        # Hanya satu dari scroll/empty yang boleh tampil; menampilkan keduanya
+        # membuat panel dua kali lebih tinggi dan mendesak isi Chat.
+        self._empty.setVisible(False)
 
         self.setVisible(False)
 
@@ -107,16 +114,21 @@ class LyricsPanel(QFrame):
 
     # ------------------------------------------------------------ public
     def open(self) -> None:
+        self._open = True
         self.setVisible(True)
         if self._lines:
             self._timer.start()
 
     def close_panel(self) -> None:
+        self._open = False
         self._timer.stop()
         self.setVisible(False)
 
+    def is_open(self) -> bool:
+        return self._open
+
     def toggle(self) -> bool:
-        if self.isVisible():
+        if self._open:
             self.close_panel()
             return False
         self.open()
@@ -170,7 +182,7 @@ class LyricsPanel(QFrame):
         for _ms, text in self._lines:
             self._col.insertWidget(self._col.count() - 1, _Row(text, False))
 
-        if self.isVisible():
+        if self._open:
             self._timer.start()
 
     def _on_error(self, key, title, artist, reason):

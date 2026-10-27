@@ -75,7 +75,11 @@ def emote_for_status(status: str, error_count: int = 0) -> str:
     if status == Status.SUCCESS:
         return "happy" if error_count == 0 else "excited"
     if status == Status.ERROR:
-        return "annoyed" if error_count >= 3 else "sad"
+        if error_count >= 3:
+            return "annoyed"
+        if error_count == 2:
+            return "crying"
+        return "sad"
     return "neutral"
 
 
@@ -101,6 +105,7 @@ class PochiMascot(QWidget):
 
         now = time.monotonic()
         self._explicit_emote: str | None = None
+        self._explicit_until = 0.0
         self._idle_name: str | None = None
         self._poke_index = 0
         self._idle_since = now
@@ -120,6 +125,11 @@ class PochiMascot(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(50)
         self._timer.timeout.connect(self._tick)
+        # Emote eksplisit (poke/pet/laugh) kedaluwarsa sendiri; timer ini
+        # tetap jalan walau reduce_motion aktif karena tidak menggerakkan apa pun.
+        self._emote_timer = QTimer(self)
+        self._emote_timer.setSingleShot(True)
+        self._emote_timer.timeout.connect(self._expire_emote)
         self._refresh_timer()
 
     # ------------------------------------------------------------- state
@@ -130,7 +140,7 @@ class PochiMascot(QWidget):
     def set_status(self, s: str) -> None:
         self._idle_since = time.monotonic()
         self._sleepy = False
-        self._explicit_emote = None
+        self._clear_explicit()
         if s == self._status:
             self.update()
             return
@@ -150,16 +160,40 @@ class PochiMascot(QWidget):
         return QColor(Status.color(self.current_status()))
 
     # ---------------------------------------------------------- ekspresi
-    def set_emote(self, name: str) -> None:
-        self._explicit_emote = name if name in EMOTES else "neutral"
+    def set_emote(self, name: str, seconds: float | None = None) -> None:
+        """Tampilkan emote eksplisit lalu kembali ke status setelah beberapa saat."""
+        name = name if name in EMOTES else "neutral"
+        now = time.monotonic()
+        if seconds is None:
+            seconds = 6.0 if name == "love" else 4.0
+        self._explicit_emote = name
+        self._explicit_until = now + max(0.0, float(seconds))
+        self._emote_timer.start(max(1, int(max(0.0, float(seconds)) * 1000)))
         self._sleepy = False
+        self._idle_since = now
+        self._next_idle_emote = now + random.uniform(20.0, 40.0)
+        self._refresh_timer()
+        self.update()
+
+    def _clear_explicit(self) -> None:
+        self._explicit_emote = None
+        self._explicit_until = 0.0
+        if hasattr(self, "_emote_timer"):
+            self._emote_timer.stop()
+
+    def _expire_emote(self) -> None:
+        if not self._explicit_emote:
+            return
+        if time.monotonic() < self._explicit_until:
+            return
+        self._clear_explicit()
         self._idle_since = time.monotonic()
         self._next_idle_emote = self._idle_since + random.uniform(20.0, 40.0)
         self._refresh_timer()
         self.update()
 
     def current_emote(self) -> str:
-        if self._explicit_emote:
+        if self._explicit_emote and time.monotonic() < self._explicit_until:
             return self._explicit_emote
         if self._sleepy:
             return "sleepy"
@@ -182,6 +216,10 @@ class PochiMascot(QWidget):
         self.set_emote("love")
         return "love"
 
+    def laugh(self) -> str:
+        self.set_emote("laughing")
+        return "laughing"
+
     def mousePressEvent(self, e):
         if self._interactive:
             if e.button() == Qt.MouseButton.RightButton:
@@ -191,6 +229,13 @@ class PochiMascot(QWidget):
             e.accept()
             return
         super().mousePressEvent(e)
+
+    def mouseDoubleClickEvent(self, e):
+        if self._interactive and e.button() == Qt.MouseButton.LeftButton:
+            self.laugh()
+            e.accept()
+            return
+        super().mouseDoubleClickEvent(e)
 
     def set_reduce_motion(self, value: bool) -> None:
         self._reduce = bool(value)
@@ -203,7 +248,7 @@ class PochiMascot(QWidget):
             return
         self._sleepy = value
         if value:
-            self._explicit_emote = None
+            self._clear_explicit()
         else:
             self._idle_since = time.monotonic()
             self._next_idle_emote = self._idle_since + random.uniform(20.0, 40.0)
@@ -233,6 +278,8 @@ class PochiMascot(QWidget):
 
     def _tick(self):
         now = time.monotonic()
+        if self._explicit_emote and now >= self._explicit_until:
+            self._clear_explicit()
         idle = self.current_status() == Status.IDLE
 
         if idle and not self._explicit_emote and not self._sleepy:

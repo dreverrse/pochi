@@ -28,12 +28,14 @@ from ui.activity import ActivityArea, AgendaCard
 from ui.chat import ChatPanel
 from ui.components import Dot, EllipsisLabel, IconButton, Pill, icon_label
 from ui.icons import make_icon
-from ui.mascot import PochiMascot
+from ui.mascot import SLEEP_AFTER, PochiMascot
 
 SHADOW = 6
 COMPACT_SIZE = (236, 42)
 RINGKAS_SIZE = (560, 300)
 CHAT_SIZE = (430, 620)
+# Ukuran minimum isi panel (skala 0.75 dulu membuat layout terhimpit).
+MIN_EXPANDED = (440, 300)
 
 
 class DragHandle(QWidget):
@@ -112,6 +114,15 @@ class IslandWindow(QWidget):
         self._build_compact()
         self._build_expanded()
         self._position_contents()
+        # Overhead tetap di luar halaman (header, footer, margin, spacing).
+        # Dipakai untuk menghitung minimum per halaman, bukan gabungan stack.
+        lay = self._expanded.layout()
+        if lay is not None:
+            lay.activate()
+        expanded_min = self._expanded.minimumSizeHint()
+        stack_min = self.stack.minimumSizeHint()
+        self._chrome_w = max(0, expanded_min.width() - stack_min.width())
+        self._chrome_h = max(0, expanded_min.height() - stack_min.height())
         self.setGeometry(self._compact_rect())
         self._compact.setVisible(True)
         self._expanded.setVisible(False)
@@ -149,14 +160,28 @@ class IslandWindow(QWidget):
         self._compact_w = int(max(COMPACT_SIZE[0], self.cfg.compact_width) * s) + SHADOW * 2
         self._compact_h = int(COMPACT_SIZE[1] * s) + SHADOW * 2
         area = work_area()
-        self._ringkas_w = min(int(RINGKAS_SIZE[0] * s) + SHADOW * 2,
-                              area.width() - 16)
-        self._ringkas_h = min(int(RINGKAS_SIZE[1] * s) + SHADOW * 2,
-                              area.height() - 16)
-        self._chat_w = min(int(CHAT_SIZE[0] * s) + SHADOW * 2,
-                           area.width() - 16)
-        self._chat_h = min(int(CHAT_SIZE[1] * s) + SHADOW * 2,
-                           area.height() - 16)
+        min_rw, min_rh = MIN_EXPANDED
+        min_cw, min_ch = MIN_EXPANDED
+        if hasattr(self, "_chrome_h"):
+            page = self.chat_page if self._page == "chat" else self.ringkas_page
+            hint = page.minimumSizeHint()
+            need_w = hint.width() + self._chrome_w + SHADOW * 2 + 8
+            need_h = hint.height() + self._chrome_h + SHADOW * 2 + 8
+            # Hint per halaman: panel lirik hanya menambah tinggi Chat.
+            if self._page == "chat":
+                min_cw, min_ch = max(min_cw, need_w), max(min_ch, need_h)
+            else:
+                min_rw, min_rh = max(min_rw, need_w), max(min_rh, need_h)
+        limit_w = max(min_rw, min_cw, area.width() - 16)
+        limit_h = max(min_rh, min_ch, area.height() - 16)
+        self._ringkas_w = min(max(int(RINGKAS_SIZE[0] * s) + SHADOW * 2, min_rw),
+                              limit_w)
+        self._ringkas_h = min(max(int(RINGKAS_SIZE[1] * s) + SHADOW * 2, min_rh),
+                              limit_h)
+        self._chat_w = min(max(int(CHAT_SIZE[0] * s) + SHADOW * 2, min_cw),
+                           limit_w)
+        self._chat_h = min(max(int(CHAT_SIZE[1] * s) + SHADOW * 2, min_ch),
+                           limit_h)
         # Alias lama untuk smoke test/dashboard.
         self._expanded_w = self._ringkas_w
         self._expanded_h = self._ringkas_h
@@ -235,7 +260,7 @@ class IslandWindow(QWidget):
             size=max(20, int(26 * self.cfg.scale)),
             status_provider=lambda: self._status,
             reduce_motion=self.cfg.reduce_motion,
-            show_backing=True)
+            show_backing=True, interactive=True)
         h.addWidget(self.header_mascot)
 
         titles = QVBoxLayout()
@@ -299,8 +324,13 @@ class IslandWindow(QWidget):
         v.addWidget(self.stack, 1)
 
         # ---- aktivitas (satu polling untuk media, lirik, AI, timer)
-        self.activity = ActivityArea(self.controller, self.media,
-                                     self.cfg.reduce_motion)
+        # Parent eksplisit: anak-anaknya dipindah ke layout halaman, jadi
+        # ActivityArea sendiri tidak boleh menjadi top-level window yatim.
+        self.activity = ActivityArea(
+            self.controller, self.media, self.cfg.reduce_motion,
+            on_needs_chat=lambda: self.show_chat(focus=False),
+            on_layout_changed=self._refit,
+            parent=self._expanded)
         self.music_card = self.activity.media_card
         self.lyrics_panel = self.activity.lyrics_panel
         self.ai_card = self.activity.ai
@@ -349,9 +379,13 @@ class IslandWindow(QWidget):
         cl.addWidget(self.lyrics_panel)
 
         self.chat = ChatPanel(self.controller)
-        self.chat.setMinimumHeight(150)
+        # Jangan paksa tinggi lebih kecil dari minimum asli panel: empty state
+        # (maskot + judul + chip) akan saling tumpang tindih saat ruang sempit.
+        self.chat.setMinimumHeight(self.chat.minimumSizeHint().height())
         self.chat.sendRequested.connect(self._send_text)
         self.chat_mascot = self.chat.welcome_mascot
+        # ChatPanel dibuat setelah cfg dibaca; samakan preferensi gerak.
+        self.chat_mascot.set_reduce_motion(self.cfg.reduce_motion)
         cl.addWidget(self.chat, 1)
 
         # ---- izin tool
@@ -447,6 +481,10 @@ class IslandWindow(QWidget):
     def _escape(self):
         if self._mode != "expanded":
             return
+        if self._permission is not None:
+            # Jangan pernah menyembunyikan permintaan izin yang belum dijawab.
+            self.show_chat(focus=False)
+            return
         if self._page == "chat":
             self.show_ringkas()
         else:
@@ -505,7 +543,25 @@ class IslandWindow(QWidget):
         self.expandedChanged.emit(True)
         self._reset_idle()
 
+    def _refit(self) -> None:
+        """Sesuaikan ukuran panel setelah isi berubah (mis. panel lirik)."""
+        if self._mode != "expanded":
+            return
+        lay = self._expanded.layout()
+        if lay is not None:
+            lay.activate()
+        self._compute_sizes()
+        self._position_contents()
+        if self._anim is not None:
+            self._anim.stop()
+        self.setGeometry(self._expanded_rect())
+        self._reset_idle()
+
     def show_ringkas(self, animate: bool = True):
+        if self._permission is not None:
+            # Banner izin hanya ada di halaman Chat.
+            self.show_chat(focus=False, animate=animate)
+            return
         if self._mode != "expanded":
             self.expand(animate)
             return
@@ -535,6 +591,9 @@ class IslandWindow(QWidget):
         self._reset_idle()
 
     def collapse(self, animate: bool = True):
+        if self._permission is not None:
+            self.show_chat(focus=False, animate=animate)
+            return
         if self._mode == "collapsed":
             return
         self._wake()
@@ -542,10 +601,9 @@ class IslandWindow(QWidget):
         self._mode = "collapsed"
         self._idle.stop()
         self.activity.stop_polling()
-        # jadwalkan tidur (30 dtk idle, hanya saat collapsed & tidak sibuk)
+        # maskot tidur setelah 90 dtk idle (hanya saat collapsed & tidak sibuk)
         if not self.controller.busy and self._permission is None:
-            secs = getattr(self.cfg, "sleep_after_seconds", 30)
-            self._sleep_timer.start(int(max(5, secs) * 1000))
+            self._sleep_timer.start(int(SLEEP_AFTER * 1000))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         eff = self._expanded.graphicsEffect()
         if eff is not None:
@@ -727,8 +785,11 @@ class IslandWindow(QWidget):
         for mascot in (self.compact_mascot, self.header_mascot,
                        self.chat_mascot):
             mascot.set_status(status)
-            if status == Status.ERROR and self._error_count >= 3:
-                mascot.set_emote("annoyed")
+            if status == Status.ERROR:
+                if self._error_count >= 3:
+                    mascot.set_emote("annoyed")
+                elif self._error_count == 2:
+                    mascot.set_emote("crying")
         busy = self.controller.busy
         self._set_busy(busy)
         if busy or self._permission is not None:
@@ -790,6 +851,12 @@ class IslandWindow(QWidget):
             self.foot_usage.setText("")
 
     # ------------------------------------------------------------- permission
+    def _set_permission_lock(self, locked: bool) -> None:
+        self.ringkas_tab.setEnabled(not locked)
+        self.btn_close.setEnabled(not locked)
+        self.btn_close.setToolTip(
+            "Selesaikan izin dulu" if locked else "Tutup (Esc)")
+
     def _on_permission(self, payload):
         self._permission = payload
         while self.perm_buttons.count():
@@ -799,6 +866,7 @@ class IslandWindow(QWidget):
         if not payload:
             self._permission = None
             self.permission.setVisible(False)
+            self._set_permission_lock(False)
             self._reset_idle()
             return
         self.perm_title.setText(str(payload.get("title") or "Tool meminta izin"))
@@ -823,6 +891,7 @@ class IslandWindow(QWidget):
             self.perm_buttons.addWidget(b)
         self.perm_buttons.addStretch(1)
         self.permission.setVisible(True)
+        self._set_permission_lock(True)
         self._idle.stop()
         self.show_chat(focus=False)
 
@@ -836,9 +905,12 @@ class IslandWindow(QWidget):
             return
         if self.controller.send(text, files):
             self.input.clear()
+            # Jangan biarkan draft lama muncul lagi saat Chat dibuka ulang.
+            self._draft_text = ""
 
     def _send_text(self, text: str, files: list | tuple = ()):
         if self.controller.send(text, files):
+            self._draft_text = ""
             self._reset_idle()
 
     # -------------------------------------------------------------- lampiran
@@ -850,24 +922,34 @@ class IslandWindow(QWidget):
         if self._mode == "expanded" and e.mimeData().hasUrls():
             e.acceptProposedAction()
 
+    def _stage_files(self, paths) -> None:
+        if not paths:
+            return
+        self.chat.add_files(paths)
+        if self._page != "chat":
+            # Lampiran selalu masuk ke composer Chat, bukan halaman Ringkas.
+            self.show_chat(focus=False)
+
     def dropEvent(self, e):
         if self._mode != "expanded":
             return
         paths = [u.toLocalFile() for u in e.mimeData().urls()
                  if u.isLocalFile()]
         if paths:
-            self.chat.add_files(paths)
+            self._stage_files(paths)
             e.acceptProposedAction()
 
     # ---------------------------------------------------------------- idle
     def _go_sleep(self):
-        if not self.mascot.sleeping():
-            self.mascot.set_sleeping(True)
+        for mascot in (self.mascot, self.header_mascot):
+            if not mascot.sleeping():
+                mascot.set_sleeping(True)
 
     def _wake(self):
         self._sleep_timer.stop()
-        if self.mascot.sleeping():
-            self.mascot.set_sleeping(False)
+        for mascot in (self.mascot, self.header_mascot):
+            if mascot.sleeping():
+                mascot.set_sleeping(False)
 
     def _reset_idle(self):
         self._wake()

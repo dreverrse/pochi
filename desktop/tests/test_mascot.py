@@ -62,11 +62,40 @@ def test_interactive_mascot():
     assert w.poke() == "wink"
 
 
+def test_error_count_two_cries():
+    assert emote_for_status(Status.ERROR) == "sad"
+    assert emote_for_status(Status.ERROR, error_count=2) == "crying"
+    assert emote_for_status(Status.ERROR, error_count=3) == "annoyed"
+
+
+def test_laugh_and_pet_hold():
+    w = PochiMascot(size=64, interactive=True)
+    assert w.laugh() == "laughing"
+    assert w.current_emote() == "laughing"
+    assert w.pet() == "love"
+    assert w.current_emote() == "love"
+    assert w._explicit_until > 0
+
+
+def test_explicit_emote_expires_with_reduce_motion():
+    from PyQt6.QtTest import QTest
+    w = PochiMascot(size=64, reduce_motion=True)
+    w.show()
+    w.set_emote("happy", seconds=0.01)
+    assert w.current_emote() == "happy"
+    QTest.qWait(60)
+    assert w.current_emote() != "happy", "emote eksplisit harus kedaluwarsa"
+    w.poke()
+    assert w.current_emote() == "wink"
+
+
 if __name__ == "__main__":
     failed = 0
     for fn in (test_mapping, test_all_15_render, test_poke_cycle,
                test_idle_emote_is_known, test_reduce_motion_has_no_timer,
-               test_interactive_mascot):
+               test_interactive_mascot, test_error_count_two_cries,
+               test_laugh_and_pet_hold,
+               test_explicit_emote_expires_with_reduce_motion):
         try:
             fn()
         except Exception as exc:

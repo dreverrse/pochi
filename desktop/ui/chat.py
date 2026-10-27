@@ -176,7 +176,8 @@ class ChatPanel(QWidget):
         wl.setContentsMargins(18, 18, 18, 18)
         wl.setSpacing(8)
         wl.addStretch(1)
-        self.welcome_mascot = PochiMascot(size=86, show_backing=True)
+        self.welcome_mascot = PochiMascot(size=86, show_backing=True,
+                                          interactive=True)
         wl.addWidget(self.welcome_mascot, 0, Qt.AlignmentFlag.AlignHCenter)
         self.welcome_title = QLabel("Halo, aku Pochi.")
         self.welcome_title.setStyleSheet(

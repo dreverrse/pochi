@@ -68,8 +68,9 @@ Butuh compositor untuk transparansi (xfwm4 compositing aktif).
 - `Esc`: Chat → Ringkas → tutup. Alihkan fokus ke luar panel juga menutup,
   kecuali saat ada permintaan izin tool.
 - Status: idle netral, sibuk berpikir, sukses senang, error sedih; setelah
-  3 error berturut-turut Pochi kesal. Poke/pet maskot di dashboard memutar
-  ekspresi interaktif (wink → senang → terkejut → malu, dan love).
+  3 error berturut-turut Pochi kesal, dan 2 error membuatnya menangis.
+  Klik maskot = poke, klik kanan = pet, klik dua kali = tertawa. Ekspresi
+  interaktif kembali ke status setelah beberapa detik.
 - Pengaturan (`⋯`): posisi, skala, aksen, pintasan, reduce motion. Saat
   reduce motion aktif, blink, siklus ekspresi, dan animasi panel dimatikan.
 
