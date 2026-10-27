@@ -117,10 +117,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val density = resources.displayMetrics.density
 
-        // Top-notch bounding box (228dp x 34dp) so the island sits flush with the top status bar
-        // cutout (`y = 0`) without obstructing app toolbars below it.
-        val collapsedWidthPx = (228 * density).toInt()
-        val collapsedHeightPx = (34 * density).toInt()
         // Dynamic Island bounding box (200dp x 36dp) sits cleanly below the status bar
         val collapsedWidthPx = (200 * density).toInt()
         val collapsedHeightPx = (36 * density).toInt()

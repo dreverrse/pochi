@@ -768,7 +768,7 @@ fun PochiIslandBot(
                                         .clickable {
                                             runCatching {
                                                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                    setDataAndType(android.net.Uri.parse(sc.uri), "image/*")
+                                                    setDataAndType(sc.uri, "image/*")
                                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                                 }
                                                 context.startActivity(intent)
