@@ -12,8 +12,10 @@ from PyQt6.QtWidgets import (
 
 from app import theme
 from app.state import Activity, Task
+from services.lyric_service import LyricsService
 from ui.components import Dot, EllipsisLabel, IconButton, PulseDots, icon_label
 from ui.icons import make_icon
+from ui.lyrics import LyricsPanel
 
 
 class _Strip(QFrame):
@@ -91,7 +93,7 @@ class AIActivityCard(_Strip):
 
 
 class MediaCard(_Strip):
-    def __init__(self, media, parent=None):
+    def __init__(self, media, on_lyrics=None, parent=None):
         super().__init__(parent)
         self.media = media
         h = QHBoxLayout(self)
@@ -113,7 +115,13 @@ class MediaCard(_Strip):
         self.prev = IconButton("prev", "Sebelumnya", 26, 12)
         self.play = IconButton("pause", "Putar / jeda", 28, 13, theme.TEXT)
         self.next = IconButton("next", "Berikutnya", 26, 12)
-        for b in (self.prev, self.play, self.next):
+        self.lyrics_btn = IconButton(
+            "lyrics", "Tampilkan / sembunyikan lirik", 26, 12)
+        if on_lyrics is not None:
+            self.lyrics_btn.clicked.connect(on_lyrics)
+        else:
+            self.lyrics_btn.setEnabled(False)
+        for b in (self.prev, self.play, self.next, self.lyrics_btn):
             h.addWidget(b)
         self.prev.clicked.connect(media.previous)
         self.play.clicked.connect(media.play_pause)
@@ -202,10 +210,13 @@ class ActivityArea(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(6)
         self.ai = AIActivityCard(controller, reduce_motion)
-        self.media_card = MediaCard(media)
+        self.lyrics_service = LyricsService(media, parent=self)
+        self.lyrics_panel = LyricsPanel(media, self.lyrics_service)
+        self.media_card = MediaCard(media, on_lyrics=self._toggle_lyrics)
         self.timer = TimerCard(controller)
         v.addWidget(self.ai)
         v.addWidget(self.media_card)
+        v.addWidget(self.lyrics_panel)
         v.addWidget(self.timer)
         self.setVisible(False)
 
@@ -216,6 +227,11 @@ class ActivityArea(QWidget):
         controller.activityChanged.connect(self._on_activity)
         controller.tasksChanged.connect(self._on_tasks)
         media.changed.connect(self._on_media)
+        self.lyrics_panel.close_btn.clicked.connect(self.lyrics_panel.close_panel)
+
+    def _toggle_lyrics(self) -> None:
+        self.lyrics_panel.toggle()
+        self._update_visible()
 
     def start_polling(self) -> None:
         self.media.acquire("island")
@@ -226,7 +242,8 @@ class ActivityArea(QWidget):
 
     def _update_visible(self):
         self.setVisible(any(not w.isHidden() for w in
-                            (self.ai, self.media_card, self.timer)))
+                            (self.ai, self.media_card, self.timer,
+                             self.lyrics_panel)))
 
     def _on_activity(self, act):
         self.ai.set_activity(act)
