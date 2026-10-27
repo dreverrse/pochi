@@ -8,26 +8,34 @@ from __future__ import annotations
 from PyQt6.QtGui import QColor
 
 # ---------------------------------------------------------------- palet inti
-# Identitas visual meniru versi Android (Dynamic Island iOS): hitam murni,
-# permukaan kartu gelap #141416, hairline #26262B, dan warna aksen iOS.
-BG = QColor("#000000")          # island black (iOS)
-BG_SOFT = QColor("#0A0A0A")     # matte black (backing mascot)
-PANEL = QColor("#141416")        # cardSurface
-PANEL_2 = QColor("#1C1C1E")
-PANEL_3 = QColor("#2C2C2E")     # iosGray
-BORDER = QColor("#26262B")       # borderHairline
-BORDER_SOFT = QColor("#1C1C20")
-TEXT = QColor("#FFFFFF")
-TEXT_SOFT = QColor("#E5E5EA")
-MUTED = QColor("#8E8E93")
-DIM = QColor("#636366")
+# Identitas baru: hitam keunguan (void), kartu bertingkat, dan aksen violet.
+# Nilai ini adalah sumber kebenaran; alias lama di bawah hanya kompatibilitas.
+VOID = QColor("#05030A")         # latar island
+PANEL = QColor("#0B0812")        # permukaan panel
+CARD_TOP = QColor("#191524")     # gradien kartu (atas)
+CARD_BOTTOM = QColor("#12101A")  # gradien kartu (bawah)
+CARD_HI = QColor("#241B3D")      # kartu hover / elevasi
+BORDER = QColor("#26202F")       # hairline
+TEXT = QColor("#F5F3FF")
+MUTED = QColor("#9A94AE")
+DIM = QColor("#6B6380")
 
-PURPLE = QColor("#AF52DE")       # iosPurple
-PURPLE_DEEP = QColor("#8E4EC6")
-CYAN = QColor("#38BDF8")         # working (sky)
-GREEN = QColor("#34C759")        # iosGreen
-AMBER = QColor("#FF9500")        # iosAmber / waiting
-RED = QColor("#FF3B30")          # iosRed
+VIOLET = QColor("#7C5CFF")
+VIOLET_LIGHT = QColor("#C4B5FD")
+CYAN = QColor("#4CC9F0")         # working
+GREEN = QColor("#3DDC97")        # success
+AMBER = QColor("#FFB547")        # waiting
+RED = QColor("#FF5C7A")          # error
+
+# ------------------------------------------------- alias lama (jangan dihapus)
+BG = VOID
+BG_SOFT = CARD_BOTTOM
+PANEL_2 = CARD_TOP
+PANEL_3 = CARD_HI
+BORDER_SOFT = QColor("#1C1826")
+TEXT_SOFT = QColor("#DDD8EC")
+PURPLE = VIOLET
+PURPLE_DEEP = QColor("#5B3FE0")
 
 STATUS_COLORS = {
     "idle": TEXT,
@@ -73,6 +81,18 @@ def qss(family: str = "Poppins") -> str:
         background: {PANEL.name()};
         border: 1px solid {BORDER_SOFT.name()};
         border-radius: 16px;
+    }}
+    QFrame#softCard {{
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 {CARD_TOP.name()}, stop:1 {CARD_BOTTOM.name()});
+        border: 1px solid {BORDER.name()};
+        border-radius: 20px;
+    }}
+    QFrame#ringkasCard {{
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 {CARD_TOP.name()}, stop:1 {CARD_BOTTOM.name()});
+        border: 1px solid {BORDER.name()};
+        border-radius: 20px;
     }}
     QFrame#strip {{
         background: {PANEL_2.name()};
@@ -148,6 +168,31 @@ def qss(family: str = "Poppins") -> str:
         font-size: 10px;
         font-weight: 600;
         padding: 3px 8px;
+    }}
+    QLabel#pill[tone="green"] {{
+        background: rgba(61, 220, 151, 0.12);
+        border-color: rgba(61, 220, 151, 0.35);
+        color: {GREEN.name()};
+    }}
+    QLabel#pill[tone="violet"] {{
+        background: rgba(124, 92, 255, 0.14);
+        border-color: rgba(124, 92, 255, 0.38);
+        color: {VIOLET_LIGHT.name()};
+    }}
+    QLabel#pill[tone="amber"] {{
+        background: rgba(255, 181, 71, 0.12);
+        border-color: rgba(255, 181, 71, 0.35);
+        color: {AMBER.name()};
+    }}
+    QLabel#pill[tone="red"] {{
+        background: rgba(255, 92, 122, 0.12);
+        border-color: rgba(255, 92, 122, 0.35);
+        color: {RED.name()};
+    }}
+    QLabel#pill[tone="cyan"] {{
+        background: rgba(76, 201, 240, 0.12);
+        border-color: rgba(76, 201, 240, 0.35);
+        color: {CYAN.name()};
     }}
 
     /* ---------------------------------------------------------- tombol */

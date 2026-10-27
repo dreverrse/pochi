@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPoint, QRectF, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import (
+    QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen,
+)
 from PyQt6.QtWidgets import (
     QDialog, QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton,
     QSizePolicy, QVBoxLayout, QWidget,
@@ -207,6 +209,107 @@ class PulseDots(QWidget):
             p.setBrush(c)
             x = w * (0.22 + i * 0.28)
             p.drawEllipse(QRectF(x - w * 0.07, w / 2 - w * 0.07, w * 0.14, w * 0.14))
+
+
+class Pill(QLabel):
+    """Label kecil bergaya chip dengan warna sesuai nada status."""
+
+    TONES = {"muted", "green", "violet", "amber", "red", "cyan"}
+
+    def __init__(self, text: str = "", tone: str = "muted", parent=None):
+        super().__init__(text, parent)
+        self.setObjectName("pill")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self.set_tone(tone)
+
+    def set_tone(self, tone: str) -> None:
+        self.setProperty("tone", tone if tone in self.TONES else "muted")
+        style = self.style()
+        if style is not None:
+            style.unpolish(self)
+            style.polish(self)
+        self.update()
+
+
+class SoftCard(QFrame):
+    """Kartu membulat dengan gradien halus; isi ditaruh di ``body``."""
+
+    def __init__(self, padding: int = 13, parent=None):
+        super().__init__(parent)
+        self.setObjectName("softCard")
+        self.body = QVBoxLayout(self)
+        self.body.setContentsMargins(padding, padding, padding, padding)
+        self.body.setSpacing(8)
+
+
+def sparkline_points(values: list[float], width: float,
+                     height: float) -> list[QPointF]:
+    """Titik polyline: x merata, y terbalik (nilai tinggi = y kecil)."""
+    if not values:
+        return []
+    pad = 2.0
+    usable = max(1.0, height - pad * 2)
+    lo, hi = min(values), max(values)
+    if hi - lo < 1e-9:
+        ys = [height / 2.0 for _ in values]
+    else:
+        ys = [pad + (hi - v) / (hi - lo) * usable for v in values]
+    if len(values) == 1:
+        return [QPointF(0.0, ys[0])]
+    step = width / (len(values) - 1)
+    return [QPointF(i * step, y) for i, y in enumerate(ys)]
+
+
+class Sparkline(QWidget):
+    """Grafik garis mini tanpa dependency, cocok untuk RAM/CPU."""
+
+    def __init__(self, color: QColor | None = None, parent=None):
+        super().__init__(parent)
+        self._color = QColor(color or theme.VIOLET)
+        self.values: list[float] = []
+        self.setMinimumHeight(28)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding,
+                           QSizePolicy.Policy.Preferred)
+
+    def set_values(self, values: list[float]) -> None:
+        self.values = [float(v) for v in values]
+        self.update()
+
+    def paintEvent(self, _e) -> None:
+        if len(self.values) < 2:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = float(self.width()), float(self.height())
+        pts = sparkline_points(self.values, w, h)
+
+        line = QPainterPath(pts[0])
+        for pt in pts[1:]:
+            line.lineTo(pt)
+
+        area = QPainterPath(line)
+        area.lineTo(QPointF(pts[-1].x(), h))
+        area.lineTo(QPointF(pts[0].x(), h))
+        area.closeSubpath()
+
+        grad = QLinearGradient(0, 0, 0, h)
+        top = QColor(self._color)
+        top.setAlpha(70)
+        bottom = QColor(self._color)
+        bottom.setAlpha(0)
+        grad.setColorAt(0.0, top)
+        grad.setColorAt(1.0, bottom)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(grad)
+        p.drawPath(area)
+
+        pen = QPen(self._color, 1.6)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawPath(line)
 
 
 class EllipsisLabel(QLabel):
