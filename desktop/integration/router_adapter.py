@@ -21,7 +21,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from integration.bridge import PochiBridge
 from integration.text import extract_text, sanitize
-from services.probes import router_api_key, router_status
+from services.probes import gateway_api_key, router_api_key, router_status
 
 SYSTEM_PROMPT = (
     "Kamu adalah Pochi, asisten AI desktop pribadi di Linux. "
@@ -107,15 +107,17 @@ class RouterAdapter(PochiBridge):
     name = "9router"
     label = "9Router"
 
-    def __init__(self, cfg, parent=None):
+    def __init__(self, cfg, parent=None, key_provider=router_api_key):
         super().__init__(parent)
         self.cfg = cfg
+        self._key_provider = key_provider
         self._worker: _RouterWorker | None = None
 
     def start(self) -> None:
         if self._worker is not None:
             return
-        self._worker = _RouterWorker(self.cfg)
+        self._worker = _RouterWorker(self.cfg, self._key_provider,
+                                     backend_name=self.name, backend_label=self.label)
         w = self._worker
         w.sig_status.connect(self.on_status)
         w.sig_delta.connect(self.on_delta)
@@ -153,9 +155,13 @@ class _RouterWorker(QThread):
     sig_connection = pyqtSignal(object)
     sig_usage = pyqtSignal(int, int)
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, key_provider=router_api_key,
+                 backend_name="9router", backend_label="9Router"):
         super().__init__()
         self.cfg = cfg
+        self._key_provider = key_provider
+        self._backend_name = backend_name
+        self._backend_label = backend_label
         self._jobs: queue.Queue = queue.Queue()
         self._stop_evt = threading.Event()
         self._cancel_evt = threading.Event()
@@ -204,8 +210,8 @@ class _RouterWorker(QThread):
     def _probe(self) -> None:
         status = router_status(self.cfg.model_base, timeout=0.7)
         self.sig_connection.emit({
-            "backend": "9router",
-            "label": "9Router",
+            "backend": self._backend_name,
+            "label": self._backend_label,
             "ok": bool(status["ok"]),
             "model": self.cfg.model_name,
             "detail": (f"Lokal · {status['latency_ms']} ms"
@@ -233,7 +239,7 @@ class _RouterWorker(QThread):
         port = u.port or (443 if u.scheme == "https" else 80)
         base_path = (u.path or "").rstrip("/")
         path = f"{base_path}/chat/completions"
-        key = router_api_key()
+        key = self._key_provider()
         headers = {
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
@@ -289,7 +295,7 @@ class _RouterWorker(QThread):
                 if self._cancel_evt.is_set():
                     break
                 if accumulated.strip():
-                    self.sig_message.emit(accumulated.strip(), "9ROUTER")
+                    self.sig_message.emit(accumulated.strip(), self._backend_name.upper())
                 else:
                     self.sig_error.emit(err)
                 return
@@ -310,7 +316,7 @@ class _RouterWorker(QThread):
         if self._cancel_evt.is_set():
             self.sig_status.emit("idle")
             return
-        self.sig_message.emit(text_out, "9ROUTER")
+        self.sig_message.emit(text_out, self._backend_name.upper())
         if not usage_emitted:
             self.sig_usage.emit(max(0, len(text_out) // 4), 0)
 
@@ -335,7 +341,7 @@ class _RouterWorker(QThread):
         if self._cancel_evt.is_set():
             self.sig_status.emit("idle")
             return
-        self.sig_message.emit(text, "9ROUTER")
+        self.sig_message.emit(text, self._backend_name.upper())
 
     def _close(self) -> None:
         try:
@@ -350,6 +356,21 @@ class _RouterWorker(QThread):
             pass
         self._resp = None
         self._conn = None
+
+
+class GatewayAdapter(RouterAdapter):
+    """9ochi Gateway (OpenAI-compatible lokal via virtual key).
+
+    Memakai ``POCHI_GATEWAY_KEY`` dari env / ~/.hermes/.env. Gateway sendiri
+    meneruskan ke provider (mis. 9Router) sekaligus mencatat usage/biaya dan
+    menegakkan anggaran/rate limit per virtual key.
+    """
+
+    name = "gateway"
+    label = "Pochi Gateway"
+
+    def __init__(self, cfg, parent=None):
+        super().__init__(cfg, parent, key_provider=gateway_api_key)
 
 
 class RouterError(RuntimeError):

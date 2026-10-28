@@ -158,11 +158,13 @@ def test_gateway_probe() -> None:
 def test_candidates() -> None:
     cfg = Config(backend="auto", hermes_command="__definitely_not_installed__")
     labels = [label for _factory, label in _candidates(cfg)]
-    assert labels == ["9Router", "DEMO"], labels
+    assert labels == ["Pochi Gateway", "9Router", "DEMO"], labels
     demo = [label for _f, label in _candidates(Config(backend="demo"))]
     assert demo == ["DEMO"]
     hermes = [label for _f, label in _candidates(Config(backend="hermes"))]
     assert hermes == ["Hermes ACP"]
+    gateway = [label for _f, label in _candidates(Config(backend="gateway"))]
+    assert gateway == ["Pochi Gateway"]
 
 
 def test_controller_demo(app) -> None:

@@ -27,7 +27,7 @@ ACCENTS = {
 }
 
 ANCHORS = ("top-left", "top-center", "top-right")
-BACKENDS = ("auto", "hermes", "9router", "demo")
+BACKENDS = ("auto", "hermes", "9router", "gateway", "demo")
 
 
 @dataclass
@@ -51,7 +51,7 @@ class Config:
     system_poll_ms: int = 2000
 
     # ---- backend ---------------------------------------------------------
-    backend: str = "auto"                 # auto | hermes | 9router | demo
+    backend: str = "auto"                 # auto | hermes | 9router | gateway | demo
     hermes_command: str = "hermes"
     model_base: str = "http://127.0.0.1:20128/v1"
     model_name: str = "inc/mercury-3"

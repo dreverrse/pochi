@@ -26,9 +26,10 @@ ANCHOR_LABELS = {
     "top-right": "Kanan atas",
 }
 BACKEND_LABELS = {
-    "auto": "Auto (Hermes → 9Router → DEMO)",
+    "auto": "Auto (Hermes → Gateway → 9Router → DEMO)",
     "hermes": "Hermes ACP saja",
     "9router": "9Router langsung",
+    "gateway": "Pochi Gateway (virtual key)",
     "demo": "DEMO (tanpa backend nyata)",
 }
 
@@ -159,7 +160,7 @@ class SettingsDialog(DialogShell):
 
         self.base = QLineEdit(cfg.model_base)
         self.base.setPlaceholderText("http://127.0.0.1:20128/v1")
-        bform.addRow("9Router base URL", self.base)
+        bform.addRow("Base URL", self.base)
 
         self.timeout = QSpinBox()
         self.timeout.setRange(15, 300)
@@ -170,8 +171,9 @@ class SettingsDialog(DialogShell):
 
         note2 = QLabel(
             "Kredensial tidak pernah disimpan di sini. 9Router memakai key "
-            "dari environment atau ~/.hermes/.env; Hermes membaca "
-            "konfigurasinya sendiri. Perubahan backend diterapkan saat Simpan.")
+            "dari environment atau ~/.hermes/.env; Pochi Gateway memakai "
+            "POCHI_GATEWAY_KEY; Hermes membaca konfigurasinya sendiri. "
+            "Perubahan backend diterapkan saat Simpan.")
         note2.setWordWrap(True)
         note2.setObjectName("dim")
         v.addWidget(note2)

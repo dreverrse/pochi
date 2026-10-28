@@ -109,6 +109,26 @@ def router_api_key() -> str:
     return ""
 
 
+def gateway_api_key() -> str:
+    """Ambil virtual key Pochi Gateway dari env / ~/.hermes/.env (tidak pernah di-log)."""
+    for name in ("POCHI_GATEWAY_KEY",):
+        val = os.environ.get(name, "").strip()
+        if val:
+            return val
+    env_file = HERMES_HOME / ".env"
+    try:
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            if k.strip() == "POCHI_GATEWAY_KEY":
+                return v.strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return ""
+
+
 def environment_summary() -> dict:
     """Ringkasan non-rahasia untuk README/diagnostik."""
     return {

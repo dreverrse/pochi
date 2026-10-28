@@ -49,6 +49,18 @@ Status: disetujui pemilik (Tuan Andre).
 - Detail: `docs/superpowers/specs/2026-10-28-pochi-desktop-redesign-design.md`
 - Menggantikan D6.
 
+### D9. Integrasi Pochi Gateway (pochi-gateway)
+- Keputusan: Pochi desktop mendapat backend **"gateway"** yang memakai
+  Pochi Gateway (http://127.0.0.1:8000/v1) sebagai endpoint OpenAI-compatible
+  dengan virtual key. Gateway sendiri memiliki 9Router (localhost:20128)
+  sebagai provider nyata (model publik `pochi-lokal` → `inc/mercury-3`).
+- Alasan: Pochi mendapat pencatatan usage/biaya, anggaran, dan rate limit
+  per klien tanpa mengubah kode model; dashboard gateway jadi titik monitor.
+- Detail: `data/pochi_virtual_key` (mode 600) di-gitignore; desktop membaca
+  virtual key via `POCHI_GATEWAY_KEY` (env / ~/.hermes/.env), bukan config.
+- Urutan `auto` baru: Hermes ACP → Pochi Gateway → 9Router → DEMO.
+- Wajib: jangan commit `data/*`, `~/.hermes/.env`, atau virtual key.
+
 ## Antrian keputusan terbuka
 - Pemutar musik final (diperlukan untuk uji M1).
 - Batas ukuran file transfer antar perangkat (default PRD 100 MB).

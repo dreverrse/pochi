@@ -16,7 +16,7 @@ from PyQt6.QtCore import QTimer
 from integration.bridge import PochiBridge
 from integration.hermes_adapter import HermesAcpAdapter
 from integration.mock_adapter import MockAdapter
-from integration.router_adapter import RouterAdapter
+from integration.router_adapter import GatewayAdapter, RouterAdapter
 from services.probes import has_command
 
 START_TIMEOUT_MS = 35_000
@@ -187,17 +187,21 @@ class AutoAdapter(PochiBridge):
 
 def _candidates(cfg):
     hermes = (lambda c: HermesAcpAdapter(c), "Hermes ACP")
+    gateway = (lambda c: GatewayAdapter(c), "Pochi Gateway")
     router = (lambda c: RouterAdapter(c), "9Router")
     demo = (lambda c: MockAdapter(c), "DEMO")
     if cfg.backend == "demo":
         return [demo]
     if cfg.backend == "hermes":
         return [hermes]
+    if cfg.backend == "gateway":
+        return [gateway]
     if cfg.backend == "9router":
         return [router]
     out = []
     if has_command(cfg.hermes_command):
         out.append(hermes)
+    out.append(gateway)
     out.append(router)
     out.append(demo)
     return out
@@ -209,6 +213,7 @@ def create_bridge(cfg) -> PochiBridge:
         return AutoAdapter(cfg)
     factory = {
         "hermes": lambda c: HermesAcpAdapter(c),
+        "gateway": lambda c: GatewayAdapter(c),
         "9router": lambda c: RouterAdapter(c),
         "demo": lambda c: MockAdapter(c),
     }.get(cfg.backend, lambda c: AutoAdapter(c))

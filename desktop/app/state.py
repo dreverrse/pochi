@@ -389,6 +389,8 @@ class Controller(QObject):
             return "HERMES"
         if b == "9router":
             return "9ROUTER"
+        if b == "gateway":
+            return "GATEWAY"
         if b == "demo":
             return "DEMO"
         return b.upper() if b else "POCHI"

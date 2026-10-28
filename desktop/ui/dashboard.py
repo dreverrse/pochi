@@ -146,7 +146,7 @@ class PochiCard(Card):
             f"color:{color.name()}; font-size:15px; font-weight:600;")
 
     def _on_connection(self, conn):
-        if conn.ok and conn.backend in ("hermes", "9router"):
+        if conn.ok and conn.backend in ("hermes", "9router", "gateway"):
             color = theme.GREEN
         elif conn.backend == "demo":
             color = theme.AMBER

@@ -598,7 +598,7 @@ class IslandWindow(QWidget):
     def _on_connection(self, conn):
         self._connection_ok = bool(conn.ok)
         detail = conn.detail or ""
-        if conn.ok and conn.backend in ("hermes", "9router"):
+        if conn.ok and conn.backend in ("hermes", "9router", "gateway"):
             color = theme.GREEN
         elif conn.backend == "demo":
             color = theme.AMBER
