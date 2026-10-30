@@ -631,7 +631,20 @@ fun PochiIslandBot(
         return
     }
 
-    val islandShape = RoundedCornerShape(islandCornerRadius)
+    // Tahap 10 (ala notch iPhone): sudut atas landai seperti takik
+    // perangkat keras, sudut bawah tetap membulat kuat.
+    val islandShape = if (
+        islandMode == IslandMode.EYES || islandMode == IslandMode.MINI
+    ) {
+        RoundedCornerShape(islandCornerRadius)
+    } else {
+        RoundedCornerShape(
+            topStart = islandCornerRadius * 0.45f,
+            topEnd = islandCornerRadius * 0.45f,
+            bottomStart = islandCornerRadius,
+            bottomEnd = islandCornerRadius
+        )
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -655,16 +668,13 @@ fun PochiIslandBot(
                     scaleX = sx
                     scaleY = sy
                 }
-                .background(
-                    Brush.verticalGradient(listOf(PochiDesign.Void, islandBlack)),
-                    islandShape
-                )
-                .border(
-                    1.dp,
-                    Brush.verticalGradient(
-                        listOf(PochiDesign.FaceRim.copy(alpha = 0.85f), borderHairline)
-                    ),
-                    islandShape
+                .background(islandBlack, islandShape)
+                .then(
+                    if (islandMode == IslandMode.EXPANDED) {
+                        Modifier.border(1.dp, PochiDesign.WidgetBorder, islandShape)
+                    } else {
+                        Modifier
+                    }
                 )
         ) {
             // Cahaya violet lembut di balik konten (Tahap 4) — memberi
@@ -678,7 +688,7 @@ fun PochiIslandBot(
                         .background(
                             Brush.radialGradient(
                                 listOf(
-                                    accentViolet.copy(alpha = 0.20f + squashPulse.value * 0.12f),
+                                    accentViolet.copy(alpha = 0.10f + squashPulse.value * 0.06f),
                                     Color.Transparent
                                 )
                             )
@@ -762,7 +772,7 @@ fun PochiIslandBot(
                                 }
                             }
                         }
-                        .padding(horizontal = 10.dp),
+                        .padding(start = 10.dp, end = 26.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -904,6 +914,35 @@ fun PochiIslandBot(
                     }
                     }
                 }
+            }
+
+            // Lensa kamera ala notch (Tahap 10): tampil di ujung kanan
+            // kapsul saat diam; musik/intipan/unduhan/fokus menyembunyikannya.
+            if (collapsedContentAlpha > 0.01f && !mediaPlayback.isPlaying &&
+                !peekActive && activeDownload == null && !isFocusRunning
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 8.dp)
+                        .graphicsLayer { alpha = collapsedContentAlpha }
+                ) {
+                    NotchLens()
+                }
+            }
+
+            // Celah speaker ala notch (Tahap 10) di panel terbuka.
+            if (expandedContentAlpha > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 6.dp)
+                        .width(38.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xFF1B1B1F))
+                        .graphicsLayer { alpha = expandedContentAlpha }
+                )
             }
 
             // ================= 1B. EYES-ONLY (Tahap 5) =================
@@ -2713,5 +2752,41 @@ private fun SleepZzz(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.offset(x = (6 + driftB * 6).dp, y = (-4 - driftB * 8).dp)
         )
+    }
+}
+
+/**
+ * Lensa kamera ala notch (Tahap 10): lingkaran konsentris gelap
+ * dengan pantulan biru kecil — meniru kamera depan pada takik
+ * iPhone di ujung kanan kapsul.
+ */
+@Composable
+private fun NotchLens() {
+    Box(
+        modifier = Modifier
+            .size(12.dp)
+            .clip(CircleShape)
+            .background(
+                Brush.radialGradient(
+                    listOf(Color(0xFF2E2E33), Color(0xFF0B0B0E))
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.5.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF040609)),
+            contentAlignment = Alignment.TopStart
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(start = 1.dp, top = 1.dp)
+                    .size(2.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF5B84C4).copy(alpha = 0.9f))
+            )
+        }
     }
 }
