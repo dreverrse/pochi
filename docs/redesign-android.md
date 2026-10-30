@@ -218,6 +218,32 @@ termasuk saat data ditampilkan di chat.
   pahlawan dan kurva dari angka-angkanya, teks lengkap tetap tampil
   sebagai keterangan di bawah kartu.
 
+## Tahap 10 — bentuk notch ala iPhone
+
+Atas gambar referensi keynote notch iPhone (kamera inframerah,
+flood illuminator, speaker, kamera depan, dot projector), dengan
+pendekatan skill `redesign` (audit dulu, token dulu, perilaku
+tidak diubah):
+
+- **Bentuk takik**: sudut atas island dibuat landai
+  (0,45x radius), sudut bawah tetap membulat kuat — kapsul dan
+  panel terbaca sebagai satu bar perangkat keras, bukan pil
+  melayang. Mode EYES/MINI tetap pil simetris.
+- **Badan hitam pekat**: gradasi Void dan tepi gradasi violet
+  dicabut; kapsul murni hitam tanpa tepi seperti notch asli.
+  Panel terbuka memakai tepi garis `WidgetBorder` tipis, glow
+  violet diturunkan separuh.
+- **Lensa kamera**: `NotchLens` baru — lingkaran konsentris gelap
+  dengan pantulan biru kecil di ujung kanan kapsul, tampil saat
+  diam; zona kanannya kini dicadangkan (padding status digeser)
+  seperti Dynamic Island asli. Musik/intipan/unduhan/fokus
+  menyembunyikan lensa.
+- **Celah speaker**: slot tipis 38x4dp di tengah atas panel
+  terbuka, meniru earpiece pada takik.
+- **Posisi tidak diubah**: island tetap di bawah status bar
+  (keputusan kode asli agar jam/baterai sistem tidak tertutup)
+  dan tetap bisa digeser/dijepit ke tepi seperti sebelumnya.
+
 ## Tahap 9 — rombak total: bahasa papan widget hitam
 
 Atas arahan pemilik ("Semuanya rombak total") mengikuti gambar
