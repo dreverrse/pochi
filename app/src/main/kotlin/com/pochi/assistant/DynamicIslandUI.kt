@@ -202,6 +202,7 @@ fun PochiIslandBot(
     val tasks by PochiPrefs.tasksFlow.collectAsState()
     val waterGlasses by PochiPrefs.waterGlassesFlow.collectAsState()
     val dailyBudgetRp by PochiPrefs.dailyBudgetFlow.collectAsState()
+    val expenses by PochiPrefs.expensesFlow.collectAsState()
     val completedFocusSessions by PochiPrefs.focusSessionsFlow.collectAsState()
     val selectedCity by PochiPrefs.cityFlow.collectAsState()
     val activeApproval by ApprovalManager.activeRequest.collectAsState()
@@ -246,9 +247,16 @@ fun PochiIslandBot(
     var callSeconds by remember { mutableIntStateOf(56) }
     var speechRecognizerRef by remember { mutableStateOf<SpeechRecognizer?>(null) }
 
-    // Weather state
-    var liveTemp by remember { mutableStateOf(32) }
+    // Weather state — Tahap 12: data asli dari PochiLiveData
+    // (Open-Meteo + Aladhan). Berlangganan flow agar UI terkomposisi
+    // ulang begitu data tiba; refresh otomatis saat kota berubah.
+    val liveWeather by PochiLiveData.weatherFlow.collectAsState()
+    val livePrayer by PochiLiveData.prayerFlow.collectAsState()
+    val liveTemp = liveWeather?.tempC ?: 32
     var isRefreshingWeather by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedCity) {
+        PochiLiveData.refresh(context, selectedCity)
+    }
 
     // Jam header kini hidup di composable kecil PochiClockText (lihat
     // bawah file) agar tik 1 detik tidak merekomposisi seluruh island
@@ -1405,17 +1413,32 @@ fun PochiIslandBot(
                                                     tint = PochiDesign.AccentVioletSoft
                                                 )
                                                 WidgetValue(
-                                                    text = "Rp ${dailyBudgetRp / 1000}rb",
+                                                    text = NaturalExpenseParser.formatRupiah(
+                                                        expenses.sumOf { it.amountRp }
+                                                    ),
                                                     size = 16
                                                 )
                                                 WidgetFootnote(
-                                                    text = if (isId) "anggaran harian" else "daily budget"
+                                                    text = if (isId) {
+                                                        "dari ${NaturalExpenseParser.formatRupiah(dailyBudgetRp)} hari ini"
+                                                    } else {
+                                                        "of ${NaturalExpenseParser.formatRupiah(dailyBudgetRp)} today"
+                                                    }
                                                 )
                                             }
                                             WidgetRing(
-                                                fraction = 0.65f,
+                                                fraction = if (dailyBudgetRp > 0L) {
+                                                    (expenses.sumOf { it.amountRp }.toFloat() / dailyBudgetRp)
+                                                        .coerceIn(0f, 1f)
+                                                } else {
+                                                    0f
+                                                },
                                                 color = PochiDesign.AccentVioletSoft,
-                                                centerText = "65%"
+                                                centerText = if (dailyBudgetRp > 0L) {
+                                                    "${(expenses.sumOf { it.amountRp } * 100 / dailyBudgetRp)}%"
+                                                } else {
+                                                    "0%"
+                                                }
                                             )
                                         }
                                     }
@@ -1553,14 +1576,41 @@ fun PochiIslandBot(
                             ) {
                                 // Widget cuaca besar (Tahap 9, ala papan):
                                 // suhu raksasa + strip suhu seminggu.
+                                // Tahap 12: strip 7 hari ke depan dari
+                                // data asli Open-Meteo (maksimum harian).
                                 val lifeCal = Calendar.getInstance()
-                                val lifeMondayOffset =
-                                    (lifeCal.get(Calendar.DAY_OF_WEEK) + 5) % 7
-                                val lifeMonday = (lifeCal.clone() as Calendar).apply {
-                                    add(Calendar.DAY_OF_MONTH, -lifeMondayOffset)
+                                val lifeDayLetters = mapOf(
+                                    Calendar.SUNDAY to "M",
+                                    Calendar.MONDAY to "S",
+                                    Calendar.TUESDAY to "S",
+                                    Calendar.WEDNESDAY to "R",
+                                    Calendar.THURSDAY to "K",
+                                    Calendar.FRIDAY to "J",
+                                    Calendar.SATURDAY to "S"
+                                )
+                                val lifeDays = (0..6).map { off ->
+                                    (lifeCal.clone() as Calendar).apply {
+                                        add(Calendar.DAY_OF_MONTH, off)
+                                    }
                                 }
-                                val lifeTemps = listOf(31, 32, 33, 32, 31, 30, 29)
-                                val lifeLetters = listOf("S", "S", "R", "K", "J", "S", "M")
+                                val lifeTemps = lifeDays.indices.map { i ->
+                                    liveWeather?.dailyMax?.getOrNull(i)
+                                        ?: listOf(31, 32, 33, 32, 31, 30, 29)[i]
+                                }
+                                val lifeLetters = lifeDays.map {
+                                    lifeDayLetters[it.get(Calendar.DAY_OF_WEEK)] ?: "?"
+                                }
+                                val lifeUv = liveWeather?.uvIndex ?: 8
+                                val lifeUvLabel = when {
+                                    lifeUv <= 2 -> if (isId) "Rendah" else "Low"
+                                    lifeUv <= 5 -> if (isId) "Sedang" else "Moderate"
+                                    lifeUv <= 7 -> if (isId) "Tinggi" else "High"
+                                    lifeUv <= 10 -> if (isId) "Sangat Tinggi" else "Very High"
+                                    else -> if (isId) "Ekstrem" else "Extreme"
+                                }
+                                val lifeCondition = liveWeather?.let {
+                                    if (isId) it.conditionId else it.conditionEn
+                                } ?: (if (isId) "Cerah berawan" else "Partly cloudy")
                                 PochiWidget(modifier = Modifier.fillMaxWidth()) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -1574,13 +1624,13 @@ fun PochiIslandBot(
                                             )
                                             WidgetValue(text = "$liveTemp°", size = 32)
                                             WidgetFootnote(
-                                                text = if (isId) "Cerah berawan • UV High 8" else "Partly cloudy • UV High 8",
+                                                text = "$lifeCondition • UV $lifeUvLabel $lifeUv",
                                                 color = PochiDesign.BoardOrange
                                             )
                                         }
                                         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                             lifeTemps.forEachIndexed { i, t ->
-                                                val isToday = i == lifeMondayOffset
+                                                val isToday = i == 0
                                                 Column(
                                                     horizontalAlignment = Alignment.CenterHorizontally,
                                                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -1604,18 +1654,24 @@ fun PochiIslandBot(
                                 }
                                 // Kartu data mewah (Tahap 8.1): grafik suhu
                                 // per jam — satu-satunya tempat kartu ini.
-                                val hourlyTemps = listOf(
-                                    27f, 28f, 30f, 32f, 33f, 32.5f, 31f, 29f, 28f, 27f
-                                )
+                                val hourlyTemps = liveWeather?.hourlyTemps
+                                    ?.takeIf { it.size >= 24 }
+                                    ?.let { h ->
+                                        listOf(5, 7, 9, 11, 13, 15, 17, 19, 21, 23)
+                                            .map { h[it] }
+                                    }
+                                    ?: listOf(
+                                        27f, 28f, 30f, 32f, 33f, 32.5f, 31f, 29f, 28f, 27f
+                                    )
                                 PochiDataCard(
                                     title = selectedCity,
                                     chipText = if (isId) "Per jam" else "Hourly",
-                                    heroLabel = if (isId) "Suhu sekarang • Cerah berawan" else "Now • Partly cloudy",
+                                    heroLabel = if (isId) "Suhu sekarang • $lifeCondition" else "Now • $lifeCondition",
                                     heroValue = "$liveTemp°C",
                                     footer = if (isId) {
-                                        "Tertinggi ${(hourlyTemps.maxOrNull() ?: 0f).toInt()}°C • Terendah ${(hourlyTemps.minOrNull() ?: 0f).toInt()}°C • UV High indeks 8"
+                                        "Tertinggi ${(liveWeather?.dailyMax?.firstOrNull() ?: (hourlyTemps.maxOrNull() ?: 0f).toInt())}°C • Terendah ${(liveWeather?.dailyMin?.firstOrNull() ?: (hourlyTemps.minOrNull() ?: 0f).toInt())}°C • UV $lifeUvLabel indeks $lifeUv"
                                     } else {
-                                        "High ${(hourlyTemps.maxOrNull() ?: 0f).toInt()}°C • Low ${(hourlyTemps.minOrNull() ?: 0f).toInt()}°C • UV High index 8"
+                                        "High ${(liveWeather?.dailyMax?.firstOrNull() ?: (hourlyTemps.maxOrNull() ?: 0f).toInt())}°C • Low ${(liveWeather?.dailyMin?.firstOrNull() ?: (hourlyTemps.minOrNull() ?: 0f).toInt())}°C • UV $lifeUvLabel index $lifeUv"
                                     },
                                     points = hourlyTemps,
                                     modifier = Modifier.fillMaxWidth()
@@ -1664,9 +1720,15 @@ fun PochiIslandBot(
                                             .background(cardSurface)
                                             .border(1.dp, borderHairline, RoundedCornerShape(23.dp))
                                             .clickable {
-                                                isRefreshingWeather = true
                                                 customEmote = PochiEmote.CALM
                                                 PochiSignals.playTapHaptic(context)
+                                                coroutineScope.launch {
+                                                    isRefreshingWeather = true
+                                                    PochiLiveData.refresh(
+                                                        context, selectedCity, force = true
+                                                    )
+                                                    isRefreshingWeather = false
+                                                }
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
