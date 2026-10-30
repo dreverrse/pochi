@@ -6,7 +6,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.ContentUris
 import android.content.Context
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.database.ContentObserver
@@ -99,10 +103,55 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     override val viewModelStore: ViewModelStore get() = store
     override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
 
+    // Tahap 6 (ala Nusa): dengarkan peristiwa daya & audio untuk intipan.
+    private var systemPeekReceiver: BroadcastReceiver? = null
+
+    private fun batteryPercent(): Int {
+        val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        return if (level >= 0 && scale > 0) (level * 100) / scale else -1
+    }
+
+    private fun registerSystemPeekReceiver() {
+        if (systemPeekReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    Intent.ACTION_POWER_CONNECTED -> PochiSignals.showSystemPeek(
+                        PochiSignals.SystemPeek("charging", "Mengisi daya", batteryPercent())
+                    )
+                    Intent.ACTION_POWER_DISCONNECTED -> PochiSignals.showSystemPeek(
+                        PochiSignals.SystemPeek("unplugged", "Charger dilepas", batteryPercent())
+                    )
+                    BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                        val name = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)?.name
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)?.name
+                        }
+                        PochiSignals.showSystemPeek(
+                            PochiSignals.SystemPeek("audio", name ?: "Perangkat audio", -1)
+                        )
+                    }
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_POWER_CONNECTED)
+            addAction(Intent.ACTION_POWER_DISCONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+        }
+        runCatching { registerReceiver(receiver, filter) }
+        systemPeekReceiver = receiver
+    }
+
     override fun onCreate() {
         super.onCreate()
         startAsForeground()
         PochiPrefs.init(this)
+        registerSystemPeekReceiver()
 
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
@@ -553,6 +602,8 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     }
 
     override fun onDestroy() {
+        systemPeekReceiver?.let { runCatching { unregisterReceiver(it) } }
+        systemPeekReceiver = null
         _isRunning.value = false
         screenshotObserver?.let {
             runCatching { contentResolver.unregisterContentObserver(it) }

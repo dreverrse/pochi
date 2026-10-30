@@ -36,6 +36,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -68,6 +71,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -186,6 +191,30 @@ fun PochiIslandBot(
     val activeApproval by ApprovalManager.activeRequest.collectAsState()
     val dismissSignal by ApprovalManager.dismissSignal.collectAsState()
     val mediaPlayback by PochiSignals.mediaPlayback.collectAsState()
+    val systemPeek by PochiSignals.systemPeek.collectAsState()
+    val waterLog by PochiPrefs.waterLogFlow.collectAsState()
+
+    // Tahap 6 (ala Nusa): pelacak diam untuk siklus mata pendamping
+    // dan jendela tampil intipan peristiwa sistem.
+    var lastInteractionMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var idleTickMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var peekTickMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(islandMode) {
+        while (islandMode != IslandMode.EXPANDED) {
+            idleTickMs = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    LaunchedEffect(systemPeek) {
+        peekTickMs = System.currentTimeMillis()
+        while (systemPeek != null &&
+            System.currentTimeMillis() - (systemPeek?.atMs ?: 0L) < 3400L
+        ) {
+            delay(400)
+            peekTickMs = System.currentTimeMillis()
+        }
+    }
     val activeDownload by PochiSignals.activeDownload.collectAsState()
     val latestScreenshot by PochiSignals.latestScreenshot.collectAsState()
 
@@ -275,6 +304,7 @@ fun PochiIslandBot(
     }
 
     fun setMode(mode: IslandMode) {
+        lastInteractionMs = System.currentTimeMillis()
         islandMode = mode
         onExpandChange(mode == IslandMode.EXPANDED)
         if (mode == IslandMode.COLLAPSED) {
@@ -373,7 +403,7 @@ fun PochiIslandBot(
     } else {
         (screenWidth - 20.dp).coerceIn(336.dp, 380.dp)
     }
-    val expandedHeight = 252.dp
+    val expandedHeight = 264.dp
 
     val transition = updateTransition(targetState = islandMode, label = "islandTransition")
 
@@ -444,7 +474,31 @@ fun PochiIslandBot(
         label = "collapsedAlpha"
     ) { mode -> if (mode == IslandMode.COLLAPSED) 1f else 0f }
 
+    // Tahap 6 (ala Nusa): urutan halaman panel untuk geser & titik.
+    val pageOrder = listOf(
+        PochiTab.GLANCE, PochiTab.WALLET, PochiTab.TODAY,
+        PochiTab.LIFE, PochiTab.FOCUS, PochiTab.CHAT
+    )
+
     val activeEmote = customEmote ?: idleEmote ?: PochiEmote.SMILING
+
+    // Tahap 6 (ala Nusa): siklus pendamping saat island mengecil —
+    // 0 = jam & status, 1 = jam memudar diganti mata (>=15 dtk diam),
+    // 2 = mata tertidur (>=75 dtk diam). Musik yang sedang diputar
+    // menahan siklus agar info lagu tetap terlihat.
+    val idleSeconds = ((idleTickMs - lastInteractionMs) / 1000L).coerceAtLeast(0L)
+    val idleStage = when {
+        islandMode == IslandMode.EXPANDED -> 0
+        mediaPlayback.isPlaying -> 0
+        idleSeconds >= 75 -> 2
+        idleSeconds >= 15 -> 1
+        else -> 0
+    }
+    val displayEmote = if (idleStage == 2) PochiEmote.SLEEPY else activeEmote
+
+    // Intipan peristiwa sistem tampil maksimal ~3,4 detik.
+    val peekActive = systemPeek != null &&
+        (peekTickMs - (systemPeek?.atMs ?: 0L)) in 0..3400L
 
     // Edge Peek Mode
     if (isHidden) {
@@ -533,47 +587,65 @@ fun PochiIslandBot(
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
-                                val downTimeMs = System.currentTimeMillis()
+                                val touchSlop = viewConfiguration.touchSlop
                                 var accumulatedX = 0f
                                 var accumulatedY = 0f
                                 var isDragging = false
-                                val touchSlop = viewConfiguration.touchSlop
+                                var upSeen = false
+                                var longPressFired = false
 
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                    if (change.changedToUp()) {
-                                        if (!isDragging) {
-                                            val heldMs = System.currentTimeMillis() - downTimeMs
-                                            if (heldMs >= 450L) {
-                                                // Tahap 5: tahan kapsul -> mengecil jadi mata saja
-                                                customEmote = PochiEmote.CALM
-                                                setMode(IslandMode.EYES)
-                                            } else {
-                                                customEmote = PochiEmote.HAPPY
-                                                setMode(IslandMode.EXPANDED)
+                                // Fase A (Tahap 6): bedakan ketuk / seret /
+                                // tahan. Tekan lama kini MENYALA SAAT MASIH
+                                // DITAHAN (450 md) — tidak menunggu jari
+                                // diangkat seperti Tahap 5 yang mudah gagal.
+                                try {
+                                    withTimeout(450L) {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                            if (change.changedToUp()) {
+                                                upSeen = true
+                                                break
                                             }
-                                        } else {
-                                            onDragEnd()
+                                            if (change.isConsumed) break
+                                            accumulatedX += change.position.x - change.previousPosition.x
+                                            accumulatedY += change.position.y - change.previousPosition.y
+                                            if (kotlin.math.hypot(accumulatedX, accumulatedY) > touchSlop) {
+                                                isDragging = true
+                                                break
+                                            }
                                         }
-                                        break
                                     }
-                                    if (change.isConsumed) break
+                                } catch (e: TimeoutCancellationException) {
+                                    if (!isDragging && !upSeen) longPressFired = true
+                                }
 
-                                    val dx = change.position.x - change.previousPosition.x
-                                    val dy = change.position.y - change.previousPosition.y
-                                    accumulatedX += dx
-                                    accumulatedY += dy
-
-                                    if (!isDragging) {
-                                        if (kotlin.math.hypot(accumulatedX, accumulatedY) > touchSlop) {
-                                            isDragging = true
+                                when {
+                                    longPressFired -> {
+                                        customEmote = PochiEmote.CALM
+                                        setMode(IslandMode.EYES)
+                                        waitForUpOrCancellation()
+                                    }
+                                    upSeen -> {
+                                        // Bangun dari tidur -> sapa gembira (ala Nusa)
+                                        customEmote = PochiEmote.HAPPY
+                                        setMode(IslandMode.EXPANDED)
+                                    }
+                                    isDragging -> {
+                                        onDragBubble(accumulatedX, accumulatedY)
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                            if (change.changedToUp()) {
+                                                onDragEnd()
+                                                break
+                                            }
                                             change.consume()
-                                            onDragBubble(accumulatedX, accumulatedY)
+                                            onDragBubble(
+                                                change.position.x - change.previousPosition.x,
+                                                change.position.y - change.previousPosition.y
+                                            )
                                         }
-                                    } else {
-                                        change.consume()
-                                        onDragBubble(dx, dy)
                                     }
                                 }
                             }
@@ -583,6 +655,21 @@ fun PochiIslandBot(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     // Pochi Mascot's glowing white eyes on the left
+                    if (idleStage > 0) {
+                        // Tahap 6 (ala Nusa): jam memudar, tinggal mata pendamping.
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PochiMascot(
+                                state = botState,
+                                emoteOverride = displayEmote,
+                                size = 26.dp,
+                                eyeTrackerOffset = eyeGazeOffset,
+                                showBlackBacking = false
+                            )
+                        }
+                    } else {
                     PochiMascot(
                         state = botState,
                         emoteOverride = activeEmote,
@@ -595,6 +682,33 @@ fun PochiIslandBot(
 
                     // Glanceable status on the right with vibrant color
                     when {
+                        peekActive -> {
+                            val peek = systemPeek!!
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = when (peek.kind) {
+                                        "charging" -> Icons.Rounded.Bolt
+                                        "audio" -> Icons.Rounded.Headphones
+                                        else -> Icons.Rounded.Power
+                                    },
+                                    contentDescription = null,
+                                    tint = if (peek.kind == "charging") iosGreen else textPrimary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = if (peek.percent >= 0) "${peek.label} • ${peek.percent}%" else peek.label,
+                                    color = textPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
                         mediaPlayback.isPlaying -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -671,6 +785,7 @@ fun PochiIslandBot(
                             }
                         }
                     }
+                    }
                 }
             }
 
@@ -688,7 +803,7 @@ fun PochiIslandBot(
                 ) {
                     PochiMascot(
                         state = botState,
-                        emoteOverride = activeEmote,
+                        emoteOverride = displayEmote,
                         size = 21.dp,
                         eyeTrackerOffset = eyeGazeOffset,
                         showBlackBacking = false
@@ -702,6 +817,33 @@ fun PochiIslandBot(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer { alpha = expandedContentAlpha }
+                        .pointerInput(activeTab) {
+                            var totalDrag = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { totalDrag = 0f },
+                                onDragEnd = {
+                                    val idx = pageOrder.indexOf(activeTab)
+                                    if (idx >= 0) {
+                                        val next = when {
+                                            totalDrag < -60f && idx < pageOrder.lastIndex -> pageOrder[idx + 1]
+                                            totalDrag > 60f && idx > 0 -> pageOrder[idx - 1]
+                                            else -> activeTab
+                                        }
+                                        if (next != activeTab) {
+                                            activeTab = next
+                                            lastInteractionMs = System.currentTimeMillis()
+                                            PochiSignals.playTapHaptic(context)
+                                        }
+                                    }
+                                },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    totalDrag += dragAmount
+                                    if (kotlin.math.abs(totalDrag) > viewConfiguration.touchSlop) {
+                                        change.consume()
+                                    }
+                                }
+                            )
+                        }
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -713,7 +855,15 @@ fun PochiIslandBot(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(9.dp)
+                            horizontalArrangement = Arrangement.spacedBy(9.dp),
+                            modifier = Modifier.pointerInput(Unit) {
+                                detectTapGestures(
+                                    onLongPress = {
+                                        customEmote = PochiEmote.CALM
+                                        setMode(IslandMode.EYES)
+                                    }
+                                )
+                            }
                         ) {
                             PochiFaceMascot(
                                 face = PochiFace.forState(botState),
@@ -1430,6 +1580,45 @@ fun PochiIslandBot(
                                     )
                                 }
 
+                                // Grafik minum per 3 jam (Tahap 6, ala Nusa)
+                                val bucketLabels = listOf("06", "09", "12", "15", "18", "21")
+                                val bucketMl = (0 until 6).map { b ->
+                                    waterLog.count { ts ->
+                                        val h = java.util.Calendar.getInstance()
+                                            .apply { timeInMillis = ts }
+                                            .get(java.util.Calendar.HOUR_OF_DAY)
+                                        h >= 6 + b * 3 && h < 9 + b * 3
+                                    } * 250
+                                }
+                                val bucketMax = (bucketMl.maxOrNull() ?: 0).coerceAtLeast(250)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    bucketMl.forEachIndexed { i, ml ->
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(20.dp)
+                                                    .height((6 + 18 * ml / bucketMax).dp)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(
+                                                        if (ml > 0) iosBlue else borderHairline
+                                                    )
+                                            )
+                                            Text(
+                                                text = bucketLabels[i],
+                                                color = textSecondary,
+                                                fontSize = 8.sp
+                                            )
+                                        }
+                                    }
+                                }
+
                                 // Large Tactile Buttons: Log Water & Start Focus
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1792,6 +1981,31 @@ fun PochiIslandBot(
                                         )
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    // --- TITIK HALAMAN (Tahap 6, ala Nusa) ---
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            pageOrder.forEach { tab ->
+                                val isSel = activeTab == tab
+                                Box(
+                                    modifier = Modifier
+                                        .height(6.dp)
+                                        .width(if (isSel) 16.dp else 6.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSel) accentViolet else borderHairline)
+                                        .clickable {
+                                            activeTab = tab
+                                            lastInteractionMs = System.currentTimeMillis()
+                                            PochiSignals.playTapHaptic(context)
+                                        }
+                                )
                             }
                         }
                     }

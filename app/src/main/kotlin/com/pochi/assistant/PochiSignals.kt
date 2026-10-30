@@ -86,6 +86,21 @@ object PochiSignals {
     private val _latestScreenshot = MutableStateFlow<ScreenshotPreviewInfo?>(null)
     val latestScreenshot: StateFlow<ScreenshotPreviewInfo?> = _latestScreenshot
 
+    // Intipan peristiwa sistem ala Nusa (Tahap 6): charger/earbuds.
+    data class SystemPeek(
+        val kind: String, // "charging", "unplugged", "audio"
+        val label: String,
+        val percent: Int = -1,
+        val atMs: Long = System.currentTimeMillis()
+    )
+
+    private val _systemPeek = MutableStateFlow<SystemPeek?>(null)
+    val systemPeek: StateFlow<SystemPeek?> = _systemPeek
+
+    fun showSystemPeek(peek: SystemPeek) {
+        _systemPeek.value = peek
+    }
+
     private val _agentSession = MutableStateFlow(AgentSessionState())
     val agentSession: StateFlow<AgentSessionState> = _agentSession
 

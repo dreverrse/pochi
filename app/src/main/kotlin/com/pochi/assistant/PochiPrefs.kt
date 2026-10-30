@@ -501,6 +501,7 @@ object PochiPrefs {
     private const val KEY_EXPENSES_JSON = "pochi_expenses_json"
     private const val KEY_DAILY_BUDGET = "pochi_daily_budget_rp"
     private const val KEY_WATER_GLASSES = "pochi_water_glasses_today"
+    private const val KEY_WATER_LOG = "pochi_water_log_today"
     private const val KEY_ONBOARDING_DONE = "pochi_onboarding_v2_done"
     private const val KEY_ICON_STYLE = "pochi_icon_style"
     private const val KEY_FONT_STYLE = "pochi_font_style"
@@ -528,6 +529,10 @@ object PochiPrefs {
 
     private val _waterGlassesFlow = MutableStateFlow(3)
     val waterGlassesFlow: StateFlow<Int> = _waterGlassesFlow
+
+    // Log waktu minum hari ini (epoch ms) untuk grafik ala Nusa (Tahap 6)
+    private val _waterLogFlow = MutableStateFlow<List<Long>>(emptyList())
+    val waterLogFlow: StateFlow<List<Long>> = _waterLogFlow
 
     private val _dailyBudgetFlow = MutableStateFlow(100_000L)
     val dailyBudgetFlow: StateFlow<Long> = _dailyBudgetFlow
@@ -592,6 +597,9 @@ object PochiPrefs {
         _focusSessionsFlow.value = prefs.getInt(KEY_FOCUS_SESSIONS, 2)
         _cityFlow.value = prefs.getString(KEY_CITY, "Jakarta") ?: "Jakarta"
         _waterGlassesFlow.value = prefs.getInt(KEY_WATER_GLASSES, 3)
+        _waterLogFlow.value = (prefs.getString(KEY_WATER_LOG, "") ?: "")
+            .split(",").mapNotNull { it.toLongOrNull() }
+            .filter { isSameDay(it, System.currentTimeMillis()) }
         _dailyBudgetFlow.value = prefs.getLong(KEY_DAILY_BUDGET, 100_000L)
 
         val savedLang = prefs.getString(KEY_LANG, PochiLang.ID.code)
@@ -829,12 +837,26 @@ object PochiPrefs {
     fun addWaterGlass(context: Context) {
         val next = (_waterGlassesFlow.value + 1).coerceIn(0, 16)
         _waterGlassesFlow.value = next
-        prefs(context).edit().putInt(KEY_WATER_GLASSES, next).apply()
+        val now = System.currentTimeMillis()
+        val log = (_waterLogFlow.value + now).filter { isSameDay(it, now) }
+        _waterLogFlow.value = log
+        prefs(context).edit()
+            .putInt(KEY_WATER_GLASSES, next)
+            .putString(KEY_WATER_LOG, log.joinToString(","))
+            .apply()
+    }
+
+    private fun isSameDay(a: Long, b: Long): Boolean {
+        val ca = java.util.Calendar.getInstance().apply { timeInMillis = a }
+        val cb = java.util.Calendar.getInstance().apply { timeInMillis = b }
+        return ca.get(java.util.Calendar.YEAR) == cb.get(java.util.Calendar.YEAR) &&
+            ca.get(java.util.Calendar.DAY_OF_YEAR) == cb.get(java.util.Calendar.DAY_OF_YEAR)
     }
 
     fun resetWaterGlasses(context: Context) {
         _waterGlassesFlow.value = 0
-        prefs(context).edit().putInt(KEY_WATER_GLASSES, 0).apply()
+        _waterLogFlow.value = emptyList()
+        prefs(context).edit().putInt(KEY_WATER_GLASSES, 0).putString(KEY_WATER_LOG, "").apply()
     }
 
     fun setDailyBudget(context: Context, budgetRp: Long) {
