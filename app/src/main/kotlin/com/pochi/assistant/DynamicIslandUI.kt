@@ -204,7 +204,7 @@ fun PochiIslandBot(
     }
     var activeRichCard by remember { mutableStateOf<PochiRichCard?>(null) }
     var manualEmote by remember { mutableStateOf<PochiEmote?>(null) }
-    var autonomousEmote by remember { mutableStateOf(PochiEmote.NEUTRAL) }
+    var autonomousEmote by remember { mutableStateOf(PochiEmote.NORMAL) }
 
     // Idle auto-shrink & semi-transparency timer
     var lastActivityMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -215,11 +215,11 @@ fun PochiIslandBot(
         isIdleMini = false
     }
 
-    val pendingApproval by ApprovalManager.pendingAction.collectAsState()
-    val outsideDismissTrigger by ApprovalManager.outsideDismissTrigger.collectAsState()
+    val pendingApproval by ApprovalManager.activeRequest.collectAsState()
+    val outsideDismissTrigger by ApprovalManager.dismissSignal.collectAsState()
     val mediaPlayback by PochiSignals.mediaPlayback.collectAsState()
     val screenApp by PochiSignals.screenApp.collectAsState()
-    val recentScreenshot by PochiSignals.recentScreenshot.collectAsState()
+    val recentScreenshot by PochiSignals.latestScreenshot.collectAsState()
     val droppedFile by PochiSignals.droppedFile.collectAsState()
     val expandRequest by PochiSignals.islandExpandRequest.collectAsState()
 
@@ -287,16 +287,16 @@ fun PochiIslandBot(
                     appLower.contains("code") || appLower.contains("studio") || appLower.contains("termux") || appLower.contains("git") ->
                         listOf(PochiEmote.FOCUS, PochiEmote.THINKING, PochiEmote.WINK_LEFT).random()
                     appLower.contains("whatsapp") || appLower.contains("telegram") || appLower.contains("instagram") || appLower.contains("tiktok") ->
-                        listOf(PochiEmote.SMILING, PochiEmote.LOOK_LEFT, PochiEmote.LOOK_RIGHT, PochiEmote.WINK_RIGHT).random()
+                        listOf(PochiEmote.SMILING, PochiEmote.HMM, PochiEmote.SUSPICIOUS, PochiEmote.WINK_LEFT).random()
                     appLower.contains("game") || appLower.contains("mobilelegends") || appLower.contains("pubg") || appLower.contains("genshin") ->
                         listOf(PochiEmote.EXCITED, PochiEmote.FOCUS, PochiEmote.SURPRISED).random()
                     appLower.contains("youtube") || appLower.contains("netflix") || appLower.contains("spotify") ->
                         listOf(PochiEmote.CALM, PochiEmote.HAPPY).random()
                     else -> listOf(
-                        PochiEmote.NEUTRAL,
+                        PochiEmote.NORMAL,
                         PochiEmote.SMILING,
-                        PochiEmote.LOOK_LEFT,
-                        PochiEmote.LOOK_RIGHT,
+                        PochiEmote.HMM,
+                        PochiEmote.SUSPICIOUS,
                         PochiEmote.CALM,
                         PochiEmote.WINK_LEFT
                     ).random()
@@ -378,7 +378,7 @@ fun PochiIslandBot(
 
     val currentEmote: PochiEmote = when {
         isThinking -> PochiEmote.THINKING
-        isListening -> PochiEmote.LISTENING
+        isListening -> PochiEmote.SURPRISED
         manualEmote != null -> manualEmote!!
         else -> autonomousEmote
     }
@@ -531,13 +531,10 @@ fun PochiIslandBot(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         PochiMascot(
-                            emote = currentEmote,
-                            isThinking = isThinking,
-                            isListening = isListening,
-                            eyeWidth = if (isIdleMini) 5.dp else 6.5.dp,
-                            eyeHeight = if (isIdleMini) 8.dp else 10.dp,
-                            eyeGap = if (isIdleMini) 3.dp else 4.dp,
-                            accentColor = Color(0xFF38BDF8)
+                            state = if (isThinking) BotState.WORKING else BotState.IDLE,
+                            emoteOverride = currentEmote,
+                            size = if (isIdleMini) 16.dp else 22.dp,
+                            showBlackBacking = false
                         )
                         if (!isIdleMini) {
                             val label = when {
@@ -626,13 +623,10 @@ fun PochiIslandBot(
                                 contentAlignment = Alignment.Center
                             ) {
                                 PochiMascot(
-                                    emote = currentEmote,
-                                    isThinking = isThinking,
-                                    isListening = isListening,
-                                    eyeWidth = 7.dp,
-                                    eyeHeight = 11.dp,
-                                    eyeGap = 4.5.dp,
-                                    accentColor = Color(0xFF38BDF8)
+                                    state = if (isThinking) BotState.WORKING else BotState.IDLE,
+                                    emoteOverride = currentEmote,
+                                    size = 24.dp,
+                                    showBlackBacking = false
                                 )
                             }
 
@@ -683,7 +677,7 @@ fun PochiIslandBot(
 
                     // 2. Biometric Approval Card if pending
                     if (pendingApproval != null) {
-                        ApprovalCardUI(action = pendingApproval!!)
+                        PochiApprovalCard(request = pendingApproval!!, onDeny = { ApprovalManager.confirmDeny("Ditolak dari island") })
                     }
 
                     // 3. Scrollable AI Reply & Generative Visual Card Area
