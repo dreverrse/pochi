@@ -197,13 +197,13 @@ fun PochiReferenceApp(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var onboarded by remember { mutableStateOf(PochiPrefs.isOnboardingDone(context)) }
+    var onboarded by remember { mutableStateOf(PochiPrefs.onboardingDoneFlow.value) }
     // Default to Center Tab (1 = Pochi AI Center)
     var selectedTab by remember { mutableIntStateOf(1) }
 
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
-    var hasAccessibility by remember { mutableStateOf(PochiAccessibilityService.isEnabled(context)) }
-    var hasNotification by remember { mutableStateOf(PochiNotificationService.isEnabled(context)) }
+    var hasAccessibility by remember { mutableStateOf(PochiAccessibilityService.instance != null) }
+    var hasNotification by remember { mutableStateOf((Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")?.contains(context.packageName) == true)) }
     var batteryIgnored by remember {
         mutableStateOf(
             (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)
@@ -215,8 +215,8 @@ fun PochiReferenceApp(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 canOverlay = Settings.canDrawOverlays(context)
-                hasAccessibility = PochiAccessibilityService.isEnabled(context)
-                hasNotification = PochiNotificationService.isEnabled(context)
+                hasAccessibility = PochiAccessibilityService.instance != null
+                hasNotification = (Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")?.contains(context.packageName) == true)
                 batteryIgnored = (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)
                     ?.isIgnoringBatteryOptimizations(context.packageName) == true
                 if (canOverlay && !DynamicIslandService.isRunningFlow.value) {
@@ -570,13 +570,10 @@ private fun PochiControlHubScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         PochiMascot(
-                            emote = PochiEmote.SMILING,
-                            isThinking = false,
-                            isListening = false,
-                            eyeWidth = 5.5.dp,
-                            eyeHeight = 9.dp,
-                            eyeGap = 3.5.dp,
-                            accentColor = Color.White
+                            state = BotState.IDLE,
+                            emoteOverride = PochiEmote.SMILING,
+                            size = 34.dp,
+                            showBlackBacking = false
                         )
                     }
 
@@ -958,13 +955,10 @@ private fun PochiControlHubScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         PochiMascot(
-                            emote = PochiEmote.HAPPY,
-                            isThinking = false,
-                            isListening = false,
-                            eyeWidth = 4.5.dp,
-                            eyeHeight = 7.5.dp,
-                            eyeGap = 3.dp,
-                            accentColor = Color.White
+                            state = BotState.IDLE,
+                            emoteOverride = PochiEmote.HAPPY,
+                            size = 28.dp,
+                            showBlackBacking = false
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -1329,13 +1323,10 @@ private fun PochiAiCenterScreen(
 
                 // Pochi Mascot Eyes beneath the AI Orb
                 PochiMascot(
-                    emote = if (isThinking) PochiEmote.THINKING else if (isListening) PochiEmote.LISTENING else currentEmote,
-                    isThinking = isThinking,
-                    isListening = isListening,
-                    eyeWidth = 8.dp,
-                    eyeHeight = 12.dp,
-                    eyeGap = 5.dp,
-                    accentColor = SkyCyanBlue
+                    state = if (isThinking) BotState.WORKING else BotState.IDLE,
+                    emoteOverride = if (isThinking) PochiEmote.THINKING else if (isListening) PochiEmote.SURPRISED else currentEmote,
+                    size = 44.dp,
+                    showBlackBacking = false
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1706,7 +1697,7 @@ private fun PochiContextAndMemoryScreen(
 ) {
     val context = LocalContext.current
     val db = remember { PochiDb.getInstance(context) }
-    var memories by remember { mutableStateOf(db.getRecentMemories(30)) }
+    var memories by remember { mutableStateOf(db.getAllMemories().take(30)) }
     var newMemoryText by remember { mutableStateOf("") }
 
     val selectedCity by PochiPrefs.cityFlow.collectAsState()
@@ -1922,7 +1913,7 @@ private fun PochiContextAndMemoryScreen(
                             .border(1.dp, CardBorderDark, RoundedCornerShape(50))
                             .clickable {
                                 val nextIdx = (cities.indexOf(selectedCity) + 1) % cities.size
-                                PochiPrefs.setCity(context, cities[nextIdx])
+                                PochiPrefs.saveCity(context, cities[nextIdx])
                             }
                             .padding(horizontal = 16.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -1974,7 +1965,7 @@ private fun PochiContextAndMemoryScreen(
                             .border(1.dp, CardBorderDark, RoundedCornerShape(22.dp))
                             .clickable {
                                 val nextIdx = (cities.indexOf(selectedCity) + 1) % cities.size
-                                PochiPrefs.setCity(context, cities[nextIdx])
+                                PochiPrefs.saveCity(context, cities[nextIdx])
                             }
                             .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -2107,7 +2098,7 @@ private fun PochiContextAndMemoryScreen(
                                     if (newMemoryText.isNotBlank()) {
                                         db.saveMemory("preferensi", newMemoryText.trim())
                                         newMemoryText = ""
-                                        memories = db.getRecentMemories(30)
+                                        memories = db.getAllMemories().take(30)
                                     }
                                 }
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -2213,7 +2204,7 @@ private fun PochiContextAndMemoryScreen(
                                 .size(18.dp)
                                 .clickable {
                                     db.deleteMemory(mem.id)
-                                    memories = db.getRecentMemories(30)
+                                    memories = db.getAllMemories().take(30)
                                 }
                         )
                     }
@@ -2286,13 +2277,10 @@ private fun PochiEngineSettingsScreen(
                     )
                 }
                 PochiMascot(
-                    emote = PochiEmote.WINK_LEFT,
-                    isThinking = false,
-                    isListening = false,
-                    eyeWidth = 7.dp,
-                    eyeHeight = 11.dp,
-                    eyeGap = 4.dp,
-                    accentColor = SkyCyanBlue
+                    state = BotState.IDLE,
+                    emoteOverride = PochiEmote.WINK_LEFT,
+                    size = 40.dp,
+                    showBlackBacking = false
                 )
             }
 
@@ -2427,7 +2415,7 @@ private fun PochiEngineSettingsScreen(
                         .clickable {
                             PochiPrefs.setProvider(context, selectedProvider)
                             PochiPrefs.setApiKey(context, selectedProvider, apiKeyInput.trim())
-                            PochiPrefs.setModel(context, selectedProvider, modelInput.trim().ifBlank { selectedProvider.defaultModel })
+                            PochiPrefs.saveModel(context, selectedProvider, modelInput.trim().ifBlank { selectedProvider.defaultModel })
                             savedBanner = true
                         }
                         .padding(vertical = 12.dp),
@@ -2470,7 +2458,7 @@ private fun PochiEngineSettingsScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(if (active) RoyalBlue else ElevatedCardBlack)
-                                .clickable { PochiPrefs.setCity(context, city) }
+                                .clickable { PochiPrefs.saveCity(context, city) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -2496,7 +2484,7 @@ private fun PochiEngineSettingsScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(if (active) RoyalBlue else ElevatedCardBlack)
-                                .clickable { PochiPrefs.setCity(context, city) }
+                                .clickable { PochiPrefs.saveCity(context, city) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -2687,13 +2675,10 @@ private fun PochiOnboardingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 PochiMascot(
-                    emote = PochiEmote.EXCITED,
-                    isThinking = false,
-                    isListening = false,
-                    eyeWidth = 9.dp,
-                    eyeHeight = 14.dp,
-                    eyeGap = 6.dp,
-                    accentColor = Color.White
+                    state = BotState.IDLE,
+                    emoteOverride = PochiEmote.EXCITED,
+                    size = 64.dp,
+                    showBlackBacking = false
                 )
             }
 
