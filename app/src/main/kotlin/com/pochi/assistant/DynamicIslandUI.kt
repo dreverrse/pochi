@@ -1033,8 +1033,8 @@ fun PochiIslandBot(
                                 }
                             )
                         }
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     // --- HEADER PREMIUM (Tahap 4): wajah + identitas + jam + tutup ---
                     Row(
@@ -1056,7 +1056,7 @@ fun PochiIslandBot(
                         ) {
                             // Tahap 11: tanpa logo & tanpa nama Pochi —
                             // header panel kini menampilkan kategori aktif.
-                            Column {
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(
                                     text = if (isId) activeTab.titleId else activeTab.titleEn,
                                     color = textPrimary,
@@ -1909,87 +1909,6 @@ fun PochiIslandBot(
                             }
                         }
                     }
-                    }
-
-                    // --- TITIK HALAMAN (Tahap 6, ala Nusa) ---
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            pageOrder.forEach { tab ->
-                                val isSel = activeTab == tab
-                                val dotWidth by animateDpAsState(
-                                    targetValue = if (isSel) 16.dp else 6.dp,
-                                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 420f),
-                                    label = "dotWidth"
-                                )
-                                val dotColorMix by animateFloatAsState(
-                                    targetValue = if (isSel) 1f else 0f,
-                                    animationSpec = tween(200),
-                                    label = "dotColor"
-                                )
-                                val dotColor = lerp(borderHairline, PochiDesign.BoardBlue, dotColorMix)
-                                Box(
-                                    modifier = Modifier
-                                        .height(18.dp)
-                                        .width(dotWidth + 10.dp)
-                                        .pochiPress { goToPage(tab) },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .height(6.dp)
-                                            .width(dotWidth)
-                                            .clip(CircleShape)
-                                            .background(dotColor)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // --- DOCK KACA (Tahap 4): pengganti switcher lama ---
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(PochiDesign.WidgetSurface)
-                                .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
-                                .padding(horizontal = 6.dp, vertical = 4.dp)
-                        ) {
-                            // Tahap 8: dock memakai urutan halaman yang
-                            // sama dengan titik & geser (konsisten).
-                            pageOrder.forEach { tab ->
-                                val isSel = activeTab == tab
-                                val selBg = if (isSel) {
-                                    Brush.linearGradient(listOf(PochiDesign.BoardBlue, PochiDesign.BoardBlue))
-                                } else {
-                                    Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(selBg)
-                                        .pochiPress { goToPage(tab) },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = tab.icon,
-                                        contentDescription = tab.titleEn,
-                                        tint = if (isSel) Color.White else textSecondary,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }
