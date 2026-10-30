@@ -905,7 +905,7 @@ fun PochiIslandBot(
                                 )
                                 Text(
                                     text = SimpleDateFormat("HH:mm", Locale.US)
-                                        .format(Date(nowMs)),
+                                        .format(Date(idleTickMs)),
                                     color = textPrimary,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -1061,7 +1061,7 @@ fun PochiIslandBot(
                                         SimpleDateFormat(
                                             "EEEE, d MMMM yyyy",
                                             Locale("id", "ID")
-                                        ).format(Date(nowMs))
+                                        ).format(Date(idleTickMs))
                                     } else {
                                         botState.statusLabel
                                     },
