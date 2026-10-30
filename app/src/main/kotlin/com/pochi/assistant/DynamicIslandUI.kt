@@ -254,45 +254,6 @@ fun PochiIslandBot(
     // bawah file) agar tik 1 detik tidak merekomposisi seluruh island
     // — perbaikan responsivitas Tahap 4.
 
-    // Tahap 8: bersembunyi otomatis — 10 detik tanpa interaksi,
-    // panel menutup sendiri lalu island menyusut jadi MINI (sangat
-    // kecil & tembus pandang) agar tidak menghalangi layar. Musik,
-    // timer fokus, unduhan, dan kartu persetujuan menahan penyusutan.
-    LaunchedEffect(islandMode, mediaPlayback.isPlaying, isFocusRunning, activeApproval, activeDownload, systemPeek) {
-        while (true) {
-            delay(500)
-            val idleMs = System.currentTimeMillis() - lastInteractionMs
-            if (idleMs < 10_000L) continue
-            when (islandMode) {
-                IslandMode.EXPANDED -> {
-                    if (activeApproval == null && !isListeningVoice) {
-                        setMode(IslandMode.COLLAPSED)
-                    }
-                }
-                IslandMode.COLLAPSED, IslandMode.EYES -> {
-                    if (!mediaPlayback.isPlaying && !isFocusRunning &&
-                        activeDownload == null && !peekActive
-                    ) {
-                        setMode(IslandMode.MINI)
-                    }
-                }
-                IslandMode.MINI -> Unit
-            }
-        }
-    }
-
-    // Saat MINI: musik mulai / peristiwa sistem -> tampil lagi sebentar
-    LaunchedEffect(mediaPlayback.isPlaying) {
-        if (mediaPlayback.isPlaying && islandMode == IslandMode.MINI) {
-            setMode(IslandMode.COLLAPSED)
-        }
-    }
-    LaunchedEffect(systemPeek) {
-        if (systemPeek != null && islandMode == IslandMode.MINI) {
-            setMode(IslandMode.COLLAPSED)
-        }
-    }
-
     // Lirikan kembali netral setelah sesaat (Tahap 7)
     LaunchedEffect(eyeGazeOffset) {
         if (eyeGazeOffset != Offset.Zero) {
@@ -600,6 +561,46 @@ fun PochiIslandBot(
     // Intipan peristiwa sistem tampil maksimal ~3,4 detik.
     val peekActive = systemPeek != null &&
         (peekTickMs - (systemPeek?.atMs ?: 0L)) in 0..3400L
+
+    // Tahap 8: bersembunyi otomatis — 10 detik tanpa interaksi,
+    // panel menutup sendiri lalu island menyusut jadi MINI (sangat
+    // kecil & tembus pandang) agar tidak menghalangi layar. Musik,
+    // timer fokus, unduhan, dan kartu persetujuan menahan penyusutan.
+    LaunchedEffect(islandMode, mediaPlayback.isPlaying, isFocusRunning, activeApproval, activeDownload, systemPeek) {
+        while (true) {
+            delay(500)
+            val idleMs = System.currentTimeMillis() - lastInteractionMs
+            if (idleMs < 10_000L) continue
+            when (islandMode) {
+                IslandMode.EXPANDED -> {
+                    if (activeApproval == null && !isListeningVoice) {
+                        setMode(IslandMode.COLLAPSED)
+                    }
+                }
+                IslandMode.COLLAPSED, IslandMode.EYES -> {
+                    if (!mediaPlayback.isPlaying && !isFocusRunning &&
+                        activeDownload == null && !peekActive
+                    ) {
+                        setMode(IslandMode.MINI)
+                    }
+                }
+                IslandMode.MINI -> Unit
+            }
+        }
+    }
+
+    // Saat MINI: musik mulai / peristiwa sistem -> tampil lagi sebentar
+    LaunchedEffect(mediaPlayback.isPlaying) {
+        if (mediaPlayback.isPlaying && islandMode == IslandMode.MINI) {
+            setMode(IslandMode.COLLAPSED)
+        }
+    }
+    LaunchedEffect(systemPeek) {
+        if (systemPeek != null && islandMode == IslandMode.MINI) {
+            setMode(IslandMode.COLLAPSED)
+        }
+    }
+
 
     // Edge Peek Mode
     if (isHidden) {
