@@ -52,6 +52,9 @@ object AiClient {
                     "SET_TIMER:detik, SET_ALARM:HH:MM|label, CALL:nama_atau_nomor, SMS:nama_atau_nomor|pesan, " +
                     "WHATSAPP:nama_atau_nomor|pesan, CALENDAR:judul|menit_dari_sekarang|durasi_menit, " +
                     "MAPS:lokasi, CLIPBOARD:teks, SAVE_NOTE:isi_catatan, REMEMBER:kategori|isi_memori, SETTINGS:WIFI_atau_BLUETOOTH. " +
+                    "Jika Tuan Andre meminta data kripto, grafik/statistik, cuaca, atau jadwal sholat, kamu juga boleh menyertakan satu tag visual [CARD:CRYPTO:SIMBOL] (misal BTC/ETH/SOL), " +
+                    "atau [CARD:CHART:Judul|Label1:Angka1,Label2:Angka2,Label3:Angka3,Label4:Angka4,Label5:Angka5], " +
+                    "atau [CARD:WEATHER:Kota], atau [CARD:PRAYER:Kota]. " +
                     "Jangan tulis [ACTION:...] jika hanya mengobrol santai."
             )
             if (contextNote.isNotBlank()) {

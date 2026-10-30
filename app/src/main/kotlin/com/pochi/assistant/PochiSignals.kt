@@ -38,6 +38,24 @@ data class ScreenshotPreviewInfo(
     val capturedAt: Long = System.currentTimeMillis()
 )
 
+data class DroppedFileInfo(
+    val id: String = System.currentTimeMillis().toString(),
+    val uri: Uri?,
+    val fileName: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+    val textPreview: String = "",
+    val droppedAt: Long = System.currentTimeMillis()
+) {
+    val formattedSize: String
+        get() = when {
+            sizeBytes >= 1024 * 1024 -> String.format(java.util.Locale.US, "%.2f MB", sizeBytes / (1024f * 1024f))
+            sizeBytes >= 1024 -> String.format(java.util.Locale.US, "%.1f KB", sizeBytes / 1024f)
+            sizeBytes > 0 -> "$sizeBytes B"
+            else -> " Live Stream"
+        }
+}
+
 data class AgentChoicePrompt(
     val id: String,
     val question: String,
@@ -88,6 +106,24 @@ object PochiSignals {
 
     private val _agentSession = MutableStateFlow(AgentSessionState())
     val agentSession: StateFlow<AgentSessionState> = _agentSession
+
+    private val _droppedFile = MutableStateFlow<DroppedFileInfo?>(null)
+    val droppedFile: StateFlow<DroppedFileInfo?> = _droppedFile
+
+    private val _islandExpandRequest = MutableStateFlow(0L)
+    val islandExpandRequest: StateFlow<Long> = _islandExpandRequest
+
+    fun publishDroppedFile(info: DroppedFileInfo) {
+        _droppedFile.value = info
+    }
+
+    fun consumeDroppedFile() {
+        _droppedFile.value = null
+    }
+
+    fun requestExpandIsland() {
+        _islandExpandRequest.value = System.currentTimeMillis()
+    }
 
     fun updateScreen(app: String, text: String) {
         _screenApp.value = app

@@ -183,6 +183,36 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                 }
             }
 
+            setOnDragListener { _, event ->
+                when (event.action) {
+                    android.view.DragEvent.ACTION_DRAG_STARTED -> true
+                    android.view.DragEvent.ACTION_DROP -> {
+                        val clip = event.clipData
+                        if (clip != null && clip.itemCount > 0) {
+                            val item = clip.getItemAt(0)
+                            val uri = item.uri
+                            if (uri != null) {
+                                val info = PochiJarvisEngine.inspectUri(context, uri)
+                                PochiSignals.publishDroppedFile(info)
+                            } else if (!item.text.isNullOrBlank()) {
+                                val txt = item.text.toString()
+                                PochiSignals.publishDroppedFile(
+                                    DroppedFileInfo(
+                                        uri = null,
+                                        fileName = "dropped_snippet.txt",
+                                        mimeType = "text/plain",
+                                        sizeBytes = txt.length.toLong(),
+                                        textPreview = txt
+                                    )
+                                )
+                            }
+                        }
+                        true
+                    }
+                    else -> true
+                }
+            }
+
             setContent {
                 val peek by peekState
                 val currentPeekSide by peekSideState
@@ -206,22 +236,21 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         } else {
                             (curSw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
                         }
-                        val curMaxExpH = (curSh - curMinTop - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
+                        val curMaxExpH = (curSh - curMinTop - (16 * density).toInt()).coerceAtLeast((240 * density).toInt())
                         val curDefExpH = if (isLandscape) {
-                            (260 * density).toInt().coerceAtMost(curMaxExpH)
-                            (210 * density).toInt().coerceAtMost(curMaxExpH)
+                            (320 * density).toInt().coerceAtMost(curMaxExpH)
                         } else {
-                            (440 * density).toInt().coerceAtMost(curMaxExpH)
-                            (230 * density).toInt().coerceAtMost(curMaxExpH)
+                            (450 * density).toInt().coerceAtMost(curMaxExpH)
                         }
 
                         if (expanded) {
                             params.flags = expandedFlags
+                            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                             params.x = 0
                             params.y = curMinTop
                             params.width = curExpW
                             params.height = if (expandedHeightPx > 0) {
-                                expandedHeightPx.coerceIn((180 * density).toInt(), curMaxExpH)
+                                expandedHeightPx.coerceIn((280 * density).toInt(), curMaxExpH)
                             } else {
                                 curDefExpH
                             }
@@ -230,7 +259,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                             params.flags = collapsedFlags
                             applyLayout()
                             collapseJob = serviceScope.launch {
-                                delay(360)
+                                delay(320)
                                 params.width = collapsedWidthPx
                                 params.height = collapsedHeightPx
                                 params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
@@ -404,9 +433,9 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     }
 
     private fun getMinTopYPx(): Int {
-        val density = resources.displayMetrics.density
-        // Ensures the island sits cleanly BELOW the phone infobar / status bar (never covered by clock/battery)
-        return getStatusBarHeightPx() + (6 * density).toInt()
+        // Attaches flush right at the bottom edge of the phone status bar (0dp gap)
+        // so the Notch looks seamlessly fused with the top bar while never covering clock/battery icons.
+        return getStatusBarHeightPx()
     }
 
     private fun computeY(userOffsetYDp: Int): Int {
