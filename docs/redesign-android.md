@@ -74,12 +74,41 @@ verifikasi dilakukan GitHub Actions setelah branch di-push.
   alamat gateway non-privat (hanya loopback, 10/8, 172.16/12,
   192.168/16, CGNAT 100.64/10, `*.local`, atau nama host satu label).
 
+## Tahap 4 — Dashboard notch mewah + responsivitas
+
+Atas permintaan pemilik: desain panel expanded ("dashboard notch")
+dirombak total agar lebih mewah dan UI lebih responsif.
+
+- **Kerangka premium**: badan island kini gradasi vertikal
+  `Void -> hitam`, tepi gradasi violet (`FaceRim -> Hairline`), dan
+  cahaya radial violet lembut di balik konten panel.
+- **Header baru**: wajah blueprint bergelombang suara + wordmark
+  "POCHI ✦" (aksen emas `AccentGold`) + label status bot; jam memakai
+  `PochiClockText`; tombol tutup berupa pil kaca.
+- **Dock kaca bawah**: pemilih kartu lama di bar atas dipindah menjadi
+  dock pil kaca (`SurfaceGlass`) di dasar panel; tab aktif mendapat
+  gradasi violet penuh. Tab kini: Glance, Call, Musik, Aktivitas,
+  Cuaca, Timer.
+- **Tab Glance (default)** — layout ala notch Mac dari referensi:
+  kartu musik mini di kiri (sampul gradasi, judul/artis, kontrol
+  prev/play/next yang berfungsi) dan kartu agenda di kanan (hari +
+  tanggal, salat berikutnya, sisa tugas, kota).
+- Token premium baru di `PochiDesign`: `SurfaceGlass`,
+  `SurfaceGlassHigh`, `AccentGold`, `GlowViolet`. Tinggi panel
+  expanded naik 224 -> 252 dp.
+- **Responsivitas**: jam header dipisah ke composable kecil
+  (`PochiClockText`) — sebelumnya state jam di badan `PochiIslandBot`
+  membuat tik 1 detik merekomposisi seluruh island; kini hanya teks
+  jam. Spring transisi ukuran island disetel ulang
+  (damping 0,82) agar terasa lebih mantap dan premium.
+- Semua kartu lama (Call, Musik penuh, Aktivitas, Cuaca, Timer,
+  persetujuan, tangkapan layar) tidak berubah perilakunya.
+
 ## Sisa pekerjaan
 
-- Push branch `redesign/android-tahap-1` dan verifikasi build GitHub
-  Actions (belum dilakukan — menunggu keputusan pemilik).
-- Layout expanded ala notch Mac (musik kiri, agenda kanan) belum
-  dikerjakan; panel expanded saat ini masih tata letak tab lama.
+- Push branch dan verifikasi build GitHub Actions untuk Tahap 4
+  (Tahap 1-3 sudah terverifikasi: run #14 sukses, artefak
+  `pochi-release-apk` 11,5 MB).
 - Kunci gateway masih tersimpan dengan mekanisme yang sama seperti
   API key lama (plaintext SharedPreferences, temuan audit lama) —
   migrasi ke penyimpanan terenkripsi adalah pekerjaan terpisah.
