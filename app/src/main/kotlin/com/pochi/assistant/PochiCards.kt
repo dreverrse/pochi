@@ -120,12 +120,12 @@ fun PochiStatCard(
     ringFraction: Float? = null,
     onClick: (() -> Unit)? = null
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(16.dp)
     Box(
         modifier = modifier
             .clip(shape)
-            .background(PochiDesign.CardSurface)
-            .border(1.dp, PochiDesign.Hairline, shape)
+            .background(PochiDesign.WidgetSurface)
+            .border(1.dp, PochiDesign.WidgetBorder, shape)
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .padding(16.dp)
     ) {
