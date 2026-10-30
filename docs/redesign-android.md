@@ -218,6 +218,39 @@ termasuk saat data ditampilkan di chat.
   pahlawan dan kurva dari angka-angkanya, teks lengkap tetap tampil
   sebagai keterangan di bawah kartu.
 
+## Tahap 13 — mode Coucou: agen coding + jembatan laptop
+
+Atas arahan pemilik (desain + fungsi inti Coucou sekalian
+jembatan ke laptop). Coucou (github.com/Louis-CFM/coucou, MIT)
+diimplementasikan ulang di kode Pochi — nama & maskot tetap
+Pochi. Ini menggantikan arah batch 2 Tahap 12.
+
+- **`PochiAgents.kt` (baru)**: `AgentBridge` — menurunkan alamat
+  jembatan dari host Pochi Gateway (port 8788), polling
+  `GET /pochi/agents` tiap 3 detik dari `DynamicIslandService`,
+  `POST /pochi/approve` untuk keputusan izin. StateFlow sesi,
+  izin tertunda, dan status daring.
+- **Halaman Agen** (`PochiTab.AGENTS`, halaman pertama panel,
+  tab bawaan baru): status jembatan + kartu sesi per agen
+  (titik warna merek, proyek, status Bekerja/Selesai/Menunggu,
+  aksi terakhir + berkas, +N/-M) memakai bahasa widget Tahap 9.
+  Keadaan kosong menjelaskan cara menjalankan jembatan.
+- **Ticker kapsul**: izin tertunda (kuning, "Izin: <tool>") dan
+  sesi yang bekerja ("<agen> • <berkas>") menjadi status kapsul
+  prioritas tertinggi.
+- **Kartu izin ala Coucou**: permintaan izin agen membuka panel
+  sendiri otomatis dan tampil sebagai kartu di atas halaman
+  (agen, tool, ringkasan perintah) dengan **Tolak / Selalu /
+  Izinkan**; keputusan diteruskan ke agen yang menunggu.
+- **Sisi laptop** (`desktop/bridge/`): `pochi_bridge.py`
+  (server stdlib murni: /pochi/hook, /pochi/permission yang
+  menahan respons sampai HP memutuskan ~110 dtk, /pochi/agents,
+  /pochi/approve, /pochi/health; status sesi persisten JSON),
+  `pochi_hook.py` (hook Claude Code: aktivitas kirim-&-lupakan,
+  PermissionRequest menunggu keputusan; tanpa keputusan ->
+  kembali ke prompt terminal biasa), dan README pemasangan.
+  Teruji asap lokal: health, hook aktivitas -> sesi WORKING.
+
 ## Tahap 12 — semua fungsi bekerja (batch 1: data asli)
 
 Atas arahan pemilik ("sekarang buat semua fungsi bekerja"),
