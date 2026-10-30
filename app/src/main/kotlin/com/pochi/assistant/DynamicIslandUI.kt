@@ -17,14 +17,25 @@ import android.speech.SpeechRecognizer
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -52,6 +63,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -238,6 +250,14 @@ fun PochiIslandBot(
     // bawah file) agar tik 1 detik tidak merekomposisi seluruh island
     // — perbaikan responsivitas Tahap 4.
 
+    // Lirikan kembali netral setelah sesaat (Tahap 7)
+    LaunchedEffect(eyeGazeOffset) {
+        if (eyeGazeOffset != Offset.Zero) {
+            delay(1500)
+            eyeGazeOffset = Offset.Zero
+        }
+    }
+
     // Call duration ticker
     LaunchedEffect(islandMode, activeTab) {
         while (islandMode == IslandMode.EXPANDED && activeTab == PochiTab.CHAT) {
@@ -421,7 +441,11 @@ fun PochiIslandBot(
 
     val islandWidth by transition.animateDp(
         transitionSpec = {
-            spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+            if (targetState == IslandMode.EXPANDED) {
+                spring(dampingRatio = 0.74f, stiffness = Spring.StiffnessMediumLow)
+            } else {
+                spring(dampingRatio = 0.88f, stiffness = Spring.StiffnessMediumLow)
+            }
         },
         label = "islandWidth"
     ) { mode ->
@@ -434,7 +458,11 @@ fun PochiIslandBot(
 
     val islandHeightAnim by transition.animateDp(
         transitionSpec = {
-            spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+            if (targetState == IslandMode.EXPANDED) {
+                spring(dampingRatio = 0.74f, stiffness = Spring.StiffnessMediumLow)
+            } else {
+                spring(dampingRatio = 0.88f, stiffness = Spring.StiffnessMediumLow)
+            }
         },
         label = "islandHeight"
     ) { mode ->
@@ -448,7 +476,7 @@ fun PochiIslandBot(
     // Authentic Apple Squircle Corner Radii: 18dp for capsule pill, 32dp for expanded card
     val islandCornerRadius by transition.animateDp(
         transitionSpec = {
-            spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+            spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMediumLow)
         },
         label = "islandCornerRadius"
     ) { mode ->
@@ -479,6 +507,17 @@ fun PochiIslandBot(
         PochiTab.GLANCE, PochiTab.WALLET, PochiTab.TODAY,
         PochiTab.LIFE, PochiTab.FOCUS, PochiTab.CHAT
     )
+
+    // Tahap 7: pulsa squash & stretch setiap island berubah bentuk —
+    // island melebar sesaat sambil memipih, lalu memantul pulih.
+    val squashPulse = remember { Animatable(0f) }
+    LaunchedEffect(islandMode) {
+        squashPulse.snapTo(1f)
+        squashPulse.animateTo(
+            0f,
+            spring(dampingRatio = 0.42f, stiffness = 260f)
+        )
+    }
 
     val activeEmote = customEmote ?: idleEmote ?: PochiEmote.SMILING
 
@@ -543,10 +582,15 @@ fun PochiIslandBot(
                 .graphicsLayer {
                     clip = true
                     shape = islandShape
+                    val squash = squashPulse.value
+                    var sx = 1f + squash * 0.05f
+                    var sy = 1f - squash * 0.055f
                     if (islandMode == IslandMode.COLLAPSED) {
-                        scaleX = breathScale
-                        scaleY = 2f - breathScale
+                        sx *= breathScale
+                        sy *= (2f - breathScale)
                     }
+                    scaleX = sx
+                    scaleY = sy
                 }
                 .background(
                     Brush.verticalGradient(listOf(PochiDesign.Void, islandBlack)),
@@ -571,7 +615,7 @@ fun PochiIslandBot(
                         .background(
                             Brush.radialGradient(
                                 listOf(
-                                    accentViolet.copy(alpha = 0.20f),
+                                    accentViolet.copy(alpha = 0.20f + squashPulse.value * 0.12f),
                                     Color.Transparent
                                 )
                             )
@@ -587,6 +631,11 @@ fun PochiIslandBot(
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
+                                // Tahap 7: mata melirik ke titik yang disentuh.
+                                eyeGazeOffset = Offset(
+                                    ((down.position.x / size.width.coerceAtLeast(1)) - 0.5f) * 7f,
+                                    ((down.position.y / size.height.coerceAtLeast(1)) - 0.5f) * 5f
+                                )
                                 val touchSlop = viewConfiguration.touchSlop
                                 var accumulatedX = 0f
                                 var accumulatedY = 0f
@@ -668,6 +717,13 @@ fun PochiIslandBot(
                                 eyeTrackerOffset = eyeGazeOffset,
                                 showBlackBacking = false
                             )
+                            if (idleStage == 2) {
+                                SleepZzz(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .offset(x = 17.dp, y = (-3).dp)
+                                )
+                            }
                         }
                     } else {
                     PochiMascot(
@@ -714,10 +770,8 @@ fun PochiIslandBot(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.GraphicEq,
-                                    contentDescription = null,
-                                    tint = spotifyGreen,
+                                LiveEqualizer(
+                                    color = spotifyGreen,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
@@ -795,10 +849,7 @@ fun PochiIslandBot(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer { alpha = eyesContentAlpha }
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) { setMode(IslandMode.COLLAPSED) },
+                        .pochiPress { setMode(IslandMode.COLLAPSED) },
                     contentAlignment = Alignment.Center
                 ) {
                     PochiMascot(
@@ -808,6 +859,13 @@ fun PochiIslandBot(
                         eyeTrackerOffset = eyeGazeOffset,
                         showBlackBacking = false
                     )
+                    if (displayEmote == PochiEmote.SLEEPY) {
+                        SleepZzz(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(end = 7.dp, top = 1.dp)
+                        )
+                    }
                 }
             }
 
@@ -879,7 +937,8 @@ fun PochiIslandBot(
                                         text = "POCHI",
                                         color = textPrimary,
                                         fontSize = 13.sp,
-                                        fontWeight = FontWeight.ExtraBold
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 2.sp
                                     )
                                     Text(
                                         text = "✦",
@@ -892,7 +951,8 @@ fun PochiIslandBot(
                                     text = botState.statusLabel,
                                     color = textSecondary,
                                     fontSize = 10.sp,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    letterSpacing = 0.5.sp
                                 )
                             }
                         }
@@ -908,7 +968,7 @@ fun PochiIslandBot(
                                     .clip(CircleShape)
                                     .background(PochiDesign.SurfaceGlass)
                                     .border(1.dp, borderHairline, CircleShape)
-                                    .clickable { setMode(IslandMode.COLLAPSED) },
+                                    .pochiPress { setMode(IslandMode.COLLAPSED) },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -921,7 +981,24 @@ fun PochiIslandBot(
                         }
                     }
 
-                    // --- ACTIVE CARD BODY ---
+                    // --- ACTIVE CARD BODY (Tahap 7: transisi halaman hidup) ---
+                    AnimatedContent(
+                        targetState = activeTab,
+                        transitionSpec = {
+                            val dir = if (pageOrder.indexOf(targetState) >= pageOrder.indexOf(initialState)) 1 else -1
+                            (slideInHorizontally(
+                                animationSpec = spring(dampingRatio = 0.86f, stiffness = Spring.StiffnessMedium)
+                            ) { w -> dir * w / 3 } + fadeIn(tween(190)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
+                                    ) { w -> -dir * w / 3 } + fadeOut(tween(130))
+                                )
+                                .using(SizeTransform(clip = false))
+                        },
+                        label = "pageTransition",
+                        modifier = Modifier.fillMaxWidth()
+                    ) { page ->
                     when {
                         // System Approval Card
                         activeApproval != null -> {
@@ -1005,7 +1082,7 @@ fun PochiIslandBot(
                         }
 
                         // CARD 0: GLANCE ala notch Mac (Tahap 4)
-                        activeTab == PochiTab.GLANCE -> {
+                        page == PochiTab.GLANCE -> {
                             GlancePage(
                                 context = context,
                                 isId = isId,
@@ -1022,7 +1099,7 @@ fun PochiIslandBot(
 
 
                         // CARD 1: SPOTIFY & PODCAST NOW PLAYING
-                        activeTab == PochiTab.WALLET -> {
+                        page == PochiTab.WALLET -> {
                             MusicPage(
                                 context = context,
                                 mediaPlayback = mediaPlayback,
@@ -1034,7 +1111,7 @@ fun PochiIslandBot(
 
 
                         // CARD 2: FACETIME / TELEGRAM POCHI CALL
-                        activeTab == PochiTab.CHAT -> {
+                        page == PochiTab.CHAT -> {
                             CallPage(
                                 context = context,
                                 isId = isId,
@@ -1073,7 +1150,7 @@ fun PochiIslandBot(
 
 
                         // CARD 3: APPLE HEALTH ACTIVITY RINGS (Direct match for Image 3)
-                        activeTab == PochiTab.TODAY -> {
+                        page == PochiTab.TODAY -> {
                             val doneTasks = tasks.count { it.isDone }
                             val totalTasks = tasks.size.coerceAtLeast(1)
 
@@ -1134,6 +1211,11 @@ fun PochiIslandBot(
                                     verticalAlignment = Alignment.Bottom
                                 ) {
                                     bucketMl.forEachIndexed { i, ml ->
+                                        val barHeight by animateDpAsState(
+                                            targetValue = (6 + 18 * ml / bucketMax).dp,
+                                            animationSpec = spring(dampingRatio = 0.72f, stiffness = 210f),
+                                            label = "waterBar"
+                                        )
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -1141,7 +1223,7 @@ fun PochiIslandBot(
                                             Box(
                                                 modifier = Modifier
                                                     .width(20.dp)
-                                                    .height((6 + 18 * ml / bucketMax).dp)
+                                                    .height(barHeight)
                                                     .clip(RoundedCornerShape(4.dp))
                                                     .background(
                                                         if (ml > 0) iosBlue else borderHairline
@@ -1168,7 +1250,7 @@ fun PochiIslandBot(
                                             .height(46.dp)
                                             .clip(RoundedCornerShape(23.dp))
                                             .background(iosBlue)
-                                            .clickable {
+                                            .pochiPress {
                                                 PochiPrefs.addWaterGlass(context)
                                                 customEmote = PochiEmote.HAPPY
                                                 PochiSignals.playSuccessHaptic(context)
@@ -1201,7 +1283,7 @@ fun PochiIslandBot(
                                             .height(46.dp)
                                             .clip(RoundedCornerShape(23.dp))
                                             .background(iosGreen)
-                                            .clickable {
+                                            .pochiPress {
                                                 isFocusRunning = true
                                                 isFocusPaused = false
                                                 focusRemainingSeconds = 25 * 60
@@ -1234,7 +1316,7 @@ fun PochiIslandBot(
                         }
 
                         // CARD 4: WEATHER & UV RAINBOW EQUALIZER (Direct match for Image 3)
-                        activeTab == PochiTab.LIFE -> {
+                        page == PochiTab.LIFE -> {
                             val nextPrayer = PrayerScheduleHelper.getNextPrayer(selectedCity)
 
                             Column(
@@ -1521,6 +1603,7 @@ fun PochiIslandBot(
                             }
                         }
                     }
+                    }
 
                     // --- TITIK HALAMAN (Tahap 6, ala Nusa) ---
                     Row(
@@ -1531,13 +1614,23 @@ fun PochiIslandBot(
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             pageOrder.forEach { tab ->
                                 val isSel = activeTab == tab
+                                val dotWidth by animateDpAsState(
+                                    targetValue = if (isSel) 16.dp else 6.dp,
+                                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 420f),
+                                    label = "dotWidth"
+                                )
+                                val dotColor by animateColorAsState(
+                                    targetValue = if (isSel) accentViolet else borderHairline,
+                                    animationSpec = tween(200),
+                                    label = "dotColor"
+                                )
                                 Box(
                                     modifier = Modifier
                                         .height(6.dp)
-                                        .width(if (isSel) 16.dp else 6.dp)
+                                        .width(dotWidth)
                                         .clip(CircleShape)
-                                        .background(if (isSel) accentViolet else borderHairline)
-                                        .clickable {
+                                        .background(dotColor)
+                                        .pochiPress {
                                             activeTab = tab
                                             lastInteractionMs = System.currentTimeMillis()
                                             PochiSignals.playTapHaptic(context)
@@ -1581,8 +1674,9 @@ fun PochiIslandBot(
                                         .size(30.dp)
                                         .clip(CircleShape)
                                         .background(selBg)
-                                        .clickable {
+                                        .pochiPress {
                                             activeTab = tab
+                                            lastInteractionMs = System.currentTimeMillis()
                                             PochiSignals.playTapHaptic(context)
                                         },
                                     contentAlignment = Alignment.Center
@@ -1613,6 +1707,12 @@ private fun ActivityRingItem(
     label: String,
     sublabel: String
 ) {
+    // Tahap 7: nilai ring dianimasikan pegas agar perubahan terasa cair.
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 90f),
+        label = "ringProgress"
+    )
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -1638,7 +1738,7 @@ private fun ActivityRingItem(
                 drawArc(
                     color = color,
                     startAngle = -90f,
-                    sweepAngle = 360f * progress,
+                    sweepAngle = 360f * animatedProgress,
                     useCenter = false,
                     topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
                     size = Size(radius * 2f, radius * 2f),
@@ -2030,7 +2130,7 @@ private fun MusicPage(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(Color.White)
-                    .clickable {
+                    .pochiPress {
                         dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
                         PochiSignals.playTapHaptic(context)
                     },
@@ -2259,5 +2359,104 @@ private fun CallPage(
                 }
             }
         }
+    }
+}
+
+/**
+ * Tahap 7: umpan balik fisik saat ditekan — elemen mengecil ke 0,92
+ * lalu memantul pulih dengan pegas longgar. Menggantikan clickable
+ * polos pada tombol-tombol utama island agar terasa hidup.
+ */
+@Composable
+private fun Modifier.pochiPress(onTap: () -> Unit): Modifier {
+    val scale = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+    return this
+        .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    scope.launch { scale.animateTo(0.92f, tween(80)) }
+                    tryAwaitRelease()
+                    scope.launch {
+                        scale.animateTo(
+                            1f,
+                            spring(dampingRatio = 0.45f, stiffness = 400f)
+                        )
+                    }
+                },
+                onTap = { onTap() }
+            )
+        }
+}
+
+/**
+ * Tahap 7: equalizer batang hidup untuk status media — empat batang
+ * menari dengan tempo berbeda selama musik diputar, menggantikan
+ * ikon statis.
+ */
+@Composable
+private fun LiveEqualizer(color: Color, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "liveEq")
+    val phases = listOf(340, 470, 390, 520).mapIndexed { i, duration ->
+        transition.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = duration, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "eqBar$i"
+        )
+    }
+    Canvas(modifier = modifier) {
+        val barWidth = size.width / 7f
+        phases.forEachIndexed { i, phase ->
+            val barHeight = size.height * phase.value
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(
+                    x = i * barWidth * 1.8f,
+                    y = size.height - barHeight
+                ),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+            )
+        }
+    }
+}
+
+/**
+ * Tahap 7: partikel "z/Z" yang melayang naik dan memudar saat Pochi
+ * tertidur — penanda tidur yang lembut ala pendamping Nusa.
+ */
+@Composable
+private fun SleepZzz(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "sleepZzz")
+    val drift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "zzzDrift"
+    )
+    Box(modifier = modifier) {
+        val driftB = (drift + 0.5f) % 1f
+        Text(
+            text = "z",
+            color = PochiDesign.AccentVioletSoft.copy(alpha = 0.75f - drift * 0.6f),
+            fontSize = (8 + drift * 3).sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.offset(x = (drift * 5).dp, y = (-drift * 7).dp)
+        )
+        Text(
+            text = "Z",
+            color = PochiDesign.AccentVioletSoft.copy(alpha = 0.75f - driftB * 0.6f),
+            fontSize = (10 + driftB * 4).sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.offset(x = (6 + driftB * 6).dp, y = (-4 - driftB * 8).dp)
+        )
     }
 }
