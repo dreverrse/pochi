@@ -11,7 +11,6 @@ import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.database.ContentObserver
 import android.graphics.PixelFormat
-import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -21,13 +20,20 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.Surface
 import android.view.WindowManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import androidx.lifecycle.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
@@ -41,42 +47,43 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-/**
- * Phase 1: 120fps Floating Overlay Service Architecture.
- *
- * - Hosts a `ComposeView` with custom `LifecycleOwner`, `ViewModelStoreOwner`, and `SavedStateRegistryOwner`.
- * - Anchors the matte-black (`#0A0A0A`) pill-shaped Dynamic Island at the top-center camera cutout.
- * - Strict 120fps Rule: NEVER animates `WindowManager.LayoutParams` width/height per frame via `updateViewLayout`.
- *   Instead, resizes the transparent window container ONCE prior to expansion, and drives all morphing inside
- *   Jetpack Compose using `spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)`
- *   and hardware-accelerated `Modifier.graphicsLayer`.
- */
 class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     companion object {
-        private const val CHANNEL_ID = "pochi_island"
+        private const val CHANNEL_ID = "pochi_dynamic_island_channel"
         private const val NOTIFICATION_ID = 1001
 
         private val _isRunning = MutableStateFlow(false)
-        val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
+        val isRunningFlow: StateFlow<Boolean> = _isRunning.asStateFlow()
+
+        fun start(context: Context) {
+            if (!Settings.canDrawOverlays(context)) return
+            val intent = Intent(context, DynamicIslandService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        fun stop(context: Context) {
+            context.stopService(Intent(context, DynamicIslandService::class.java))
+        }
     }
+
+    private val lifecycleRegistry = LifecycleRegistry(this)
+    private val store = ViewModelStore()
+    private val savedStateRegistryController = SavedStateRegistryController.create(this)
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private lateinit var windowManager: WindowManager
     private lateinit var composeView: ComposeView
     private lateinit var params: WindowManager.LayoutParams
 
-    private val lifecycleRegistry = LifecycleRegistry(this)
-    private val store = ViewModelStore()
-    private val savedStateRegistryController = SavedStateRegistryController.create(this)
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var isIslandExpanded = false
-    private val hiddenState = mutableStateOf(false)
-    private val peekState = mutableStateOf(false)
-    private val peekSideState = mutableStateOf("right")
-    private var lastInteraction = System.currentTimeMillis()
+    private val landscapeSideState = mutableStateOf("NONE") // "NONE" (portrait), "LEFT", "RIGHT"
     private var collapseJob: Job? = null
     private var heightJob: Job? = null
     private var expandedHeightPx = 0
@@ -117,12 +124,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val density = resources.displayMetrics.density
 
-        // Dynamic Island bounding box (200dp x 36dp) sits cleanly below the status bar
         val collapsedWidthPx = (200 * density).toInt()
         val collapsedHeightPx = (36 * density).toInt()
-        val minTopY = getMinTopYPx()
-        val initialY = computeY(PochiPrefs.offsetYFlow.value)
-        val initialX = (PochiPrefs.offsetXFlow.value * density).toInt()
+
+        landscapeSideState.value = detectLandscapeSide()
 
         params = WindowManager.LayoutParams(
             collapsedWidthPx,
@@ -131,10 +136,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             collapsedFlags,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = initialX
-            y = initialY
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -145,29 +146,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             }
         }
 
-        val screenWidthPx = resources.displayMetrics.widthPixels
-        val screenHeightPx = resources.displayMetrics.heightPixels
-        val isLandscapeInit = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val expandedWidthPx = if (isLandscapeInit) {
-            (screenWidthPx - (32 * density).toInt()).coerceIn((320 * density).toInt(), (520 * density).toInt())
-        } else {
-            (screenWidthPx - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
-        }
-        val maxExpandedHeightPx = (screenHeightPx - minTopY - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
-        val defaultExpandedHeightPx = if (isLandscapeInit) {
-            (260 * density).toInt().coerceAtMost(maxExpandedHeightPx)
-            (210 * density).toInt().coerceAtMost(maxExpandedHeightPx)
-        } else {
-            (440 * density).toInt().coerceAtMost(maxExpandedHeightPx)
-            (230 * density).toInt().coerceAtMost(maxExpandedHeightPx)
-        }
-
-        fun updateInteraction() {
-            lastInteraction = System.currentTimeMillis()
-            if (peekState.value || hiddenState.value) {
-                restoreFromHidden(collapsedWidthPx, collapsedHeightPx, density)
-            }
-        }
+        applyFixedPositionAndSize(expanded = false, density = density)
 
         composeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@DynamicIslandService)
@@ -214,56 +193,24 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             }
 
             setContent {
-                val peek by peekState
-                val currentPeekSide by peekSideState
-                val hidden by hiddenState
+                val sideMode by landscapeSideState
                 PochiIslandBot(
+                    landscapeSide = sideMode,
                     onExpandChange = { expanded ->
-                        lastInteraction = System.currentTimeMillis()
-                        if (hiddenState.value) {
-                            hiddenState.value = false
-                            peekState.value = false
-                        }
                         isIslandExpanded = expanded
                         collapseJob?.cancel()
                         heightJob?.cancel()
-                        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-                        val curSw = resources.displayMetrics.widthPixels
-                        val curSh = resources.displayMetrics.heightPixels
-                        val curMinTop = getMinTopYPx()
-                        val curExpW = if (isLandscape) {
-                            (curSw - (32 * density).toInt()).coerceIn((320 * density).toInt(), (520 * density).toInt())
-                        } else {
-                            (curSw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
-                        }
-                        val curMaxExpH = (curSh - curMinTop - (16 * density).toInt()).coerceAtLeast((240 * density).toInt())
-                        val curDefExpH = if (isLandscape) {
-                            (320 * density).toInt().coerceAtMost(curMaxExpH)
-                        } else {
-                            (450 * density).toInt().coerceAtMost(curMaxExpH)
-                        }
+                        landscapeSideState.value = detectLandscapeSide()
 
                         if (expanded) {
-                            params.flags = expandedFlags
-                            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-                            params.x = 0
-                            params.y = curMinTop
-                            params.width = curExpW
-                            params.height = if (expandedHeightPx > 0) {
-                                expandedHeightPx.coerceIn((280 * density).toInt(), curMaxExpH)
-                            } else {
-                                curDefExpH
-                            }
+                            applyFixedPositionAndSize(expanded = true, density = density)
                             applyLayout()
                         } else {
                             params.flags = collapsedFlags
                             applyLayout()
                             collapseJob = serviceScope.launch {
-                                delay(320)
-                                params.width = collapsedWidthPx
-                                params.height = collapsedHeightPx
-                                params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
-                                params.y = computeY(PochiPrefs.offsetYFlow.value)
+                                delay(300)
+                                applyFixedPositionAndSize(expanded = false, density = density)
                                 applyLayout()
                             }
                         }
@@ -277,45 +224,13 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                             }
                             heightJob?.cancel()
                             heightJob = serviceScope.launch {
-                                delay(260)
+                                delay(240)
                                 if (isIslandExpanded) {
-                                    val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-                                    val curSw = resources.displayMetrics.widthPixels
-                                    val curSh = resources.displayMetrics.heightPixels
-                                    val curMinTop = getMinTopYPx()
-                                    val curExpW = if (isLandscape) {
-                                        (curSw - (32 * density).toInt()).coerceIn((320 * density).toInt(), (520 * density).toInt())
-                                    } else {
-                                        (curSw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
-                                    }
-                                    val curMaxExpH = (curSh - curMinTop - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
-                                    params.width = curExpW
-                                    params.height = expandedHeightPx.coerceIn((160 * density).toInt(), curMaxExpH)
+                                    applyFixedPositionAndSize(expanded = true, density = density)
                                     applyLayout()
                                 }
                             }
                         }
-                    },
-                    isHidden = hidden,
-                    peekMode = peek,
-                    peekSide = currentPeekSide,
-                    onRestoreFromHidden = { updateInteraction() },
-                    onDragBubble = { dx, dy ->
-                        lastInteraction = System.currentTimeMillis()
-                        if (!hiddenState.value && !isIslandExpanded) {
-                            val sw = resources.displayMetrics.widthPixels
-                            val sh = resources.displayMetrics.heightPixels
-                            val curMinTop = getMinTopYPx()
-                            val maxBottomY = (sh - params.height - (16 * density).toInt()).coerceAtLeast(curMinTop)
-                            // Allow flexible horizontal and vertical movement across the display
-                            params.x = (params.x + dx.toInt()).coerceIn(-sw / 2 + params.width / 4, sw / 2 - params.width / 4)
-                            params.y = (params.y + dy.toInt()).coerceIn(curMinTop, maxBottomY)
-                            applyLayout()
-                        }
-                    },
-                    onDragEnd = {
-                        lastInteraction = System.currentTimeMillis()
-                        finishDrag(density)
                     },
                     onPowerOffService = {
                         stopSelf()
@@ -333,20 +248,102 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         }
 
         registerScreenshotObserver()
+    }
 
-        serviceScope.launch {
-            combine(PochiPrefs.offsetXFlow, PochiPrefs.offsetYFlow) { xDp, yDp ->
-                Pair(xDp, yDp)
-            }.collect { (xDp, yDp) ->
-                if (::composeView.isInitialized && ::params.isInitialized) {
-                    if (!isIslandExpanded && !hiddenState.value) {
-                        params.x = (xDp * density).toInt()
-                        params.y = computeY(yDp)
-                        applyLayout()
-                    }
+    @Suppress("DEPRECATION")
+    private fun detectLandscapeSide(): String {
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        if (!isLandscape) return "NONE"
+        val rot = runCatching { windowManager.defaultDisplay.rotation }.getOrDefault(Surface.ROTATION_90)
+        return if (rot == Surface.ROTATION_270) "RIGHT" else "LEFT"
+    }
+
+    /**
+     * Strictly locks Pochi's position so it cannot be dragged or shifted off-center:
+     * - Portrait ("NONE"): Exact horizontal center at top (`Gravity.TOP or Gravity.CENTER_HORIZONTAL`, `x = 0`, `y = statusBarHeight`).
+     * - Landscape ("LEFT" / "RIGHT"): Docked directly on the side edge of the phone screen (`Gravity.START/END or Gravity.CENTER_VERTICAL`, `x = 0`, `y = 0`).
+     */
+    private fun applyFixedPositionAndSize(expanded: Boolean, density: Float) {
+        val sw = resources.displayMetrics.widthPixels
+        val sh = resources.displayMetrics.heightPixels
+        val side = detectLandscapeSide()
+        landscapeSideState.value = side
+        val minTopY = getMinTopYPx()
+
+        if (expanded) {
+            params.flags = expandedFlags
+            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            val expW = if (side != "NONE") {
+                (sw - (48 * density).toInt()).coerceIn((320 * density).toInt(), (480 * density).toInt())
+            } else {
+                (sw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
+            }
+            val maxExpH = (sh - minTopY - (16 * density).toInt()).coerceAtLeast((220 * density).toInt())
+            val defExpH = if (side != "NONE") {
+                (290 * density).toInt().coerceAtMost(maxExpH)
+            } else {
+                (420 * density).toInt().coerceAtMost(maxExpH)
+            }
+            val targetH = if (expandedHeightPx > 0) {
+                expandedHeightPx.coerceIn((220 * density).toInt(), maxExpH)
+            } else {
+                defExpH
+            }
+
+            params.width = expW
+            params.height = targetH
+
+            when (side) {
+                "LEFT" -> {
+                    params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    params.x = 0
+                    params.y = 0
+                }
+                "RIGHT" -> {
+                    params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                    params.x = 0
+                    params.y = 0
+                }
+                else -> {
+                    params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    params.x = 0
+                    params.y = minTopY
+                }
+            }
+        } else {
+            params.flags = collapsedFlags
+            when (side) {
+                "LEFT" -> {
+                    params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    params.width = (176 * density).toInt()
+                    params.height = (36 * density).toInt()
+                    params.x = 0
+                    params.y = 0
+                }
+                "RIGHT" -> {
+                    params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                    params.width = (176 * density).toInt()
+                    params.height = (36 * density).toInt()
+                    params.x = 0
+                    params.y = 0
+                }
+                else -> {
+                    params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    params.width = (200 * density).toInt()
+                    params.height = (36 * density).toInt()
+                    params.x = 0
+                    params.y = minTopY
                 }
             }
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!::composeView.isInitialized || !::params.isInitialized) return
+        val density = resources.displayMetrics.density
+        applyFixedPositionAndSize(expanded = isIslandExpanded, density = density)
+        applyLayout()
     }
 
     private fun registerScreenshotObserver() {
@@ -433,114 +430,17 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     }
 
     private fun getMinTopYPx(): Int {
-        // Attaches flush right at the bottom edge of the phone status bar (0dp gap)
-        // so the Notch looks seamlessly fused with the top bar while never covering clock/battery icons.
         return getStatusBarHeightPx()
     }
-
-    private fun computeY(userOffsetYDp: Int): Int {
-        val density = resources.displayMetrics.density
-        val minTopY = getMinTopYPx()
-        val userPx = (userOffsetYDp * density).toInt()
-        return (minTopY + userPx).coerceAtLeast(minTopY)
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        if (!::composeView.isInitialized || !::params.isInitialized) return
-
-        val density = resources.displayMetrics.density
-        val sw = resources.displayMetrics.widthPixels
-        val sh = resources.displayMetrics.heightPixels
-        val isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val minTopY = getMinTopYPx()
-
-        // 1. Re-clamp horizontal position within new screen bounds
-        params.x = params.x.coerceIn(-sw / 2 + params.width / 4, sw / 2 - params.width / 4)
-
-        // 2. Re-clamp vertical position below infobar and within landscape bounds
-        val maxBottomY = (sh - params.height - (12 * density).toInt()).coerceAtLeast(minTopY)
-        params.y = params.y.coerceIn(minTopY, maxBottomY)
-
-        // 3. Responsive dimension adaptation when phone is tilted (miring / landscape)
-        if (isIslandExpanded) {
-            val expandedWidthPx = if (isLandscape) {
-                (sw - (32 * density).toInt()).coerceIn((320 * density).toInt(), (520 * density).toInt())
-            } else {
-                (sw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
-            }
-            val maxExpandedHeightPx = (sh - minTopY - (16 * density).toInt()).coerceAtLeast((180 * density).toInt())
-            params.width = expandedWidthPx
-            params.height = params.height.coerceIn((180 * density).toInt(), maxExpandedHeightPx)
-        } else {
-            params.width = (228 * density).toInt()
-            params.height = (34 * density).toInt()
-            params.width = (200 * density).toInt()
-            params.height = (36 * density).toInt()
-        }
-
-        applyLayout()
-    }
-
-    private fun finishDrag(density: Float) {
-        if (hiddenState.value || isIslandExpanded) return
-        val screenWidthPx = resources.displayMetrics.widthPixels
-        val edgeMargin = (16 * density).toInt()
-        if (params.x > screenWidthPx / 2 - edgeMargin) {
-            hideAtEdge(right = true, density = density)
-        } else if (params.x < -(screenWidthPx / 2 - edgeMargin)) {
-            hideAtEdge(right = false, density = density)
-        } else {
-            val minTopY = getMinTopYPx()
-            val savedY = ((params.y - minTopY) / density).toInt().coerceAtLeast(0)
-            val savedX = (params.x / density).toInt()
-            PochiPrefs.saveOffsets(this, savedX, savedY)
-        }
-    }
-
-    private fun hideAtEdge(right: Boolean, density: Float) {
-        val side = if (right) "right" else "left"
-        peekSideState.value = side
-        peekState.value = true
-        hiddenState.value = true
-        val peekWidthPx = (64 * density).toInt()
-        val peekHeightPx = (64 * density).toInt()
-        val screenWidthPx = resources.displayMetrics.widthPixels
-        val screenHeightPx = resources.displayMetrics.heightPixels
-        val minTopY = getMinTopYPx()
-        params.flags = collapsedFlags
-        params.width = peekWidthPx
-        params.height = peekHeightPx
-        params.x = if (right) {
-            screenWidthPx / 2 - peekWidthPx / 2
-        } else {
-            -(screenWidthPx / 2 - peekWidthPx / 2)
-        }
-        params.y = params.y.coerceIn(minTopY, screenHeightPx - peekHeightPx - (24 * density).toInt())
-        applyLayout()
-    }
-
-    private fun restoreFromHidden(collapsedWidthPx: Int, collapsedHeightPx: Int, density: Float) {
-        hiddenState.value = false
-        peekState.value = false
-        params.flags = collapsedFlags
-        params.width = collapsedWidthPx
-        params.height = collapsedHeightPx
-        params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
-        params.y = computeY(PochiPrefs.offsetYFlow.value)
-        applyLayout()
-    }
-
-
 
     private fun startAsForeground() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Pochi Dynamic Island",
+                "Pochi Dynamic Notch",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Keeps Pochi 120fps Dynamic Island active at the top cutout"
+                description = "Keeps Pochi active at the screen cutout"
                 setShowBadge(false)
             }
             val nm = getSystemService(NotificationManager::class.java)
@@ -555,7 +455,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Pochi Island Active")
+            .setContentTitle("Pochi Active")
             .setContentText("Tap to open Pochi settings")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(openAppIntent)

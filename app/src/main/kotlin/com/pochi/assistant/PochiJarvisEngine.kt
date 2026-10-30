@@ -84,8 +84,8 @@ sealed class PochiRichCard {
         val unitPrefix: String = "",
         val unitSuffix: String = "",
         val growthBadge: String = "+18.4%",
-        val colorStart: Long = 0xFF9D4EDD,
-        val colorEnd: Long = 0xFF00F5D4
+        val colorStart: Long = 0xFF1D4ED8,
+        val colorEnd: Long = 0xFF38BDF8
     ) : PochiRichCard()
 
     data class Weather(
@@ -155,17 +155,17 @@ object PochiJarvisEngine {
     )
 
     private val knownCoins = listOf(
-        CoinMeta("BTC", "Bitcoin", "BTCUSDT", "bitcoin", 94250.0, 4.38, 0xFFF7931A, 0xFFFFD166),
-        CoinMeta("ETH", "Ethereum", "ETHUSDT", "ethereum", 3280.5, 3.12, 0xFF627EEA, 0xFF00F5D4),
-        CoinMeta("SOL", "Solana", "SOLUSDT", "solana", 214.8, 7.64, 0xFF9945FF, 0xFF14F195),
-        CoinMeta("BNB", "BNB Chain", "BNBUSDT", "binancecoin", 658.0, 1.95, 0xFFF3BA2F, 0xFFFF9F1C),
-        CoinMeta("XRP", "Ripple XRP", "XRPUSDT", "ripple", 2.42, 5.40, 0xFF00A8E8, 0xFF9D4EDD),
-        CoinMeta("DOGE", "Dogecoin", "DOGEUSDT", "dogecoin", 0.368, 6.20, 0xFFC2A633, 0xFFFFE66D),
+        CoinMeta("BTC", "Bitcoin", "BTCUSDT", "bitcoin", 94250.0, 4.38, 0xFF1D4ED8, 0xFF38BDF8),
+        CoinMeta("ETH", "Ethereum", "ETHUSDT", "ethereum", 3280.5, 3.12, 0xFF2563EB, 0xFF00F5D4),
+        CoinMeta("SOL", "Solana", "SOLUSDT", "solana", 214.8, 7.64, 0xFF0284C7, 0xFF14F195),
+        CoinMeta("BNB", "BNB Chain", "BNBUSDT", "binancecoin", 658.0, 1.95, 0xFF1E40AF, 0xFF38BDF8),
+        CoinMeta("XRP", "Ripple XRP", "XRPUSDT", "ripple", 2.42, 5.40, 0xFF00A8E8, 0xFF1D4ED8),
+        CoinMeta("DOGE", "Dogecoin", "DOGEUSDT", "dogecoin", 0.368, 6.20, 0xFF0369A1, 0xFF38BDF8),
         CoinMeta("TON", "Toncoin", "TONUSDT", "the-open-network", 5.84, 2.85, 0xFF0088CC, 0xFF38EF7D),
-        CoinMeta("ADA", "Cardano", "ADAUSDT", "cardano", 0.98, 3.45, 0xFF3CC8C8, 0xFF5A189A),
-        CoinMeta("PEPE", "Pepe", "PEPEUSDT", "pepe", 0.0000195, 11.4, 0xFF00F5D4, 0xFF34C759),
-        CoinMeta("SUI", "Sui Network", "SUIUSDT", "sui", 3.45, 8.15, 0xFF4CC9F0, 0xFF7209B7),
-        CoinMeta("AVAX", "Avalanche", "AVAXUSDT", "avalanche-2", 38.9, 4.10, 0xFFE84142, 0xFFFF758F)
+        CoinMeta("ADA", "Cardano", "ADAUSDT", "cardano", 0.98, 3.45, 0xFF1D4ED8, 0xFF3CC8C8),
+        CoinMeta("PEPE", "Pepe", "PEPEUSDT", "pepe", 0.0000195, 11.4, 0xFF00F5D4, 0xFF0284C7),
+        CoinMeta("SUI", "Sui Network", "SUIUSDT", "sui", 3.45, 8.15, 0xFF4CC9F0, 0xFF1D4ED8),
+        CoinMeta("AVAX", "Avalanche", "AVAXUSDT", "avalanche-2", 38.9, 4.10, 0xFF1E3A8A, 0xFF38BDF8)
     )
 
     /**
@@ -461,7 +461,7 @@ object PochiJarvisEngine {
             if (parsed.size >= 3) {
                 return PochiRichCard.Chart(
                     title = title,
-                    subtitle = "Visualisasi Data Real-Time • Jarvis Analytics",
+                    subtitle = "Visualisasi Data Real-Time • Pochi Analytics",
                     points = parsed,
                     growthBadge = "+24.6%"
                 )
@@ -506,8 +506,8 @@ object PochiJarvisEngine {
                     unitPrefix = "Rp ",
                     unitSuffix = "K",
                     growthBadge = "-8.2% Hemat",
-                    colorStart = 0xFFFF2A85,
-                    colorEnd = 0xFFFFB703
+                    colorStart = 0xFF0A2463,
+                    colorEnd = 0xFF38BDF8
                 )
             }
             lower.contains("fokus") || lower.contains("produktivitas") || lower.contains("kerja") || lower.contains("belajar") -> {
@@ -526,8 +526,8 @@ object PochiJarvisEngine {
                     ),
                     unitSuffix = " mnt",
                     growthBadge = "+32% Fokus",
-                    colorStart = 0xFF7B2CBF,
-                    colorEnd = 0xFF00F5D4
+                    colorStart = 0xFF1D4ED8,
+                    colorEnd = 0xFF38BDF8
                 )
             }
             else -> {
@@ -543,8 +543,8 @@ object PochiJarvisEngine {
                         "Now" to 136f
                     ),
                     growthBadge = "+41.2%",
-                    colorStart = 0xFF9D4EDD,
-                    colorEnd = 0xFF00F5D4
+                    colorStart = 0xFF1D4ED8,
+                    colorEnd = 0xFF38BDF8
                 )
             }
         }
@@ -579,7 +579,7 @@ object PochiJarvisEngine {
         val availMb = ((memInfo.availMem / (1024 * 1024)).toInt()).coerceIn(512, totalMb)
         val usedMb = (totalMb - availMb).coerceAtLeast(1024)
 
-        val screenApp = PochiSignals.screenApp.value.ifBlank { "Pochi Jarvis Home" }
+        val screenApp = PochiSignals.screenApp.value.ifBlank { "Pochi Home" }
         val media = PochiSignals.mediaPlayback.value
         val activeMedia = if (media.hasTrack) "${media.title} • ${media.artist}" else "Tidak ada musik diputar"
         val uptimeHrs = ((SystemClock.elapsedRealtime() / (1000L * 3600L)).toInt()).coerceAtLeast(1)
@@ -597,7 +597,7 @@ object PochiJarvisEngine {
 
     suspend fun fetchKnowledgeCard(rawQuery: String): PochiRichCard.Knowledge? = withContext(Dispatchers.IO) {
         val clean = rawQuery
-            .replace(Regex("""^(?:tolong\s+|pochi\s+|jarvis\s+)?(?:carikan|cari|apa\s+itu|siapa\s+itu|siapa|jelaskan\s+tentang|info\s+tentang)\s+""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""^(?:tolong\s+|pochi\s+)?(?:carikan|cari|apa\s+itu|siapa\s+itu|siapa|jelaskan\s+tentang|info\s+tentang)\s+""", RegexOption.IGNORE_CASE), "")
             .trim()
         if (clean.length < 2) return@withContext null
 
@@ -608,7 +608,7 @@ object PochiJarvisEngine {
                     requestMethod = "GET"
                     connectTimeout = 4000
                     readTimeout = 4000
-                    setRequestProperty("User-Agent", "PochiJarvis/2.0")
+                    setRequestProperty("User-Agent", "PochiAI/2.0")
                 }
                 if (conn.responseCode in 200..299) {
                     val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
@@ -625,7 +625,7 @@ object PochiJarvisEngine {
                             tags = listOfNotNull(
                                 desc.takeIf { it.isNotBlank() }?.take(28),
                                 "Verified Data",
-                                "Jarvis Search"
+                                "Pochi Search"
                             )
                         )
                     }
@@ -639,7 +639,7 @@ object PochiJarvisEngine {
     }
 
     /**
-     * Unified Jarvis query processor used by BOTH the Notch Dynamic Island and the Main App.
+     * Unified Pochi query processor used by BOTH the Notch Dynamic Island and the Main App.
      */
     suspend fun processQuery(
         context: Context,
@@ -677,7 +677,7 @@ object PochiJarvisEngine {
                 if (droppedFile.textPreview.isNotBlank()) {
                     "File teks/kode '${droppedFile.fileName}' (${droppedFile.formattedSize}) berhasil dipindai (${droppedFile.textPreview.lines().size} baris terdeteksi). Siap diolah, Tuan Andre!"
                 } else {
-                    "Berkas '${droppedFile.fileName}' (${droppedFile.mimeType} • ${droppedFile.formattedSize}) berhasil diterima di Notch Jarvis, Tuan Andre."
+                    "Berkas '${droppedFile.fileName}' (${droppedFile.mimeType} • ${droppedFile.formattedSize}) berhasil diterima di Pochi, Tuan Andre."
                 }
             }
 
@@ -1044,7 +1044,7 @@ private fun CryptoRichCardUI(
                         .border(1.dp, badgeColor.copy(alpha = 0.45f), RoundedCornerShape(50))
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
-                    val sign = if (isUp) "▲ +" else "▼ "
+                    val sign = if (isUp) "+" else ""
                     Text(
                         text = "$sign${String.format(Locale.US, "%.2f", data.change24h)}%",
                         color = badgeColor,
@@ -1224,14 +1224,14 @@ private fun ChartRichCardUI(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .background(Color(0xFF1A1A26))
+                        .background(Color(0xFF0A1931))
                         .clickable { isBarMode = !isBarMode }
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = if (isBarMode) "📊 Bar" else "📈 Spline",
+                        text = if (isBarMode) "BAR" else "SPLINE",
                         color = cEnd,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -1495,9 +1495,9 @@ private fun WeatherRichCardUI(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                WeatherPillStat("💧 Lembap", "${data.humidity}%")
-                WeatherPillStat("🌬️ Angin", "${data.windKmh} km/j")
-                WeatherPillStat("☀️ UV Index", "${data.uvIndex}")
+                WeatherPillStat("Lembap", "${data.humidity}%")
+                WeatherPillStat("Angin", "${data.windKmh} km/j")
+                WeatherPillStat("UV Index", "${data.uvIndex}")
             }
 
             // Hourly Forecast Row
@@ -1550,15 +1550,15 @@ private fun PrayerRichCardUI(
             .background(
                 Brush.linearGradient(
                     listOf(
-                        Color(0xFF7B2CBF).copy(alpha = 0.26f),
-                        Color(0xFF0D0D15),
-                        Color(0xFF00F5D4).copy(alpha = 0.16f)
+                        Color(0xFF0A2463).copy(alpha = 0.45f),
+                        Color(0xFF050A14),
+                        Color(0xFF1D4ED8).copy(alpha = 0.25f)
                     )
                 )
             )
             .border(
                 1.dp,
-                Brush.horizontalGradient(listOf(Color(0xFF9D4EDD).copy(alpha = 0.6f), Color(0xFF00F5D4).copy(alpha = 0.45f))),
+                Brush.horizontalGradient(listOf(Color(0xFF1D4ED8).copy(alpha = 0.65f), Color(0xFF38BDF8).copy(alpha = 0.45f))),
                 RoundedCornerShape(24.dp)
             )
             .padding(if (compact) 12.dp else 16.dp)
@@ -1571,8 +1571,8 @@ private fun PrayerRichCardUI(
             ) {
                 Column {
                     Text(
-                        text = "🕌 Jadwal Sholat • ${data.city}",
-                        color = Color(0xFFE0AAFF),
+                        text = "JADWAL SHOLAT • ${data.city.uppercase(Locale.US)}",
+                        color = Color(0xFF38BDF8),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1587,13 +1587,13 @@ private fun PrayerRichCardUI(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .background(Color(0xFF00F5D4).copy(alpha = 0.16f))
-                        .border(1.dp, Color(0xFF00F5D4).copy(alpha = 0.4f), RoundedCornerShape(50))
+                        .background(Color(0xFF38BDF8).copy(alpha = 0.16f))
+                        .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f), RoundedCornerShape(50))
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = data.remainingText,
-                        color = Color(0xFF00F5D4),
+                        color = Color(0xFF38BDF8),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1611,8 +1611,8 @@ private fun PrayerRichCardUI(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(
-                                if (isNext) Brush.verticalGradient(listOf(Color(0xFF9D4EDD), Color(0xFF5A189A)))
-                                else Brush.verticalGradient(listOf(Color(0xFF181824), Color(0xFF14141E)))
+                                if (isNext) Brush.verticalGradient(listOf(Color(0xFF1D4ED8), Color(0xFF0A2463)))
+                                else Brush.verticalGradient(listOf(Color(0xFF0A1428), Color(0xFF060B16)))
                             )
                             .padding(horizontal = if (compact) 8.dp else 10.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1620,13 +1620,13 @@ private fun PrayerRichCardUI(
                     ) {
                         Text(
                             text = item.nameId,
-                            color = if (isNext) Color.White else Color(0xFF9E9EB0),
+                            color = if (isNext) Color.White else Color(0xFF8DA2C0),
                             fontSize = 10.sp,
                             fontWeight = if (isNext) FontWeight.Bold else FontWeight.Medium
                         )
                         Text(
                             text = item.formatted,
-                            color = if (isNext) Color(0xFF00F5D4) else Color.White,
+                            color = if (isNext) Color(0xFF38BDF8) else Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -1657,15 +1657,15 @@ private fun FileDropRichCardUI(
             .background(
                 Brush.linearGradient(
                     listOf(
-                        Color(0xFF7B2CBF).copy(alpha = 0.25f),
-                        Color(0xFF0E0E17),
-                        Color(0xFF4CC9F0).copy(alpha = 0.18f)
+                        Color(0xFF0A2463).copy(alpha = 0.42f),
+                        Color(0xFF050A14),
+                        Color(0xFF1D4ED8).copy(alpha = 0.22f)
                     )
                 )
             )
             .border(
                 1.dp,
-                Brush.horizontalGradient(listOf(Color(0xFFC77DFF), Color(0xFF4CC9F0))),
+                Brush.horizontalGradient(listOf(Color(0xFF1D4ED8), Color(0xFF38BDF8))),
                 RoundedCornerShape(24.dp)
             )
             .padding(if (compact) 12.dp else 16.dp)
@@ -1685,12 +1685,12 @@ private fun FileDropRichCardUI(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Brush.linearGradient(listOf(Color(0xFF9D4EDD), Color(0xFF4CC9F0)))),
+                            .background(Brush.linearGradient(listOf(Color(0xFF1D4ED8), Color(0xFF38BDF8)))),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = data.fileName.substringAfterLast('.', "FILE").uppercase(Locale.US).take(4),
-                            color = Color(0xFF050508),
+                            color = Color(0xFF040814),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -1706,7 +1706,7 @@ private fun FileDropRichCardUI(
                         )
                         Text(
                             text = "${data.mimeType} • ${data.sizeLabel}",
-                            color = Color(0xFF90E0EF),
+                            color = Color(0xFF38BDF8),
                             fontSize = 10.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -1717,12 +1717,12 @@ private fun FileDropRichCardUI(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .background(Color(0xFF00F5D4).copy(alpha = 0.16f))
+                        .background(Color(0xFF38BDF8).copy(alpha = 0.16f))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "✓ Inspected",
-                        color = Color(0xFF00F5D4),
+                        text = "INSPECTED",
+                        color = Color(0xFF38BDF8),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1744,7 +1744,7 @@ private fun FileDropRichCardUI(
                 val beamX = (size.width - beamW) * scanPos
                 drawRoundRect(
                     brush = Brush.horizontalGradient(
-                        listOf(Color.Transparent, Color(0xFF00F5D4), Color(0xFFC77DFF), Color.Transparent),
+                        listOf(Color.Transparent, Color(0xFF38BDF8), Color(0xFF1D4ED8), Color.Transparent),
                         startX = beamX,
                         endX = beamX + beamW
                     ),
@@ -1760,12 +1760,12 @@ private fun FileDropRichCardUI(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF07070C))
+                        .background(Color(0xFF040812))
                         .padding(10.dp)
                 ) {
                     Text(
                         text = data.snippet.take(220),
-                        color = Color(0xFFD8D8E8),
+                        color = Color(0xFFD8E4F8),
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         maxLines = if (compact) 3 else 5,
@@ -1792,15 +1792,15 @@ private fun SystemStatusRichCardUI(
             .background(
                 Brush.linearGradient(
                     listOf(
-                        Color(0xFF34C759).copy(alpha = 0.20f),
-                        Color(0xFF0D0D15),
-                        Color(0xFF7B2CBF).copy(alpha = 0.20f)
+                        Color(0xFF0A2463).copy(alpha = 0.45f),
+                        Color(0xFF050A14),
+                        Color(0xFF1D4ED8).copy(alpha = 0.25f)
                     )
                 )
             )
             .border(
                 1.dp,
-                Brush.horizontalGradient(listOf(Color(0xFF00F5D4).copy(alpha = 0.55f), Color(0xFF9D4EDD).copy(alpha = 0.45f))),
+                Brush.horizontalGradient(listOf(Color(0xFF38BDF8).copy(alpha = 0.55f), Color(0xFF1D4ED8).copy(alpha = 0.45f))),
                 RoundedCornerShape(24.dp)
             )
             .padding(if (compact) 12.dp else 16.dp)
@@ -1812,14 +1812,14 @@ private fun SystemStatusRichCardUI(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "⚡ Jarvis System Telemetry",
+                    text = "POCHI SYSTEM TELEMETRY",
                     color = Color.White,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Uptime ${data.uptimeHours}h",
-                    color = Color(0xFF00F5D4),
+                    color = Color(0xFF38BDF8),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -1837,8 +1837,8 @@ private fun SystemStatusRichCardUI(
                         .background(Color.White.copy(alpha = 0.05f))
                         .padding(10.dp)
                 ) {
-                    Text(text = if (data.isCharging) "⚡ Charging" else "🔋 Baterai", color = Color(0xFFA0A0B2), fontSize = 10.sp)
-                    Text(text = "${(data.batteryPct * progress).toInt()}%", color = Color(0xFF00F5D4), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(text = if (data.isCharging) "CHARGING" else "BATERAI", color = Color(0xFF8DA2C0), fontSize = 10.sp)
+                    Text(text = "${(data.batteryPct * progress).toInt()}%", color = Color(0xFF38BDF8), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                 }
 
                 // RAM Gauge Pill
@@ -1849,14 +1849,14 @@ private fun SystemStatusRichCardUI(
                         .background(Color.White.copy(alpha = 0.05f))
                         .padding(10.dp)
                 ) {
-                    Text(text = "🧠 Memori RAM", color = Color(0xFFA0A0B2), fontSize = 10.sp)
-                    Text(text = "${(ramRatio * 100 * progress).toInt()}%", color = Color(0xFFC77DFF), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(text = "MEMORI RAM", color = Color(0xFF8DA2C0), fontSize = 10.sp)
+                    Text(text = "${(ramRatio * 100 * progress).toInt()}%", color = Color(0xFF60A5FA), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                 }
             }
 
             Text(
-                text = "📱 Fokus Layar: ${data.activeApp}  •  🎵 ${data.activeMedia.take(28)}",
-                color = Color(0xFFD0D0E0),
+                text = "Layar: ${data.activeApp}  •  Media: ${data.activeMedia.take(28)}",
+                color = Color(0xFFD0DCF0),
                 fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1877,15 +1877,15 @@ private fun KnowledgeRichCardUI(
             .background(
                 Brush.linearGradient(
                     listOf(
-                        Color(0xFF5A189A).copy(alpha = 0.28f),
-                        Color(0xFF0E0E17),
-                        Color(0xFF0077B6).copy(alpha = 0.22f)
+                        Color(0xFF0A2463).copy(alpha = 0.42f),
+                        Color(0xFF050A14),
+                        Color(0xFF0284C7).copy(alpha = 0.24f)
                     )
                 )
             )
             .border(
                 1.dp,
-                Brush.horizontalGradient(listOf(Color(0xFFC77DFF).copy(alpha = 0.55f), Color(0xFF4CC9F0).copy(alpha = 0.45f))),
+                Brush.horizontalGradient(listOf(Color(0xFF1D4ED8).copy(alpha = 0.60f), Color(0xFF38BDF8).copy(alpha = 0.45f))),
                 RoundedCornerShape(24.dp)
             )
             .padding(if (compact) 12.dp else 16.dp)
