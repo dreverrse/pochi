@@ -117,7 +117,8 @@ data class LaunchableAppInfo(
 
 private enum class IslandMode {
     COLLAPSED,
-    EXPANDED
+    EXPANDED,
+    EYES
 }
 
 /**
@@ -126,7 +127,7 @@ private enum class IslandMode {
  * Modeled directly on official Apple Dynamic Island live activities:
  * 1. Podcasts / Spotify (Media Player with Album Art, Progress Bar, Large Play/Pause)
  * 2. Telegram / FaceTime (Pochi Live Call with expressive eyes avatar & Large Red/Gray Buttons)
- * 3. Apple Health Activity Rings (Hydration 💧, Tasks 🎯, Focus ⚡, Budget 💰)
+ * 3. Apple Health Activity Rings (Hydration, Tasks, Focus, Budget)
  * 4. Weather & UV Rainbow Equalizer Bars & Prayer Schedule
  * 5. Yandex Go / Wash Timer with animated route progress & big buttons
  */
@@ -394,7 +395,11 @@ fun PochiIslandBot(
         },
         label = "islandWidth"
     ) { mode ->
-        if (mode == IslandMode.COLLAPSED) collapsedWidth else expandedWidth
+        when (mode) {
+            IslandMode.COLLAPSED -> collapsedWidth
+            IslandMode.EXPANDED -> expandedWidth
+            IslandMode.EYES -> 68.dp
+        }
     }
 
     val islandHeightAnim by transition.animateDp(
@@ -403,7 +408,11 @@ fun PochiIslandBot(
         },
         label = "islandHeight"
     ) { mode ->
-        if (mode == IslandMode.COLLAPSED) collapsedHeight else expandedHeight
+        when (mode) {
+            IslandMode.COLLAPSED -> collapsedHeight
+            IslandMode.EXPANDED -> expandedHeight
+            IslandMode.EYES -> 34.dp
+        }
     }
 
     // Authentic Apple Squircle Corner Radii: 18dp for capsule pill, 32dp for expanded card
@@ -413,13 +422,22 @@ fun PochiIslandBot(
         },
         label = "islandCornerRadius"
     ) { mode ->
-        if (mode == IslandMode.COLLAPSED) 18.dp else 32.dp
+        when (mode) {
+            IslandMode.COLLAPSED -> 18.dp
+            IslandMode.EXPANDED -> 32.dp
+            IslandMode.EYES -> 17.dp
+        }
     }
 
     val expandedContentAlpha by transition.animateFloat(
         transitionSpec = { tween(durationMillis = 160) },
         label = "expandedAlpha"
-    ) { mode -> if (mode == IslandMode.COLLAPSED) 0f else 1f }
+    ) { mode -> if (mode == IslandMode.EXPANDED) 1f else 0f }
+
+    val eyesContentAlpha by transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 140) },
+        label = "eyesAlpha"
+    ) { mode -> if (mode == IslandMode.EYES) 1f else 0f }
 
     val collapsedContentAlpha by transition.animateFloat(
         transitionSpec = { tween(durationMillis = 140) },
@@ -515,6 +533,7 @@ fun PochiIslandBot(
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
+                                val downTimeMs = System.currentTimeMillis()
                                 var accumulatedX = 0f
                                 var accumulatedY = 0f
                                 var isDragging = false
@@ -525,8 +544,15 @@ fun PochiIslandBot(
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                     if (change.changedToUp()) {
                                         if (!isDragging) {
-                                            customEmote = PochiEmote.HAPPY
-                                            setMode(IslandMode.EXPANDED)
+                                            val heldMs = System.currentTimeMillis() - downTimeMs
+                                            if (heldMs >= 450L) {
+                                                // Tahap 5: tahan kapsul -> mengecil jadi mata saja
+                                                customEmote = PochiEmote.CALM
+                                                setMode(IslandMode.EYES)
+                                            } else {
+                                                customEmote = PochiEmote.HAPPY
+                                                setMode(IslandMode.EXPANDED)
+                                            }
                                         } else {
                                             onDragEnd()
                                         }
@@ -645,6 +671,28 @@ fun PochiIslandBot(
                             }
                         }
                     }
+                }
+            }
+
+            // ================= 1B. EYES-ONLY (Tahap 5) =================
+            if (eyesContentAlpha > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = eyesContentAlpha }
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) { setMode(IslandMode.COLLAPSED) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    PochiMascot(
+                        state = botState,
+                        emoteOverride = activeEmote,
+                        size = 21.dp,
+                        eyeTrackerOffset = eyeGazeOffset,
+                        showBlackBacking = false
+                    )
                 }
             }
 
@@ -945,21 +993,43 @@ fun PochiIslandBot(
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
-                                    Text(
-                                        text = "🕌 ${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
-                                        color = textPrimary,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = if (isId) "🎯 $remaining tugas tersisa • $selectedCity" else "🎯 $remaining tasks left • $selectedCity",
-                                        color = textSecondary,
-                                        fontSize = 10.sp,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Mosque,
+                                            contentDescription = null,
+                                            tint = PochiDesign.AccentGold,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Text(
+                                            text = "${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
+                                            color = textPrimary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.CheckCircle,
+                                            contentDescription = null,
+                                            tint = PochiDesign.StatusGreen,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Text(
+                                            text = if (isId) "$remaining tugas tersisa • $selectedCity" else "$remaining tasks left • $selectedCity",
+                                            color = textSecondary,
+                                            fontSize = 10.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                     Text(
                                         text = if (isId) "Ketuk untuk aktivitas" else "Tap for activity",
                                         color = accentViolet,
@@ -1324,7 +1394,7 @@ fun PochiIslandBot(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // 4 Rings Preview Row: Water 💧, Tasks 🎯, Focus ⚡, Budget 💰
+                                // 4 Rings Preview Row: Water, Tasks, Focus, Budget
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1335,28 +1405,28 @@ fun PochiIslandBot(
                                         color = iosBlue,
                                         progress = (waterGlasses / 8f).coerceIn(0f, 1f),
                                         label = "${(waterGlasses * 0.25f)}L",
-                                        sublabel = "Air 💧"
+                                        sublabel = "Air"
                                     )
                                     // Ring 2: Tasks
                                     ActivityRingItem(
                                         color = iosGreen,
                                         progress = (doneTasks.toFloat() / totalTasks).coerceIn(0f, 1f),
                                         label = "$doneTasks/$totalTasks",
-                                        sublabel = "Tugas 🎯"
+                                        sublabel = "Tugas"
                                     )
                                     // Ring 3: Focus
                                     ActivityRingItem(
                                         color = iosAmber,
                                         progress = (completedFocusSessions / 4f).coerceIn(0f, 1f),
                                         label = "${completedFocusSessions * 25}m",
-                                        sublabel = "Fokus ⚡"
+                                        sublabel = "Fokus"
                                     )
                                     // Ring 4: Budget
                                     ActivityRingItem(
                                         color = iosPurple,
                                         progress = 0.65f,
                                         label = "${dailyBudgetRp / 1000}k",
-                                        sublabel = "Budget 💰"
+                                        sublabel = "Budget"
                                     )
                                 }
 
@@ -1379,12 +1449,23 @@ fun PochiIslandBot(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "+ 💧 Minum 250ml",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.WaterDrop,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "+ Minum 250ml",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                        }
                                     }
 
                                     // Big Green Focus Button
@@ -1404,12 +1485,23 @@ fun PochiIslandBot(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "▶ Fokus 25m",
-                                            color = Color.Black,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.PlayArrow,
+                                                contentDescription = null,
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "Fokus 25m",
+                                                color = Color.Black,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1430,7 +1522,7 @@ fun PochiIslandBot(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "$selectedCity • 32°C ☀️",
+                                        text = "$selectedCity • 32°C",
                                         color = textPrimary,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
@@ -1492,12 +1584,23 @@ fun PochiIslandBot(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "🕌 ${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
-                                            color = Color.Black,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Mosque,
+                                                contentDescription = null,
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                            Text(
+                                                text = "${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
+                                                color = Color.Black,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
                                     }
 
                                     Box(
@@ -1514,12 +1617,23 @@ fun PochiIslandBot(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "🔄 Update Cuaca",
-                                            color = textPrimary,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Refresh,
+                                                contentDescription = null,
+                                                tint = textPrimary,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                            Text(
+                                                text = "Update Cuaca",
+                                                color = textPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1606,12 +1720,23 @@ fun PochiIslandBot(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = if (isFocusPaused) "▶ Lanjut" else "⏸ Jeda",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isFocusPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                            Text(
+                                                text = if (isFocusPaused) "Lanjut" else "Jeda",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
                                     }
 
                                     Box(
@@ -1628,12 +1753,23 @@ fun PochiIslandBot(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "⏹ Selesai",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Stop,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                            Text(
+                                                text = "Selesai",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
                                     }
 
                                     Box(

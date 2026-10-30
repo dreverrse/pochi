@@ -317,7 +317,7 @@ fun HomeScreen(
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = if (isId) "🇮🇩 ID" else "🇬🇧 EN",
+                        text = if (isId) "ID" else "EN",
                         color = Color(0xFF007AFF),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -526,9 +526,11 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = "☀️",
-                            fontSize = 24.sp
+                        Icon(
+                            imageVector = Icons.Rounded.WbSunny,
+                            contentDescription = null,
+                            tint = PochiDesign.StatusAmber,
+                            modifier = Modifier.size(26.dp)
                         )
                         Column {
                             Text(
@@ -552,12 +554,23 @@ fun HomeScreen(
                             .background(Color(0xFFFF9500).copy(alpha = 0.18f))
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        Text(
-                            text = "🕌 ${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
-                            color = Color(0xFFFF9500),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Mosque,
+                                contentDescription = null,
+                                tint = Color(0xFFFF9500),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
+                                color = Color(0xFFFF9500),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -1142,7 +1155,7 @@ fun MemoryScreen() {
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
-                            text = "📱 HP • 💻 Laptop (Ready)",
+                            text = "HP • Laptop (Ready)",
                             color = Color(0xFFAF52DE),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -1628,7 +1641,7 @@ fun PermissionStatusRow(
     ) {
         Text(text = name, color = Color(0xFF8E8E93), fontSize = 12.sp)
         Text(
-            text = if (isGranted) "✅ Aktif" else "⚠️ Buka Izin",
+            text = if (isGranted) "Aktif" else "Buka Izin",
             color = if (isGranted) Color(0xFF34C759) else Color(0xFFFF9500),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
