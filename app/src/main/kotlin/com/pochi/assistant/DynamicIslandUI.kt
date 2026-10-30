@@ -49,6 +49,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -135,7 +137,8 @@ data class LaunchableAppInfo(
 private enum class IslandMode {
     COLLAPSED,
     EXPANDED,
-    EYES
+    EYES,
+    MINI
 }
 
 /**
@@ -158,7 +161,8 @@ fun PochiIslandBot(
     onRestoreFromHidden: () -> Unit,
     onDragBubble: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
-    onPowerOffService: () -> Unit
+    onPowerOffService: () -> Unit,
+    onMiniChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -250,6 +254,45 @@ fun PochiIslandBot(
     // bawah file) agar tik 1 detik tidak merekomposisi seluruh island
     // — perbaikan responsivitas Tahap 4.
 
+    // Tahap 8: bersembunyi otomatis — 10 detik tanpa interaksi,
+    // panel menutup sendiri lalu island menyusut jadi MINI (sangat
+    // kecil & tembus pandang) agar tidak menghalangi layar. Musik,
+    // timer fokus, unduhan, dan kartu persetujuan menahan penyusutan.
+    LaunchedEffect(islandMode, mediaPlayback.isPlaying, isFocusRunning, activeApproval, activeDownload, systemPeek) {
+        while (true) {
+            delay(500)
+            val idleMs = System.currentTimeMillis() - lastInteractionMs
+            if (idleMs < 10_000L) continue
+            when (islandMode) {
+                IslandMode.EXPANDED -> {
+                    if (activeApproval == null && !isListeningVoice) {
+                        setMode(IslandMode.COLLAPSED)
+                    }
+                }
+                IslandMode.COLLAPSED, IslandMode.EYES -> {
+                    if (!mediaPlayback.isPlaying && !isFocusRunning &&
+                        activeDownload == null && !peekActive
+                    ) {
+                        setMode(IslandMode.MINI)
+                    }
+                }
+                IslandMode.MINI -> Unit
+            }
+        }
+    }
+
+    // Saat MINI: musik mulai / peristiwa sistem -> tampil lagi sebentar
+    LaunchedEffect(mediaPlayback.isPlaying) {
+        if (mediaPlayback.isPlaying && islandMode == IslandMode.MINI) {
+            setMode(IslandMode.COLLAPSED)
+        }
+    }
+    LaunchedEffect(systemPeek) {
+        if (systemPeek != null && islandMode == IslandMode.MINI) {
+            setMode(IslandMode.COLLAPSED)
+        }
+    }
+
     // Lirikan kembali netral setelah sesaat (Tahap 7)
     LaunchedEffect(eyeGazeOffset) {
         if (eyeGazeOffset != Offset.Zero) {
@@ -326,6 +369,7 @@ fun PochiIslandBot(
     fun setMode(mode: IslandMode) {
         lastInteractionMs = System.currentTimeMillis()
         islandMode = mode
+        onMiniChange(mode == IslandMode.MINI)
         onExpandChange(mode == IslandMode.EXPANDED)
         if (mode == IslandMode.COLLAPSED) {
             if (isListeningVoice) {
@@ -333,6 +377,16 @@ fun PochiIslandBot(
                 runCatching { speechRecognizerRef?.stopListening() }
             }
         }
+    }
+
+    // Tahap 8: satu pintu navigasi halaman agar dock, titik, geser,
+    // dan kartu selalu konsisten urutan & rasanya.
+    fun goToPage(tab: PochiTab) {
+        if (activeTab != tab) {
+            activeTab = tab
+            PochiSignals.playTapHaptic(context)
+        }
+        lastInteractionMs = System.currentTimeMillis()
     }
 
     fun toggleVoiceListening() {
@@ -423,7 +477,7 @@ fun PochiIslandBot(
     } else {
         (screenWidth - 20.dp).coerceIn(336.dp, 380.dp)
     }
-    val expandedHeight = 264.dp
+    val expandedHeight = 288.dp
 
     val transition = updateTransition(targetState = islandMode, label = "islandTransition")
 
@@ -453,6 +507,7 @@ fun PochiIslandBot(
             IslandMode.COLLAPSED -> collapsedWidth
             IslandMode.EXPANDED -> expandedWidth
             IslandMode.EYES -> 68.dp
+            IslandMode.MINI -> 48.dp
         }
     }
 
@@ -470,6 +525,7 @@ fun PochiIslandBot(
             IslandMode.COLLAPSED -> collapsedHeight
             IslandMode.EXPANDED -> expandedHeight
             IslandMode.EYES -> 34.dp
+            IslandMode.MINI -> 22.dp
         }
     }
 
@@ -484,6 +540,7 @@ fun PochiIslandBot(
             IslandMode.COLLAPSED -> 18.dp
             IslandMode.EXPANDED -> 32.dp
             IslandMode.EYES -> 17.dp
+            IslandMode.MINI -> 11.dp
         }
     }
 
@@ -496,6 +553,11 @@ fun PochiIslandBot(
         transitionSpec = { tween(durationMillis = 140) },
         label = "eyesAlpha"
     ) { mode -> if (mode == IslandMode.EYES) 1f else 0f }
+
+    val miniContentAlpha by transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 160) },
+        label = "miniAlpha"
+    ) { mode -> if (mode == IslandMode.MINI) 1f else 0f }
 
     val collapsedContentAlpha by transition.animateFloat(
         transitionSpec = { tween(durationMillis = 140) },
@@ -869,6 +931,28 @@ fun PochiIslandBot(
                 }
             }
 
+            // ================= 1C. MINI (Tahap 8: sembunyi otomatis) =================
+            if (miniContentAlpha > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = miniContentAlpha * 0.72f }
+                        .pochiPress {
+                            customEmote = PochiEmote.HAPPY
+                            setMode(IslandMode.COLLAPSED)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    PochiMascot(
+                        state = botState,
+                        emoteOverride = displayEmote,
+                        size = 12.dp,
+                        eyeTrackerOffset = eyeGazeOffset,
+                        showBlackBacking = false
+                    )
+                }
+            }
+
             // ================= 2. EXPANDED LIVE ACTIVITY CARD =================
             if (expandedContentAlpha > 0.01f) {
                 Column(
@@ -883,14 +967,12 @@ fun PochiIslandBot(
                                     val idx = pageOrder.indexOf(activeTab)
                                     if (idx >= 0) {
                                         val next = when {
-                                            totalDrag < -60f && idx < pageOrder.lastIndex -> pageOrder[idx + 1]
-                                            totalDrag > 60f && idx > 0 -> pageOrder[idx - 1]
+                                            totalDrag < -44f && idx < pageOrder.lastIndex -> pageOrder[idx + 1]
+                                            totalDrag > 44f && idx > 0 -> pageOrder[idx - 1]
                                             else -> activeTab
                                         }
                                         if (next != activeTab) {
-                                            activeTab = next
-                                            lastInteractionMs = System.currentTimeMillis()
-                                            PochiSignals.playTapHaptic(context)
+                                            goToPage(next)
                                         }
                                     }
                                 },
@@ -1093,7 +1175,7 @@ fun PochiIslandBot(
                                 textSecondary = textSecondary,
                                 borderHairline = borderHairline,
                                 accentViolet = accentViolet,
-                                onOpenTab = { activeTab = it }
+                                onOpenTab = { goToPage(it) }
                             )
                         }
 
@@ -1155,7 +1237,9 @@ fun PochiIslandBot(
                             val totalTasks = tasks.size.coerceAtLeast(1)
 
                             Column(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 // 4 Rings Preview Row: Water, Tasks, Focus, Budget
@@ -1194,49 +1278,36 @@ fun PochiIslandBot(
                                     )
                                 }
 
-                                // Grafik minum per 3 jam (Tahap 6, ala Nusa)
-                                val bucketLabels = listOf("06", "09", "12", "15", "18", "21")
-                                val bucketMl = (0 until 6).map { b ->
-                                    waterLog.count { ts ->
-                                        val h = java.util.Calendar.getInstance()
-                                            .apply { timeInMillis = ts }
-                                            .get(java.util.Calendar.HOUR_OF_DAY)
-                                        h >= 6 + b * 3 && h < 9 + b * 3
-                                    } * 250
+                                // Kartu data mewah (Tahap 8, ala referensi):
+                                // kurva kumulatif minum dengan angka pahlawan.
+                                val sortedLog = waterLog.sorted()
+                                val cumulativePoints = buildList {
+                                    add(0f)
+                                    sortedLog.forEachIndexed { i, _ -> add((i + 1) * 250f) }
                                 }
-                                val bucketMax = (bucketMl.maxOrNull() ?: 0).coerceAtLeast(250)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Bottom
-                                ) {
-                                    bucketMl.forEachIndexed { i, ml ->
-                                        val barHeight by animateDpAsState(
-                                            targetValue = (6 + 18 * ml / bucketMax).dp,
-                                            animationSpec = spring(dampingRatio = 0.72f, stiffness = 210f),
-                                            label = "waterBar"
-                                        )
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .width(20.dp)
-                                                    .height(barHeight)
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(
-                                                        if (ml > 0) iosBlue else borderHairline
-                                                    )
-                                            )
-                                            Text(
-                                                text = bucketLabels[i],
-                                                color = textSecondary,
-                                                fontSize = 8.sp
-                                            )
-                                        }
-                                    }
+                                val totalMl = waterGlasses * 250
+                                val goalPct = (totalMl * 100 / 2000).coerceIn(0, 100)
+                                val lastDrink = sortedLog.lastOrNull()?.let { ts ->
+                                    java.text.SimpleDateFormat("HH:mm", Locale.US)
+                                        .format(java.util.Date(ts))
                                 }
+                                PochiDataCard(
+                                    title = if (isId) "Grafik minum hari ini" else "Today's hydration",
+                                    chipText = if (lastDrink != null) {
+                                        if (isId) "Terakhir $lastDrink" else "Last $lastDrink"
+                                    } else {
+                                        if (isId) "Belum minum" else "No drinks yet"
+                                    },
+                                    heroLabel = if (isId) "Target harian tercapai" else "Daily goal reached",
+                                    heroValue = "$goalPct%",
+                                    footer = if (isId) {
+                                        "Total $totalMl ml dari target 2.000 ml"
+                                    } else {
+                                        "$totalMl ml of 2,000 ml goal"
+                                    },
+                                    points = cumulativePoints,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
 
                                 // Large Tactile Buttons: Log Water & Start Focus
                                 Row(
@@ -1287,7 +1358,7 @@ fun PochiIslandBot(
                                                 isFocusRunning = true
                                                 isFocusPaused = false
                                                 focusRemainingSeconds = 25 * 60
-                                                activeTab = PochiTab.FOCUS
+                                                goToPage(PochiTab.FOCUS)
                                                 customEmote = PochiEmote.FOCUS
                                                 PochiSignals.playSuccessHaptic(context)
                                             },
@@ -1556,7 +1627,7 @@ fun PochiIslandBot(
                                             .clickable {
                                                 isFocusRunning = false
                                                 focusRemainingSeconds = 25 * 60
-                                                activeTab = PochiTab.TODAY
+                                                goToPage(PochiTab.TODAY)
                                                 PochiSignals.playTapHaptic(context)
                                             },
                                         contentAlignment = Alignment.Center
@@ -1627,16 +1698,19 @@ fun PochiIslandBot(
                                 val dotColor = lerp(borderHairline, accentViolet, dotColorMix)
                                 Box(
                                     modifier = Modifier
-                                        .height(6.dp)
-                                        .width(dotWidth)
-                                        .clip(CircleShape)
-                                        .background(dotColor)
-                                        .pochiPress {
-                                            activeTab = tab
-                                            lastInteractionMs = System.currentTimeMillis()
-                                            PochiSignals.playTapHaptic(context)
-                                        }
-                                )
+                                        .height(18.dp)
+                                        .width(dotWidth + 10.dp)
+                                        .pochiPress { goToPage(tab) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(6.dp)
+                                            .width(dotWidth)
+                                            .clip(CircleShape)
+                                            .background(dotColor)
+                                    )
+                                }
                             }
                         }
                     }
@@ -1655,15 +1729,9 @@ fun PochiIslandBot(
                                 .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
                                 .padding(horizontal = 6.dp, vertical = 4.dp)
                         ) {
-                            val dockTabs = listOf(
-                                PochiTab.GLANCE,
-                                PochiTab.CHAT,
-                                PochiTab.WALLET,
-                                PochiTab.TODAY,
-                                PochiTab.LIFE,
-                                PochiTab.FOCUS
-                            )
-                            dockTabs.forEach { tab ->
+                            // Tahap 8: dock memakai urutan halaman yang
+                            // sama dengan titik & geser (konsisten).
+                            pageOrder.forEach { tab ->
                                 val isSel = activeTab == tab
                                 val selBg = if (isSel) {
                                     Brush.linearGradient(listOf(accentViolet, PochiDesign.FaceRim))
@@ -1672,21 +1740,17 @@ fun PochiIslandBot(
                                 }
                                 Box(
                                     modifier = Modifier
-                                        .size(30.dp)
+                                        .size(34.dp)
                                         .clip(CircleShape)
                                         .background(selBg)
-                                        .pochiPress {
-                                            activeTab = tab
-                                            lastInteractionMs = System.currentTimeMillis()
-                                            PochiSignals.playTapHaptic(context)
-                                        },
+                                        .pochiPress { goToPage(tab) },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = tab.icon,
                                         contentDescription = tab.titleEn,
                                         tint = if (isSel) Color.White else textSecondary,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }

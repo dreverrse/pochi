@@ -82,6 +82,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     private val peekSideState = mutableStateOf("right")
     private var lastInteraction = System.currentTimeMillis()
     private var collapseJob: Job? = null
+    private var isMiniState = false
     private var heightJob: Job? = null
     private var expandedHeightPx = 0
     private var screenshotObserver: ContentObserver? = null
@@ -280,6 +281,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                             applyLayout()
                             collapseJob = serviceScope.launch {
                                 delay(360)
+                                if (isMiniState) return@launch
                                 params.width = collapsedWidthPx
                                 params.height = collapsedHeightPx
                                 params.x = (PochiPrefs.offsetXFlow.value * density).toInt()
@@ -339,6 +341,23 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                     },
                     onPowerOffService = {
                         stopSelf()
+                    },
+                    onMiniChange = { mini ->
+                        isMiniState = mini
+                        // Tahap 8: jendela overlay ikut menyusut saat
+                        // MINI agar benar-benar tidak menghalangi layar.
+                        if (!isIslandExpanded && !hiddenState.value && !peekState.value) {
+                            if (mini) {
+                                collapseJob?.cancel()
+                                params.width = (54 * density).toInt()
+                                params.height = (28 * density).toInt()
+                                applyLayout()
+                            } else {
+                                params.width = collapsedWidthPx
+                                params.height = collapsedHeightPx
+                                applyLayout()
+                            }
+                        }
                     }
                 )
             }

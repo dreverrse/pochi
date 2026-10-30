@@ -1061,10 +1061,66 @@ fun ChatScreen() {
     }
 }
 
+/** Hasil ekstrak data sederhana dari teks balasan (Tahap 8). */
+private data class ChatDataExtract(
+    val heroValue: String,
+    val points: List<Float>
+)
+
+private fun extractChatData(text: String): ChatDataExtract? {
+    if (text.length > 340) return null
+    val regex = Regex("""(\d+(?:[.,]\d+)?)\s*(%|°C|ml|liter|L|Rp|rb|jt|menit|jam|hari|km|kg|GB|MB)?""")
+    val matches = regex.findAll(text).toList()
+    if (matches.size < 2) return null
+    val numbers = matches.mapNotNull {
+        it.groupValues[1].replace(",", ".").toFloatOrNull()
+    }
+    if (numbers.size < 2) return null
+    val heroIdx = numbers.indices.maxByOrNull { numbers[it] } ?: 0
+    val heroMatch = matches[heroIdx]
+    val heroUnit = heroMatch.groupValues[2]
+    val heroNumber = heroMatch.groupValues[1]
+    val heroValue = if (heroUnit.isNotBlank()) "$heroNumber$heroUnit" else heroNumber
+    return ChatDataExtract(
+        heroValue = heroValue,
+        points = numbers.take(8)
+    )
+}
+
 @Composable
 fun ChatBubble(msg: UiChatMessage) {
     val bubbleColor = if (msg.isUser) Color(0xFF007AFF) else Color(0xFF161622)
     val align = if (msg.isUser) Alignment.End else Alignment.Start
+
+    // Tahap 8: balasan Pochi yang berisi data ditampilkan sebagai
+    // kartu data mewah (kurva + angka pahlawan), teks lengkap tetap
+    // tampil sebagai keterangan di bawah kartu.
+    val chatData = if (!msg.isUser) extractChatData(msg.text) else null
+    if (chatData != null) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            PochiDataCard(
+                title = "Data dari Pochi",
+                chipText = msg.formattedTime,
+                heroLabel = "Nilai terbesar",
+                heroValue = chatData.heroValue,
+                footer = "Grafik dari angka-angka pada balasan",
+                points = chatData.points,
+                modifier = Modifier.widthIn(max = 300.dp)
+            )
+            Text(
+                text = msg.text,
+                color = Color(0xFFB9C8E8),
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                modifier = Modifier.widthIn(max = 300.dp)
+            )
+        }
+        return
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
