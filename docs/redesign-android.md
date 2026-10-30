@@ -218,6 +218,42 @@ termasuk saat data ditampilkan di chat.
   pahlawan dan kurva dari angka-angkanya, teks lengkap tetap tampil
   sebagai keterangan di bawah kartu.
 
+## Tahap 9 — rombak total: bahasa papan widget hitam
+
+Atas arahan pemilik ("Semuanya rombak total") mengikuti gambar
+referensi papan widget hitam pekat (grid kartu hitam bertepi garis
+rambut, label mini, angka besar, sparkline/ring mini):
+
+- **Fondasi**: token baru di `PochiDesign` (`WidgetSurface`,
+  `WidgetSurfaceHigh`, `WidgetBorder`, `WidgetLabel`, `BoardBlue`,
+  `BoardGreen`, `BoardOrange`, `BoardRed`) dan file komponen baru
+  `PochiWidgets.kt`: `PochiWidget`, `WidgetLabel`, `WidgetValue`,
+  `WidgetFootnote`, `PochiSparkline` (kurva Bézier tipis isi
+  gradasi), `WidgetRing` (ring tipis beranimasi), `WidgetTextStack`.
+- **Palet island**: permukaan kartu -> `WidgetSurface`, tepi ->
+  `WidgetBorder`, dock memakai permukaan widget dengan seleksi
+  `BoardBlue` solid, titik indikator biru papan. Halaman Panggilan
+  ikut otomatis lewat parameter permukaan.
+- **Glance ditulis ulang sebagai grid widget**: widget musik di
+  kiri (label, sampul, judul, kontrol berfungsi, equalizer hidup),
+  kolom kanan berisi widget kalender dengan strip minggu ini
+  (Senin-Minggu, hari ini ter-highlight biru) dan widget agenda
+  ringkas (salat berikutnya + sisa tugas).
+- **Aktivitas menjadi grid widget 2x2**: Air (nilai ml + ring +
+  sparkline kumulatif per ember 3 jam), Tugas (selesai/total +
+  ring + tugas berikutnya), Fokus (menit + ring sesi), Budget
+  (anggaran harian + ring). Grafik batang per 3 jam dan tombol
+  aksi tetap di bawahnya.
+- **Cuaca**: widget suhu besar (suhu raksasa + strip suhu
+  seminggu) di atas kartu data mewah biru Tahap 8.1.
+- **Fokus**: label mini oranye + timer digital 26sp monospace
+  putih, jalur progres gradasi oranye->merah.
+- **Musik**: halaman dibingkai sebagai satu kartu widget.
+- **Aplikasi**: kartu statistik Home memakai permukaan/radius
+  papan, hero Home bergaya widget (radius 20, garis widget),
+  balon chat asisten memakai `WidgetSurface` bertepi garis widget
+  dan biru pengguna disamakan ke `BoardBlue`.
+
 ### Koreksi Tahap 8.1 — grafik mewah hanya di cuaca
 
 Atas arahan pemilik ("grafik itu kasih di cuaca aja"): kartu data
