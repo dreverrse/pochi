@@ -334,10 +334,10 @@ fun HomeScreen(
                     .clip(RoundedCornerShape(28.dp))
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color(0xFF191924), Color(0xFF111118))
+                            listOf(PochiDesign.FaceBase, PochiDesign.Void)
                         )
                     )
-                    .border(1.dp, Color(0xFF262638), RoundedCornerShape(28.dp))
+                    .border(1.dp, PochiDesign.FaceRim.copy(alpha = 0.55f), RoundedCornerShape(28.dp))
                     .clickable {
                         pokeCount++
                         val (em, _, _) = PochiMood.onPokeReaction(pokeCount)
@@ -351,11 +351,10 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    PochiMascot(
-                        state = BotState.IDLE,
-                        emoteOverride = mascotEmote,
+                    PochiFaceMascot(
+                        face = PochiFace.fromLegacy(mascotEmote),
                         size = 68.dp,
-                        showBlackBacking = false
+                        showWaves = true
                     )
 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -444,40 +443,66 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Ring 1: Tugas
-                    HomeMetricCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Tugas 🎯",
-                        value = "$doneTasks/$totalTasks",
-                        accent = Color(0xFF34C759),
-                        onClick = onNavigateToChat
-                    )
-
-                    // Ring 2: Air Minum
-                    HomeMetricCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Air 💧",
-                        value = "${waterGlasses * 250}ml",
-                        accent = Color(0xFF007AFF),
-                        onClick = {
-                            PochiPrefs.addWaterGlass(context)
-                            PochiSignals.playSuccessHaptic(context)
-                            mascotEmote = PochiEmote.HAPPY
-                        }
-                    )
-
-                    // Ring 3: Fokus
-                    HomeMetricCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Fokus ⚡",
-                        value = "${focusSessions * 25}m",
-                        accent = Color(0xFFFF9500),
-                        onClick = onNavigateToChat
-                    )
+                // Grid kartu dashboard gaya referensi (Tahap 2): 2 kolom
+                val remainingTasks = tasks.size - doneTasks
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        PochiStatCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.CheckCircle,
+                            label = if (isId) "Tugas selesai" else "Tasks done",
+                            value = "$doneTasks/${tasks.size}",
+                            accent = PochiDesign.StatusGreen,
+                            footerText = if (isId) "$remainingTasks tersisa" else "$remainingTasks left",
+                            ringFraction = doneTasks.toFloat() / totalTasks.toFloat(),
+                            onClick = onNavigateToChat
+                        )
+                        PochiStatCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.WaterDrop,
+                            label = if (isId) "Air minum" else "Water",
+                            value = "${waterGlasses * 250}ml",
+                            accent = PochiDesign.StatusBlue,
+                            footerText = if (isId) "Target 2000ml • ketuk +1" else "Goal 2000ml • tap +1",
+                            ringFraction = waterGlasses / 8f,
+                            onClick = {
+                                PochiPrefs.addWaterGlass(context)
+                                PochiSignals.playSuccessHaptic(context)
+                                mascotEmote = PochiEmote.HAPPY
+                            }
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        PochiStatCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.Timer,
+                            label = if (isId) "Fokus hari ini" else "Focus today",
+                            value = "${focusSessions * 25}m",
+                            accent = PochiDesign.StatusAmber,
+                            footerText = if (isId) "$focusSessions sesi • target 4" else "$focusSessions sessions • goal 4",
+                            ringFraction = focusSessions / 4f,
+                            onClick = onNavigateToChat
+                        )
+                        PochiStatCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.MusicNote,
+                            label = if (isId) "Sedang diputar" else "Now playing",
+                            value = if (mediaPlayback.isPlaying) mediaPlayback.title.take(12) else "—",
+                            accent = PochiDesign.SpotifyGreen,
+                            footerText = if (mediaPlayback.isPlaying) {
+                                mediaPlayback.artist.ifBlank { if (isId) "Musik aktif" else "Music active" }
+                            } else {
+                                if (isId) "Tidak ada media" else "No media"
+                            },
+                            onClick = onNavigateToChat
+                        )
+                    }
                 }
             }
         }
@@ -587,6 +612,9 @@ fun HomeScreen(
     }
 }
 
+// Kartu metrik lama — tidak lagi dipakai HomeScreen sejak redesign Tahap 2
+// (digantikan PochiStatCard di PochiCards.kt); dipertahankan sementara
+// agar tidak ada pemanggil lain yang rusak.
 @Composable
 fun HomeMetricCard(
     modifier: Modifier = Modifier,
@@ -1307,6 +1335,9 @@ fun SettingsScreen() {
 
     var editingUserName by remember { mutableStateOf(userName) }
     var currentApiKey by remember { mutableStateOf(PochiPrefs.getApiKey(context, provider)) }
+    val gatewayUrl by PochiPrefs.gatewayUrlFlow.collectAsState()
+    var editingGatewayUrl by remember { mutableStateOf(gatewayUrl) }
+    var gatewayStatus by remember { mutableStateOf<String?>(null) }
     var showApiKey by remember { mutableStateOf(false) }
     var islandActive by remember { mutableStateOf(DynamicIslandService.isRunning.value) }
 
@@ -1419,6 +1450,74 @@ fun SettingsScreen() {
                                 imageVector = if (showApiKey) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                                 contentDescription = "Toggle",
                                 tint = Color(0xFF8E8E93)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- KONEKSI LAPTOP (POCHI GATEWAY) — redesign Tahap 3b ---
+        item {
+            SettingsCard(title = "Koneksi Laptop (Pochi Gateway)") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Alamat gateway di laptop (LAN/Tailscale). Pilih penyedia \"Laptop\" di Otak AI untuk memakai jalur ini.",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 12.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF1E1E2C))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        BasicTextField(
+                            value = editingGatewayUrl,
+                            onValueChange = {
+                                editingGatewayUrl = it
+                                PochiPrefs.saveGatewayUrl(context, it)
+                            },
+                            textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 13.sp),
+                            cursorBrush = SolidColor(PochiDesign.AccentViolet),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(PochiDesign.AccentViolet)
+                                .clickable {
+                                    gatewayStatus = "Menghubungi..."
+                                    coroutineScope.launch {
+                                        gatewayStatus = AiClient.checkGateway(
+                                            baseUrl = editingGatewayUrl,
+                                            apiKey = PochiPrefs.getApiKey(context, AiProvider.LAPTOP)
+                                        ).getOrElse { "Gagal: ${it.localizedMessage}" }
+                                    }
+                                }
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Tes Koneksi",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        if (gatewayStatus != null) {
+                            Text(
+                                text = gatewayStatus ?: "",
+                                color = Color(0xFF8E8E93),
+                                fontSize = 11.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }

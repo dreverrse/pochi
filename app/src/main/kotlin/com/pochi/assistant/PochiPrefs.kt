@@ -493,6 +493,8 @@ object PochiPrefs {
     private const val KEY_TASKS_JSON = "pochi_today_tasks_json"
     private const val KEY_PINNED_APPS = "pochi_pinned_apps"
     private const val KEY_MCP_URL = "pochi_mcp_endpoint_url"
+    private const val KEY_GATEWAY_URL = "pochi_gateway_url"
+    private const val KEY_GATEWAY_KEY = "pochi_gateway_key"
     private const val KEY_LANG = "pochi_language_code"
     private const val KEY_FLUSH_STATUSBAR = "pochi_flush_statusbar"
     private const val KEY_FOCUS_SESSIONS = "pochi_focus_completed_sessions"
@@ -567,6 +569,11 @@ object PochiPrefs {
     private val _mcpUrlFlow = MutableStateFlow("ws://100.64.0.1:8765/mcp")
     val mcpUrlFlow: StateFlow<String> = _mcpUrlFlow
 
+    // Koneksi laptop (redesign Tahap 3b): Pochi Gateway di laptop pemilik,
+    // default memakai alamat Tailscale yang sama dengan pola MCP di atas.
+    private val _gatewayUrlFlow = MutableStateFlow("http://100.64.0.1:8000/v1")
+    val gatewayUrlFlow: StateFlow<String> = _gatewayUrlFlow
+
     private val _focusSessionsFlow = MutableStateFlow(2)
     val focusSessionsFlow: StateFlow<Int> = _focusSessionsFlow
 
@@ -595,6 +602,8 @@ object PochiPrefs {
             ?: AiProvider.GEMINI
         _mcpUrlFlow.value = prefs.getString(KEY_MCP_URL, "ws://100.64.0.1:8765/mcp")
             ?: "ws://100.64.0.1:8765/mcp"
+        _gatewayUrlFlow.value = prefs.getString(KEY_GATEWAY_URL, "http://100.64.0.1:8000/v1")
+            ?: "http://100.64.0.1:8000/v1"
 
         val savedTasksJson = prefs.getString(KEY_TASKS_JSON, null)
         if (!savedTasksJson.isNullOrBlank()) {
@@ -1042,6 +1051,12 @@ object PochiPrefs {
         prefs(context).edit().putString(KEY_MCP_URL, trimmed).apply()
     }
 
+    fun saveGatewayUrl(context: Context, url: String) {
+        val trimmed = url.trim().trimEnd('/').ifBlank { "http://100.64.0.1:8000/v1" }
+        _gatewayUrlFlow.value = trimmed
+        prefs(context).edit().putString(KEY_GATEWAY_URL, trimmed).apply()
+    }
+
     fun setScreenAwareness(context: Context, enabled: Boolean) {
         _screenAwarenessFlow.value = enabled
         prefs(context).edit().putBoolean(KEY_SCREEN_AWARENESS, enabled).apply()
@@ -1130,6 +1145,7 @@ object PochiPrefs {
         AiProvider.OPENROUTER -> KEY_OPENROUTER
         AiProvider.OPENCODE -> KEY_OPENCODE
         AiProvider.INCEPTION -> KEY_INCEPTION
+        AiProvider.LAPTOP -> KEY_GATEWAY_KEY
     }
 
     private fun modelName(provider: AiProvider): String {

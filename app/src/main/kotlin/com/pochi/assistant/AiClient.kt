@@ -19,7 +19,8 @@ enum class AiProvider(
     GEMINI("Gemini", "gemini-2.5-flash", "AIza..."),
     OPENROUTER("OpenRouter", "openai/gpt-4o-mini", "sk-or-..."),
     OPENCODE("OpenCode", "glm-5.3-flash", "API key OpenCode"),
-    INCEPTION("InceptionLabs", "mercury-3", "il_...")
+    INCEPTION("InceptionLabs", "mercury-3", "il_..."),
+    LAPTOP("Laptop", "pochi-lokal", "Kunci virtual Pochi Gateway")
 }
 
 object AiClient {
@@ -84,8 +85,75 @@ object AiClient {
                 prompt = fullPrompt,
                 referer = null
             )
+            AiProvider.LAPTOP -> askOpenAiCompatible(
+                url = requirePrivateGatewayUrl(PochiPrefs.gatewayUrlFlow.value) + "/chat/completions",
+                apiKey = apiKey,
+                model = modelName,
+                prompt = fullPrompt,
+                referer = null
+            )
         }
         raw.replace("**", "").trim()
+    }
+
+    /**
+     * Tes koneksi ke Pochi Gateway di laptop (redesign Tahap 3b):
+     * GET {base}/models bergaya OpenAI. Mengembalikan nama model pertama
+     * yang ditawarkan gateway, atau pesan kesalahan yang bisa dibaca.
+     */
+    suspend fun checkGateway(baseUrl: String, apiKey: String): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val url = requirePrivateGatewayUrl(baseUrl.trim().trimEnd('/')) + "/models"
+                val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 5_000
+                    readTimeout = 8_000
+                    if (apiKey.isNotBlank()) {
+                        setRequestProperty("Authorization", "Bearer $apiKey")
+                    }
+                }
+                try {
+                    val code = connection.responseCode
+                    val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                    val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    if (code !in 200..299) error("HTTP $code")
+                    val firstModel = JSONObject(body)
+                        .optJSONArray("data")
+                        ?.optJSONObject(0)
+                        ?.optString("id")
+                        .orEmpty()
+                    if (firstModel.isNotBlank()) "Terhubung • model: $firstModel" else "Terhubung ke gateway"
+                } finally {
+                    connection.disconnect()
+                }
+            }
+        }
+
+    /**
+     * Penjaga alamat gateway laptop: karena gateway lokal berjalan lewat
+     * HTTP (manifest membuka cleartext), URL gateway hanya boleh menunjuk
+     * alamat loopback/privat/LAN/Tailscale — tidak pernah internet publik.
+     * Mengembalikan base URL bersih (tanpa garis miring akhir).
+     */
+    private fun requirePrivateGatewayUrl(baseUrl: String): String {
+        val clean = baseUrl.trim().trimEnd('/')
+        val host = runCatching { URL(clean).host.lowercase() }.getOrDefault("")
+        val octets = host.split('.').mapNotNull { it.toIntOrNull() }
+        val isIpv4 = octets.size == 4
+        val isPrivateIp = isIpv4 && (
+            octets[0] == 10 ||
+                octets[0] == 127 ||
+                (octets[0] == 172 && octets[1] in 16..31) ||
+                (octets[0] == 192 && octets[1] == 168) ||
+                (octets[0] == 100 && octets[1] in 64..127)
+            )
+        val allowed = host == "localhost" || host.endsWith(".local") ||
+            (!isIpv4 && !host.contains('.')) || isPrivateIp
+        require(allowed) {
+            "Alamat Pochi Gateway harus alamat privat/LAN (mis. 100.64.0.1 atau 192.168.1.10)"
+        }
+        return clean
     }
 
     private suspend fun askGemini(apiKey: String, modelName: String, prompt: String): String {

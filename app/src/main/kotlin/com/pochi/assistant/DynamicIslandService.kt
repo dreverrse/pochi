@@ -474,8 +474,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         peekSideState.value = side
         peekState.value = true
         hiddenState.value = true
-        val peekWidthPx = (64 * density).toInt()
-        val peekHeightPx = (64 * density).toInt()
+        // Redesign Tahap 3a: jendela peek kini menampung PochiSideBar
+        // vertikal (dulu hanya maskot 64x64).
+        val peekWidthPx = (60 * density).toInt()
+        val peekHeightPx = (252 * density).toInt()
         val screenWidthPx = resources.displayMetrics.widthPixels
         val screenHeightPx = resources.displayMetrics.heightPixels
         val minTopY = getMinTopYPx()

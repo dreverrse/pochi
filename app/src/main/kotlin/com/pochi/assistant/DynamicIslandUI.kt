@@ -146,12 +146,14 @@ fun PochiIslandBot(
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Authentic iOS Deep OLED Black Palette
-    val islandBlack = Color(0xFF000000)
-    val cardSurface = Color(0xFF141416)
-    val borderHairline = Color(0xFF26262B)
-    val textPrimary = Color(0xFFFFFFFF)
-    val textSecondary = Color(0xFF8E8E93)
+    // Palet redesign (Tahap 1): nilai tunggal kini hidup di PochiDesign,
+    // nama lokal dipertahankan agar sisa file tidak berubah.
+    val islandBlack = PochiDesign.IslandBlack
+    val cardSurface = PochiDesign.CardSurface
+    val borderHairline = PochiDesign.Hairline
+    val textPrimary = PochiDesign.TextPrimary
+    val textSecondary = PochiDesign.TextSecondary
+    val accentViolet = PochiDesign.AccentViolet
 
     // Vibrant iOS System Colors (large & colorful buttons)
     val iosGreen = Color(0xFF34C759)
@@ -442,11 +444,19 @@ fun PochiIslandBot(
                 ) { onRestoreFromHidden() },
             contentAlignment = if (peekSide == "left") Alignment.CenterStart else Alignment.CenterEnd
         ) {
-            PochiMascot(
-                state = botState,
-                emoteOverride = activeEmote,
-                size = 36.dp,
-                showBlackBacking = true
+            // Redesign Tahap 3a: mode tepi kini menampilkan side bar
+            // vertikal ber-ring progres, bukan maskot mungil saja.
+            val doneCount = tasks.count { it.isDone }
+            val tasksFraction = if (tasks.isEmpty()) 0f else doneCount.toFloat() / tasks.size.toFloat()
+            val focusFraction = if (isFocusRunning && focusTotalSeconds > 0) {
+                1f - (focusRemainingSeconds.toFloat() / focusTotalSeconds.toFloat())
+            } else {
+                (completedFocusSessions / 4f).coerceIn(0f, 1f)
+            }
+            PochiSideBar(
+                side = peekSide,
+                tasksFraction = tasksFraction,
+                focusFraction = focusFraction
             )
         }
         return
@@ -602,7 +612,7 @@ fun PochiIslandBot(
                                     modifier = Modifier
                                         .size(5.dp)
                                         .clip(CircleShape)
-                                        .background(iosGreen)
+                                        .background(accentViolet)
                                 )
                                 Text(
                                     text = "Pochi ✦",
@@ -669,11 +679,16 @@ fun PochiIslandBot(
                             }
                         }
 
-                        // Right: Clock + Minimal Close Pill
+                        // Right: Blueprint face (Tahap 1) + Clock + Minimal Close Pill
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
+                            PochiFaceMascot(
+                                face = PochiFace.forState(botState),
+                                size = 24.dp,
+                                showWaves = false
+                            )
                             Text(
                                 text = currentTimeString.ifBlank { "21:31" },
                                 color = textSecondary,

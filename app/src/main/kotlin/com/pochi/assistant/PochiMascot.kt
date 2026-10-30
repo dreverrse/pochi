@@ -331,18 +331,20 @@ fun PochiMascot(
                 scaleY = (1f / breathScale) * squishY.value,
                 pivot = Offset(cx, cy)
             ) {
-                // Pure Matte-Black (#0A0A0A) sleek rounded-rectangle backing (Frame 2s / 35s style, not a circle)
+                // Blueprint backing (redesign Tahap 1): squircle navy gelap
+                // PochiDesign.FaceBase dengan tepi violet PochiDesign.FaceRim,
+                // menggantikan hitam matte #0A0A0A lama.
                 if (showBlackBacking) {
                     val pad = s * 0.04f
                     val corner = (h * 0.22f).coerceAtLeast(6f)
                     drawRoundRect(
-                        color = Color(0xFF0A0A0A),
+                        color = PochiDesign.FaceBase,
                         topLeft = Offset(pad, pad),
                         size = Size(w - pad * 2f, h - pad * 2f),
                         cornerRadius = CornerRadius(corner, corner)
                     )
                     drawRoundRect(
-                        color = Color(0xFF26262E),
+                        color = PochiDesign.FaceRim,
                         topLeft = Offset(pad, pad),
                         size = Size(w - pad * 2f, h - pad * 2f),
                         cornerRadius = CornerRadius(corner, corner),
