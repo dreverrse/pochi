@@ -685,7 +685,7 @@ fun PochiIslandBot(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 54.dp, max = 250.dp)
+                            .heightIn(min = 54.dp, max = 320.dp)
                             .verticalScroll(scrollState),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
