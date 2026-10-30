@@ -181,6 +181,43 @@ animasi, bukan bahasa. Perombakan gerak di `DynamicIslandUI.kt`:
 - **Identitas**: wordmark header diberi letter-spacing 2sp dan label
   status 0,5sp agar tidak terasa templat bawaan.
 
+## Tahap 8 — Navigasi konsisten, sembunyi otomatis, kartu data mewah
+
+Masukan pemilik: navigasi island tidak konsisten & kurang responsif;
+island harus ikut mengecil dan bersembunyi setelah 10 detik tidak
+dipakai agar tidak menghalangi layar; grafik/data harus tampil mewah
+seperti kartu statistik biru bercahaya pada gambar referensi,
+termasuk saat data ditampilkan di chat.
+
+- **Navigasi satu pintu**: fungsi `goToPage()` menjadi satu-satunya
+  jalan berpindah halaman. Dock kini memakai urutan `pageOrder` yang
+  sama dengan titik indikator & geser (sebelumnya dock berurutan
+  berbeda — sumber rasa tidak konsisten). Ikon dock diperbesar
+  30 -> 34dp, area sentuh titik diperbesar (tinggi 18dp), ambang
+  geser diturunkan 60 -> 44px.
+- **Mode MINI + sembunyi otomatis**: mode keempat `IslandMode.MINI`
+  (pil 48x22dp, alpha 0,72, hanya mata kecil). Setelah 10 detik tanpa
+  interaksi: panel terbuka menutup sendiri, lalu kapsul/mata menyusut
+  ke MINI; musik, timer fokus, unduhan, intipan, dan kartu persetujuan
+  menahannya. `DynamicIslandService` ikut mengecilkan jendela overlay
+  ke 54x28dp (`onMiniChange`, dijaga dari tabrakan `collapseJob`) agar
+  benar-benar tidak menghalangi sentuhan ke aplikasi di bawahnya.
+  Ketuk MINI untuk bangun; musik mulai/intipan sistem juga
+  membangunkannya ke kapsul. Halaman Aktivitas kini bisa digulir dan
+  tinggi panel 264 -> 288dp.
+- **Kartu data mewah** (`PochiDataCard.kt`): komponen kartu kaca biru
+  laut dalam sesuai referensi — gradasi navy elektrik, tepi bercahaya,
+  grid samar, kurva Bézier mulus dengan isi gradasi, titik ujung &
+  puncak menyala, animasi garis "ditulis" saat tampil, chip periode,
+  dan angka pahlawan besar. Dipakai untuk grafik hidrasi (kurva
+  kumulatif dari `waterLogFlow`, angka pahlawan = persen target)
+  menggantikan grafik batang Tahap 6.
+- **Data di chat**: `ChatBubble` mengekstrak angka dari balasan Pochi
+  (`extractChatData`); balasan kaya data (<=340 karakter, >=2 angka)
+  dirender sebagai `PochiDataCard` dengan angka terbesar sebagai
+  pahlawan dan kurva dari angka-angkanya, teks lengkap tetap tampil
+  sebagai keterangan di bawah kartu.
+
 ## Sisa pekerjaan
 
 - Push branch dan verifikasi build GitHub Actions untuk Tahap 4
