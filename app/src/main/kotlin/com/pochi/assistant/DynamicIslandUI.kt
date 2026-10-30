@@ -486,7 +486,7 @@ fun PochiIslandBot(
             IslandMode.COLLAPSED -> collapsedHeight
             IslandMode.EXPANDED -> expandedHeight
             IslandMode.EYES -> 34.dp
-            IslandMode.MINI -> 22.dp
+            IslandMode.MINI -> 24.dp
         }
     }
 
@@ -501,7 +501,7 @@ fun PochiIslandBot(
             IslandMode.COLLAPSED -> 18.dp
             IslandMode.EXPANDED -> 32.dp
             IslandMode.EYES -> 17.dp
-            IslandMode.MINI -> 11.dp
+            IslandMode.MINI -> 12.dp
         }
     }
 
@@ -904,7 +904,8 @@ fun PochiIslandBot(
                                         .background(accentViolet)
                                 )
                                 Text(
-                                    text = "Pochi ✦",
+                                    text = SimpleDateFormat("HH:mm", Locale.US)
+                                        .format(Date(nowMs)),
                                     color = textPrimary,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -957,7 +958,7 @@ fun PochiIslandBot(
                     PochiMascot(
                         state = botState,
                         emoteOverride = displayEmote,
-                        size = 21.dp,
+                        size = 25.dp,
                         eyeTrackerOffset = eyeGazeOffset,
                         showBlackBacking = false
                     )
@@ -986,7 +987,7 @@ fun PochiIslandBot(
                     PochiMascot(
                         state = botState,
                         emoteOverride = displayEmote,
-                        size = 12.dp,
+                        size = 17.dp,
                         eyeTrackerOffset = eyeGazeOffset,
                         showBlackBacking = false
                     )
@@ -1045,32 +1046,25 @@ fun PochiIslandBot(
                                 )
                             }
                         ) {
-                            PochiFaceMascot(
-                                face = PochiFace.forState(botState),
-                                size = 30.dp,
-                                showWaves = true
-                            )
+                            // Tahap 11: tanpa logo & tanpa nama Pochi —
+                            // header panel kini menampilkan kategori aktif.
                             Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Text(
-                                        text = "POCHI",
-                                        color = textPrimary,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = 2.sp
-                                    )
-                                    Text(
-                                        text = "✦",
-                                        color = PochiDesign.AccentGold,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
                                 Text(
-                                    text = botState.statusLabel,
+                                    text = if (isId) activeTab.titleId else activeTab.titleEn,
+                                    color = textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = if (botState == BotState.IDLE) {
+                                        SimpleDateFormat(
+                                            "EEEE, d MMMM yyyy",
+                                            Locale("id", "ID")
+                                        ).format(Date(nowMs))
+                                    } else {
+                                        botState.statusLabel
+                                    },
                                     color = textSecondary,
                                     fontSize = 10.sp,
                                     maxLines = 1,
