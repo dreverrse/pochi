@@ -218,6 +218,16 @@ termasuk saat data ditampilkan di chat.
   pahlawan dan kurva dari angka-angkanya, teks lengkap tetap tampil
   sebagai keterangan di bawah kartu.
 
+### Koreksi Tahap 8.1 — grafik mewah hanya di cuaca
+
+Atas arahan pemilik ("grafik itu kasih di cuaca aja"): kartu data
+mewah kini tampil **hanya** di halaman Hidup/Cuaca sebagai grafik
+suhu per jam (angka pahlawan = suhu sekarang dari `liveTemp`,
+footer min/maks + UV; halaman Hidup kini bisa digulir). Grafik
+hidrasi di Aktivitas dikembalikan ke grafik batang per 3 jam
+(Tahap 6), dan render kartu data di chat dicabut — `ChatBubble`
+kembali ke balon teks biasa dan `extractChatData` dihapus.
+
 ## Sisa pekerjaan
 
 - Push branch dan verifikasi build GitHub Actions untuk Tahap 4
