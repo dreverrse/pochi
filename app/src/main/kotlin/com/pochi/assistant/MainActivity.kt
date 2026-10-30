@@ -2185,7 +2185,7 @@ private fun PochiContextAndMemoryScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = mem.content,
+                                text = mem.fact,
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
