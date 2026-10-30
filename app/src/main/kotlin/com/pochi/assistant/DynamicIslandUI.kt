@@ -107,6 +107,7 @@ enum class PochiTab(
     val icon: ImageVector,
     val accent: Color
 ) {
+    AGENTS("Agents", "Agen", Icons.Rounded.Terminal, Color(0xFFD97757)),
     GLANCE("Glance", "Sekilas", Icons.Rounded.Dashboard, Color(0xFF7C5CFF)),
     TODAY("Activity", "Aktivitas", Icons.Rounded.DonutLarge, Color(0xFF34C759)),
     CHAT("Call", "Panggilan", Icons.Rounded.Call, Color(0xFF007AFF)),
@@ -191,7 +192,7 @@ fun PochiIslandBot(
     val isId = lang == PochiLang.ID
 
     var islandMode by remember { mutableStateOf(IslandMode.COLLAPSED) }
-    var activeTab by remember { mutableStateOf(PochiTab.GLANCE) }
+    var activeTab by remember { mutableStateOf(PochiTab.AGENTS) }
     var botState by remember { mutableStateOf(BotState.IDLE) }
     var customEmote by remember { mutableStateOf<PochiEmote?>(null) }
     var idleEmote by remember { mutableStateOf<PochiEmote?>(PochiEmote.SMILING) }
@@ -250,6 +251,10 @@ fun PochiIslandBot(
     // Weather state — Tahap 12: data asli dari PochiLiveData
     // (Open-Meteo + Aladhan). Berlangganan flow agar UI terkomposisi
     // ulang begitu data tiba; refresh otomatis saat kota berubah.
+    val agentSessions by AgentBridge.sessionsFlow.collectAsState()
+    val bridgeApproval by AgentBridge.approvalFlow.collectAsState()
+    val bridgeOnline by AgentBridge.onlineFlow.collectAsState()
+    val gatewayUrl by PochiPrefs.gatewayUrlFlow.collectAsState()
     val liveWeather by PochiLiveData.weatherFlow.collectAsState()
     val livePrayer by PochiLiveData.prayerFlow.collectAsState()
     val liveTemp = liveWeather?.tempC ?: 32
@@ -535,6 +540,7 @@ fun PochiIslandBot(
 
     // Tahap 6 (ala Nusa): urutan halaman panel untuk geser & titik.
     val pageOrder = listOf(
+        PochiTab.AGENTS,
         PochiTab.GLANCE, PochiTab.WALLET, PochiTab.TODAY,
         PochiTab.LIFE, PochiTab.FOCUS, PochiTab.CHAT
     )
@@ -594,6 +600,13 @@ fun PochiIslandBot(
                 }
                 IslandMode.MINI -> Unit
             }
+        }
+    }
+
+    // Tahap 13: permintaan izin agen membuka panel sendiri.
+    LaunchedEffect(bridgeApproval) {
+        if (bridgeApproval != null && islandMode != IslandMode.EXPANDED) {
+            setMode(IslandMode.EXPANDED)
         }
     }
 
@@ -819,6 +832,55 @@ fun PochiIslandBot(
 
                     // Glanceable status on the right with vibrant color
                     when {
+                        bridgeApproval != null -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Lock,
+                                    contentDescription = null,
+                                    tint = iosAmber,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = if (isId) {
+                                        "Izin: ${bridgeApproval!!.tool}"
+                                    } else {
+                                        "Allow: ${bridgeApproval!!.tool}"
+                                    },
+                                    color = iosAmber,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        agentSessions.firstOrNull { it.isWorking } != null -> {
+                            val ws = agentSessions.firstOrNull { it.isWorking }!!
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFD97757))
+                                )
+                                Text(
+                                    text = "${ws.agent} • ${ws.file.ifBlank { ws.action }}".take(24),
+                                    color = textPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
                         peekActive -> {
                             val peek = systemPeek!!
                             Row(
@@ -1169,6 +1231,115 @@ fun PochiIslandBot(
                             }
                         }
 
+                        // Kartu izin agen dari laptop (Tahap 13, ala Coucou)
+                        bridgeApproval != null -> {
+                            val ap = bridgeApproval!!
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFD97757))
+                                    )
+                                    Text(
+                                        text = if (isId) {
+                                            "${ap.agent} meminta izin"
+                                        } else {
+                                            "${ap.agent} asks permission"
+                                        },
+                                        color = textPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Text(
+                                    text = "${ap.tool} — ${ap.summary}".take(180),
+                                    color = textSecondary,
+                                    fontSize = 11.sp,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp)
+                                            .clip(RoundedCornerShape(21.dp))
+                                            .background(iosRed)
+                                            .pochiPress {
+                                                coroutineScope.launch {
+                                                    AgentBridge.decide(gatewayUrl, ap.id, "deny")
+                                                }
+                                                PochiSignals.playTapHaptic(context)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (isId) "Tolak" else "Deny",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp)
+                                            .clip(RoundedCornerShape(21.dp))
+                                            .background(cardSurface)
+                                            .border(1.dp, iosBlue, RoundedCornerShape(21.dp))
+                                            .pochiPress {
+                                                coroutineScope.launch {
+                                                    AgentBridge.decide(gatewayUrl, ap.id, "always")
+                                                }
+                                                PochiSignals.playTapHaptic(context)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (isId) "Selalu" else "Always",
+                                            color = iosBlue,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp)
+                                            .clip(RoundedCornerShape(21.dp))
+                                            .background(iosGreen)
+                                            .pochiPress {
+                                                coroutineScope.launch {
+                                                    AgentBridge.decide(gatewayUrl, ap.id, "allow")
+                                                }
+                                                PochiSignals.playTapHaptic(context)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (isId) "Izinkan" else "Allow",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // Screenshot Preview Card
                         latestScreenshot != null -> {
                             val sc = latestScreenshot!!
@@ -1206,6 +1377,16 @@ fun PochiIslandBot(
                         }
 
                         // CARD 0: GLANCE ala notch Mac (Tahap 4)
+                        page == PochiTab.AGENTS -> {
+                            SessionsPage(
+                                isId = isId,
+                                sessions = agentSessions,
+                                online = bridgeOnline,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary
+                            )
+                        }
+
                         page == PochiTab.GLANCE -> {
                             GlancePage(
                                 context = context,
@@ -2764,4 +2945,159 @@ private fun NotchLens() {
             )
         }
     }
+}
+
+/**
+ * Halaman Sesi agen (Tahap 13, ala Coucou): status jembatan laptop
+ * + daftar sesi agen coding yang sedang berjalan, masing-masing
+ * dengan aksi terakhir dan hitungan baris +N/-M.
+ */
+@Composable
+private fun SessionsPage(
+    isId: Boolean,
+    sessions: List<AgentSession>,
+    online: Boolean,
+    textPrimary: Color,
+    textSecondary: Color
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (online) PochiDesign.BoardGreen else Color(0xFF636366)
+                    )
+            )
+            Text(
+                text = if (online) {
+                    if (isId) "Jembatan laptop terhubung" else "Laptop bridge connected"
+                } else {
+                    if (isId) "Jembatan laptop tidak terhubung" else "Laptop bridge offline"
+                },
+                color = textSecondary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        if (sessions.isEmpty()) {
+            PochiWidget(modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    WidgetLabel(
+                        text = if (isId) "BELUM ADA SESI" else "NO SESSIONS",
+                        icon = Icons.Rounded.Terminal,
+                        tint = PochiDesign.BoardBlue
+                    )
+                    Text(
+                        text = if (isId) {
+                            "Jalankan jembatan di laptop (desktop/bridge/pochi_bridge.py), lalu mulai agen coding seperti Claude Code — sesinya tampil di sini secara langsung."
+                        } else {
+                            "Run the bridge on your laptop (desktop/bridge/pochi_bridge.py), then start a coding agent like Claude Code — its session appears here live."
+                        },
+                        color = textSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        } else {
+            sessions.take(5).forEach { sess ->
+                PochiWidget(modifier = Modifier.fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(agentBrandColor(sess.agent))
+                            )
+                            Text(
+                                text = sess.agent,
+                                color = textPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = sess.project,
+                                color = textSecondary,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = when (sess.state) {
+                                    "WORKING" -> if (isId) "Bekerja" else "Working"
+                                    "DONE" -> if (isId) "Selesai" else "Done"
+                                    "WAITING" -> if (isId) "Menunggu" else "Waiting"
+                                    else -> sess.state
+                                },
+                                color = when (sess.state) {
+                                    "WORKING" -> PochiDesign.BoardBlue
+                                    "DONE" -> PochiDesign.BoardGreen
+                                    "WAITING" -> PochiDesign.BoardOrange
+                                    else -> textSecondary
+                                },
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = buildString {
+                                append(sess.action)
+                                if (sess.file.isNotBlank()) {
+                                    append(" • ")
+                                    append(sess.file)
+                                }
+                            },
+                            color = textSecondary,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (sess.plus > 0 || sess.minus > 0) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "+${sess.plus}",
+                                    color = PochiDesign.BoardGreen,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "−${sess.minus}",
+                                    color = PochiDesign.BoardRed,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun agentBrandColor(agent: String): Color = when {
+    agent.contains("Claude", ignoreCase = true) -> Color(0xFFD97757)
+    agent.contains("Codex", ignoreCase = true) -> Color(0xFF74AA9C)
+    agent.contains("Cursor", ignoreCase = true) -> Color(0xFF9D8CFF)
+    agent.contains("Gemini", ignoreCase = true) -> Color(0xFF4796E3)
+    else -> Color(0xFF8E8E93)
 }
