@@ -1096,7 +1096,7 @@ private fun CryptoRichCardUI(
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (compact) 68.dp else 88.dp)
+                        .height(if (compact) 104.dp else 132.dp)
                         .padding(top = 4.dp)
                 ) {
                     val pts = data.sparkline
@@ -1279,7 +1279,7 @@ private fun ChartRichCardUI(
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (compact) 84.dp else 108.dp)
+                        .height(if (compact) 120.dp else 152.dp)
                 ) {
                     val w = size.width
                     val h = size.height
