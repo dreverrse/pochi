@@ -218,6 +218,52 @@ termasuk saat data ditampilkan di chat.
   pahlawan dan kurva dari angka-angkanya, teks lengkap tetap tampil
   sebagai keterangan di bawah kartu.
 
+## Tahap 12 — semua fungsi bekerja (batch 1: data asli)
+
+Atas arahan pemilik ("sekarang buat semua fungsi bekerja"),
+berdasarkan dokumen audit internal repo (`docs/audit-android.md`):
+
+- **File baru `PochiLiveData.kt`**: lapisan data sungguhan.
+  Cuaca dari **Open-Meteo** (gratis, tanpa API key; suhu kini,
+  kelembapan, angin, kode kondisi WMO -> label ID/EN, suhu per
+  jam, maks/min 7 hari, indeks UV) dan jadwal salat dari
+  **Aladhan timingsByCity metode 20 (Kemenag RI)** untuk 8 kota
+  yang didukung. Hasil di-StateFlow + cache SharedPreferences
+  (cuaca basi >30 mnt, salat per hari/kota); gagal jaringan tidak
+  fatal — cadangan simulasi lama tetap ada di belakangnya.
+- **`PrayerScheduleHelper`** kini mendahulukan jadwal live
+  (`nextFromSchedule` diekstrak agar bisa dipakai ulang);
+  semua pemanggil lama (Glance, Cuaca, banner pintar) otomatis
+  mendapat waktu asli.
+- **`WeatherHelper.getSnapshot`** mendahulukan data live —
+  banner pintar & kartu cuaca ikut asli.
+- **Island**: berlangganan `weatherFlow`/`prayerFlow`, refresh
+  otomatis saat kota berubah; `liveTemp` yang sebelumnya macet
+  di 32 kini suhu asli; tombol Perbarui Cuaca benar-benar
+  mengambil data baru (force refresh + status memutar pulih).
+- **Halaman Cuaca**: kurva kartu data = suhu per jam asli,
+  footer maks/min harian asli, label kondisi & UV asli, strip
+  7 hari = prakiraan maksimum 7 hari ke depan dari hari ini.
+- **Widget Budget**: bukan lagi 65% tempelan — ring & persen
+  dihitung dari `expensesFlow` terhadap `dailyBudgetRp`, nilai
+  menampilkan total pengeluaran terformat Rupiah.
+
+Batch 2 (menyusul): lirik LRCLIB, slider volume, fase Pomodoro
++ persistensi timer, pengingat minum, halaman DECK, status MCP
+jujur + klien WebSocket.
+
+### Tambahan arahan pemilik (di atas batch 1)
+
+- **Navigasi panel dihapus**: bar dock ikon dan titik indikator
+  halaman dicabut dari panel expanded. Berpindah halaman kini
+  murni dengan geser (kiri/kanan) plus pintu kontekstual yang
+  sudah ada (ketuk widget Glance, tombol Fokus di Aktivitas,
+  tombol Selesai di Fokus, musik yang mulai memutar).
+- **Jarak tanggal dilonggarkan**: susunan panel tidak lagi
+  `SpaceBetween`; kini tumpukan `spacedBy(14.dp)` dari atas,
+  padding vertikal 12dp, dan jarak judul kategori -> tanggal
+  3dp — tanggal tidak lagi mepet ke isi di bawahnya.
+
 ## Tahap 11 — tanpa logo/nama di navigasi + mata mini lebih besar
 
 Atas arahan pemilik:
