@@ -373,6 +373,12 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
         registerScreenshotObserver()
 
+        // Tahap 13 (ala Coucou): polling jembatan agen di laptop —
+        // sesi agen coding & permintaan izinnya tampil di island.
+        serviceScope.launch {
+            AgentBridge.runPolling { PochiPrefs.gatewayUrlFlow.value }
+        }
+
         serviceScope.launch {
             combine(PochiPrefs.offsetXFlow, PochiPrefs.offsetYFlow) { xDp, yDp ->
                 Pair(xDp, yDp)
