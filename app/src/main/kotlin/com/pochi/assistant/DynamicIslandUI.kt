@@ -1004,536 +1004,73 @@ fun PochiIslandBot(
                             }
                         }
 
-                        // CARD 0: GLANCE ala notch Mac (Tahap 4) — musik kiri, agenda kanan
+                        // CARD 0: GLANCE ala notch Mac (Tahap 4)
                         activeTab == PochiTab.GLANCE -> {
-                            val nextPrayer = PrayerScheduleHelper.getNextPrayer(selectedCity)
-                            val remaining = tasks.count { !it.isDone }
-                            val todayCal = remember { Calendar.getInstance() }
-                            val dayName = SimpleDateFormat("EEEE", Locale("id", "ID")).format(todayCal.time)
-                            val dateStr = SimpleDateFormat("d MMM", Locale("id", "ID")).format(todayCal.time)
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // Kiri: musik mini
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1.15f)
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .background(PochiDesign.SurfaceGlass)
-                                        .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
-                                        .clickable { activeTab = PochiTab.WALLET }
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(9.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(
-                                                    Brush.linearGradient(
-                                                        listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))
-                                                    )
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.MusicNote,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(19.dp)
-                                            )
-                                        }
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = mediaPlayback.title.ifBlank { if (isId) "Tidak ada media" else "No media" },
-                                                color = textPrimary,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = mediaPlayback.artist.ifBlank { if (isId) "Ketuk untuk musik" else "Tap for music" },
-                                                color = textSecondary,
-                                                fontSize = 10.sp,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceEvenly
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.SkipPrevious,
-                                            contentDescription = "Previous",
-                                            tint = Color.White,
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clickable {
-                                                    dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-                                                    PochiSignals.playTapHaptic(context)
-                                                }
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .size(34.dp)
-                                                .clip(CircleShape)
-                                                .background(Color.White)
-                                                .clickable {
-                                                    dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                                                    PochiSignals.playTapHaptic(context)
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = if (mediaPlayback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                                contentDescription = "Play/Pause",
-                                                tint = Color.Black,
-                                                modifier = Modifier.size(19.dp)
-                                            )
-                                        }
-                                        Icon(
-                                            imageVector = Icons.Rounded.SkipNext,
-                                            contentDescription = "Next",
-                                            tint = Color.White,
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clickable {
-                                                    dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
-                                                    PochiSignals.playTapHaptic(context)
-                                                }
-                                        )
-                                    }
-                                }
-
-                                // Kanan: agenda mini
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .background(PochiDesign.SurfaceGlass)
-                                        .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
-                                        .clickable { activeTab = PochiTab.TODAY }
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Text(
-                                            text = dayName,
-                                            color = PochiDesign.AccentGold,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = dateStr,
-                                            color = textPrimary,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Mosque,
-                                            contentDescription = null,
-                                            tint = PochiDesign.AccentGold,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Text(
-                                            text = "${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
-                                            color = textPrimary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.CheckCircle,
-                                            contentDescription = null,
-                                            tint = PochiDesign.StatusGreen,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Text(
-                                            text = if (isId) "$remaining tugas tersisa • $selectedCity" else "$remaining tasks left • $selectedCity",
-                                            color = textSecondary,
-                                            fontSize = 10.sp,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    Text(
-                                        text = if (isId) "Ketuk untuk aktivitas" else "Tap for activity",
-                                        color = accentViolet,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
+                            GlancePage(
+                                context = context,
+                                isId = isId,
+                                selectedCity = selectedCity,
+                                tasks = tasks,
+                                mediaPlayback = mediaPlayback,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                borderHairline = borderHairline,
+                                accentViolet = accentViolet,
+                                onOpenTab = { activeTab = it }
+                            )
                         }
 
-                        // CARD 1: SPOTIFY & PODCAST NOW PLAYING (Direct match for Image 1)
+
+                        // CARD 1: SPOTIFY & PODCAST NOW PLAYING
                         activeTab == PochiTab.WALLET -> {
-                            val title = mediaPlayback.title.ifBlank { "Cruel Summer" }
-                            val artist = mediaPlayback.artist.ifBlank { "Taylor Swift • Lover" }
-                            val isPlaying = mediaPlayback.isPlaying
-
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // Middle row: Album Art Squircle + Song Title + Green Checkmark
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    // Album Artwork Squircle (52dp)
-                                    Box(
-                                        modifier = Modifier
-                                            .size(52.dp)
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(
-                                                Brush.linearGradient(
-                                                    listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))
-                                                )
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.MusicNote,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-
-                                    // Track Info & Verification
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                        ) {
-                                            Text(
-                                                text = title,
-                                                color = textPrimary,
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Icon(
-                                                imageVector = Icons.Rounded.CheckCircle,
-                                                contentDescription = "Verified",
-                                                tint = spotifyGreen,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                        Text(
-                                            text = artist,
-                                            color = textSecondary,
-                                            fontSize = 12.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-
-                                // Timeline Slider
-                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(3.dp)
-                                            .clip(RoundedCornerShape(2.dp))
-                                            .background(Color(0xFF2C2C2E))
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth(0.38f)
-                                                .fillMaxHeight()
-                                                .background(spotifyGreen)
-                                        )
-                                    }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(text = "1:20", color = textSecondary, fontSize = 10.sp)
-                                        Text(text = "-2:16", color = textSecondary, fontSize = 10.sp)
-                                    }
-                                }
-
-                                // Controls: Shuffle, Prev, Big Center White Play/Pause Button (50dp), Next, Repeat
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceAround
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Shuffle,
-                                        contentDescription = "Shuffle",
-                                        tint = textSecondary,
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { PochiSignals.playTapHaptic(context) }
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Rounded.SkipPrevious,
-                                        contentDescription = "Previous",
-                                        tint = Color.White,
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clickable {
-                                                dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-                                                PochiSignals.playTapHaptic(context)
-                                            }
-                                    )
-                                    // Big Central Circular White Play/Pause Button (50dp)
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White)
-                                            .clickable {
-                                                dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                                                PochiSignals.playTapHaptic(context)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                            contentDescription = "Play/Pause",
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = Icons.Rounded.SkipNext,
-                                        contentDescription = "Next",
-                                        tint = Color.White,
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clickable {
-                                                dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
-                                                PochiSignals.playTapHaptic(context)
-                                            }
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Rounded.Repeat,
-                                        contentDescription = "Repeat",
-                                        tint = textSecondary,
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { PochiSignals.playTapHaptic(context) }
-                                    )
-                                }
-                            }
+                            MusicPage(
+                                context = context,
+                                mediaPlayback = mediaPlayback,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                spotifyGreen = spotifyGreen
+                            )
                         }
 
-                        // CARD 2: FACETIME / TELEGRAM POCHI CALL (Direct match for Image 1)
+
+                        // CARD 2: FACETIME / TELEGRAM POCHI CALL
                         activeTab == PochiTab.CHAT -> {
-                            val mins = callSeconds / 60
-                            val secs = callSeconds % 60
-                            val callTimeFormatted = String.format(Locale.US, "%02d:%02d", mins, secs)
-
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // Middle row: Big Squircle Video Frame with Pochi Mascot + Status
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    // Avatar Squircle (54dp) containing animated Pochi Mascot eyes
-                                    Box(
-                                        modifier = Modifier
-                                            .size(54.dp)
-                                            .clip(RoundedCornerShape(18.dp))
-                                            .background(cardSurface)
-                                            .border(1.dp, borderHairline, RoundedCornerShape(18.dp))
-                                            .clickable {
-                                                pokeCount++
-                                                val (em, _, _) = PochiMood.onPokeReaction(pokeCount)
-                                                customEmote = em
-                                                PochiSignals.playTapHaptic(context)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        PochiMascot(
-                                            state = botState,
-                                            emoteOverride = activeEmote,
-                                            size = 36.dp,
-                                            showBlackBacking = false
-                                        )
-                                    }
-
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        Text(
-                                            text = "Pochi Assistant",
-                                            color = textPrimary,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(6.dp)
-                                                    .clip(CircleShape)
-                                                    .background(if (isListeningVoice) iosRed else iosGreen)
-                                            )
-                                            Text(
-                                                text = if (isListeningVoice) (if (isId) "Mendengarkan..." else "Listening...") else "Live • $callTimeFormatted",
-                                                color = textSecondary,
-                                                fontSize = 12.sp
-                                            )
-                                        }
-                                        if (voicePartialText.isNotBlank()) {
-                                            Text(
-                                                text = "\"$voicePartialText\"",
-                                                color = iosBlue,
-                                                fontSize = 11.sp,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
+                            CallPage(
+                                context = context,
+                                isId = isId,
+                                callSeconds = callSeconds,
+                                isListeningVoice = isListeningVoice,
+                                voicePartialText = voicePartialText,
+                                botState = botState,
+                                activeEmote = activeEmote,
+                                cardSurface = cardSurface,
+                                borderHairline = borderHairline,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                iosRed = iosRed,
+                                iosGreen = iosGreen,
+                                iosBlue = iosBlue,
+                                iosGray = iosGray,
+                                onPoke = {
+                                    pokeCount++
+                                    val (em, _, _) = PochiMood.onPokeReaction(pokeCount)
+                                    customEmote = em
+                                    PochiSignals.playTapHaptic(context)
+                                },
+                                onToggleVoice = { toggleVoiceListening() },
+                                onQuickAi = {
+                                    customEmote = PochiEmote.EXCITED
+                                    voicePartialText = if (isId) "Pochi siap melayani Tuan Andre!" else "Pochi is ready for Tuan Andre!"
+                                    PochiSignals.playTapHaptic(context)
+                                },
+                                onEndCall = {
+                                    customEmote = PochiEmote.BYE
+                                    setMode(IslandMode.COLLAPSED)
+                                    PochiSignals.playTapHaptic(context)
                                 }
-
-                                // 3 Large Round Buttons (FaceTime / Telegram Call style: Mic, Tanya AI, End Call)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    // Button 1: Mic / Mute
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(48.dp)
-                                            .clip(RoundedCornerShape(24.dp))
-                                            .background(if (isListeningVoice) iosRed else iosGray)
-                                            .clickable {
-                                                toggleVoiceListening()
-                                                PochiSignals.playTapHaptic(context)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isListeningVoice) Icons.Rounded.MicOff else Icons.Rounded.Mic,
-                                                contentDescription = "Mic",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Text(
-                                                text = if (isListeningVoice) "Stop" else "Bicara",
-                                                color = Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-
-                                    // Button 2: Quick AI Prompt
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(48.dp)
-                                            .clip(RoundedCornerShape(24.dp))
-                                            .background(iosBlue)
-                                            .clickable {
-                                                customEmote = PochiEmote.EXCITED
-                                                voicePartialText = if (isId) "Pochi siap melayani Tuan Andre!" else "Pochi is ready for Tuan Andre!"
-                                                PochiSignals.playTapHaptic(context)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.AutoAwesome,
-                                                contentDescription = "AI",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Text(
-                                                text = "Tanya AI",
-                                                color = Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-
-                                    // Button 3: End / Dismiss Call
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(48.dp)
-                                            .clip(RoundedCornerShape(24.dp))
-                                            .background(iosRed)
-                                            .clickable {
-                                                customEmote = PochiEmote.BYE
-                                                setMode(IslandMode.COLLAPSED)
-                                                PochiSignals.playTapHaptic(context)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.CallEnd,
-                                                contentDescription = "End Call",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Text(
-                                                text = "Tutup",
-                                                color = Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            )
                         }
+
 
                         // CARD 3: APPLE HEALTH ACTIVITY RINGS (Direct match for Image 3)
                         activeTab == PochiTab.TODAY -> {
@@ -2164,4 +1701,563 @@ private fun dispatchMediaKey(context: Context, keyCode: Int) {
     }
 }
 
+@Composable
+private fun GlancePage(
+    context: Context,
+    isId: Boolean,
+    selectedCity: String,
+    tasks: List<TodayTask>,
+    mediaPlayback: MediaPlaybackInfo,
+    textPrimary: Color,
+    textSecondary: Color,
+    borderHairline: Color,
+    accentViolet: Color,
+    onOpenTab: (PochiTab) -> Unit
+) {
+    val nextPrayer = PrayerScheduleHelper.getNextPrayer(selectedCity)
+    val remaining = tasks.count { !it.isDone }
+    val todayCal = remember { Calendar.getInstance() }
+    val dayName = SimpleDateFormat("EEEE", Locale("id", "ID")).format(todayCal.time)
+    val dateStr = SimpleDateFormat("d MMM", Locale("id", "ID")).format(todayCal.time)
 
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Kiri: musik mini
+        Column(
+            modifier = Modifier
+                .weight(1.15f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(PochiDesign.SurfaceGlass)
+                .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
+                .clickable { onOpenTab(PochiTab.WALLET) }
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = mediaPlayback.title.ifBlank { if (isId) "Tidak ada media" else "No media" },
+                        color = textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = mediaPlayback.artist.ifBlank { if (isId) "Ketuk untuk musik" else "Tap for music" },
+                        color = textSecondary,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.SkipPrevious,
+                    contentDescription = "Previous",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable {
+                            dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                            PochiSignals.playTapHaptic(context)
+                        }
+                )
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .clickable {
+                            dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                            PochiSignals.playTapHaptic(context)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (mediaPlayback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = "Play/Pause",
+                        tint = Color.Black,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Rounded.SkipNext,
+                    contentDescription = "Next",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable {
+                            dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+                            PochiSignals.playTapHaptic(context)
+                        }
+                )
+            }
+        }
+
+        // Kanan: agenda mini
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(PochiDesign.SurfaceGlass)
+                .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
+                .clickable { onOpenTab(PochiTab.TODAY) }
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = dayName,
+                    color = PochiDesign.AccentGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = dateStr,
+                    color = textPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Mosque,
+                    contentDescription = null,
+                    tint = PochiDesign.AccentGold,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = "${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
+                    color = textPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = PochiDesign.StatusGreen,
+                    modifier = Modifier.size(12.dp)
+                )
+                Text(
+                    text = if (isId) "$remaining tugas tersisa • $selectedCity" else "$remaining tasks left • $selectedCity",
+                    color = textSecondary,
+                    fontSize = 10.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = if (isId) "Ketuk untuk aktivitas" else "Tap for activity",
+                color = accentViolet,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun MusicPage(
+    context: Context,
+    mediaPlayback: MediaPlaybackInfo,
+    textPrimary: Color,
+    textSecondary: Color,
+    spotifyGreen: Color
+) {
+    val title = mediaPlayback.title.ifBlank { "Cruel Summer" }
+    val artist = mediaPlayback.artist.ifBlank { "Taylor Swift • Lover" }
+    val isPlaying = mediaPlayback.isPlaying
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Middle row: Album Art Squircle + Song Title + Green Checkmark
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Album Artwork Squircle (52dp)
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Track Info & Verification
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Text(
+                        text = title,
+                        color = textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = "Verified",
+                        tint = spotifyGreen,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Text(
+                    text = artist,
+                    color = textSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Timeline Slider
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFF2C2C2E))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.38f)
+                        .fillMaxHeight()
+                        .background(spotifyGreen)
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = "1:20", color = textSecondary, fontSize = 10.sp)
+                Text(text = "-2:16", color = textSecondary, fontSize = 10.sp)
+            }
+        }
+
+        // Controls: Shuffle, Prev, Big Center White Play/Pause Button (50dp), Next, Repeat
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Shuffle,
+                contentDescription = "Shuffle",
+                tint = textSecondary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { PochiSignals.playTapHaptic(context) }
+            )
+            Icon(
+                imageVector = Icons.Rounded.SkipPrevious,
+                contentDescription = "Previous",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable {
+                        dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                        PochiSignals.playTapHaptic(context)
+                    }
+            )
+            // Big Central Circular White Play/Pause Button (50dp)
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .clickable {
+                        dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                        PochiSignals.playTapHaptic(context)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = "Play/Pause",
+                    tint = Color.Black,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.SkipNext,
+                contentDescription = "Next",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable {
+                        dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+                        PochiSignals.playTapHaptic(context)
+                    }
+            )
+            Icon(
+                imageVector = Icons.Rounded.Repeat,
+                contentDescription = "Repeat",
+                tint = textSecondary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { PochiSignals.playTapHaptic(context) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CallPage(
+    context: Context,
+    isId: Boolean,
+    callSeconds: Int,
+    isListeningVoice: Boolean,
+    voicePartialText: String,
+    botState: BotState,
+    activeEmote: PochiEmote,
+    cardSurface: Color,
+    borderHairline: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    iosRed: Color,
+    iosGreen: Color,
+    iosBlue: Color,
+    iosGray: Color,
+    onPoke: () -> Unit,
+    onToggleVoice: () -> Unit,
+    onQuickAi: () -> Unit,
+    onEndCall: () -> Unit
+) {
+    val mins = callSeconds / 60
+    val secs = callSeconds % 60
+    val callTimeFormatted = String.format(Locale.US, "%02d:%02d", mins, secs)
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Middle row: Big Squircle Video Frame with Pochi Mascot + Status
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Avatar Squircle (54dp) containing animated Pochi Mascot eyes
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(cardSurface)
+                    .border(1.dp, borderHairline, RoundedCornerShape(18.dp))
+                    .clickable {
+                        onPoke()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                PochiMascot(
+                    state = botState,
+                    emoteOverride = activeEmote,
+                    size = 36.dp,
+                    showBlackBacking = false
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "Pochi Assistant",
+                    color = textPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(if (isListeningVoice) iosRed else iosGreen)
+                    )
+                    Text(
+                        text = if (isListeningVoice) (if (isId) "Mendengarkan..." else "Listening...") else "Live • $callTimeFormatted",
+                        color = textSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+                if (voicePartialText.isNotBlank()) {
+                    Text(
+                        text = "\"$voicePartialText\"",
+                        color = iosBlue,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // 3 Large Round Buttons (FaceTime / Telegram Call style: Mic, Tanya AI, End Call)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Button 1: Mic / Mute
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(if (isListeningVoice) iosRed else iosGray)
+                    .clickable {
+                        onToggleVoice()
+                        PochiSignals.playTapHaptic(context)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isListeningVoice) Icons.Rounded.MicOff else Icons.Rounded.Mic,
+                        contentDescription = "Mic",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = if (isListeningVoice) "Stop" else "Bicara",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Button 2: Quick AI Prompt
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(iosBlue)
+                    .clickable {
+                        onQuickAi()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoAwesome,
+                        contentDescription = "AI",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Tanya AI",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Button 3: End / Dismiss Call
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(iosRed)
+                    .clickable {
+                        onEndCall()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.CallEnd,
+                        contentDescription = "End Call",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Tutup",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
