@@ -1221,6 +1221,15 @@ private fun PochiAiCenterScreen(
 
     val scroll = rememberScrollState()
 
+    // Setelah jawaban/kartu baru tampil (mis. kartu harga BTC yang
+    // tinggi), gulir ke bawah agar kolom input di dasar kartu tidak
+    // tertutup keluar layar.
+    LaunchedEffect(activeCard, lastAnswer) {
+        if (activeCard != null) {
+            scroll.animateScrollTo(scroll.maxValue)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
