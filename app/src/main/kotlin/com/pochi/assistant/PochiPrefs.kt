@@ -311,6 +311,8 @@ object PrayerScheduleHelper {
     )
 
     fun getScheduleForCity(city: String): List<PrayerTimeItem> {
+        // Tahap 12: jadwal asli dari Aladhan bila sudah terambil.
+        PochiLiveData.prayerFor(city)?.let { return it }
         val shift = cityMinuteOffsets[city] ?: 0
         fun shifted(nameId: String, nameEn: String, baseH: Int, baseM: Int): PrayerTimeItem {
             val total = (baseH * 60 + baseM + shift + 1440) % 1440
@@ -325,8 +327,10 @@ object PrayerScheduleHelper {
         )
     }
 
-    fun getNextPrayer(city: String): NextPrayerSummary {
-        val schedule = getScheduleForCity(city)
+    fun getNextPrayer(city: String): NextPrayerSummary =
+        nextFromSchedule(getScheduleForCity(city))
+
+    fun nextFromSchedule(schedule: List<PrayerTimeItem>): NextPrayerSummary {
         val now = Calendar.getInstance()
         val nowMins = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
 
@@ -362,6 +366,27 @@ data class WeatherSnapshot(
 
 object WeatherHelper {
     fun getSnapshot(city: String, customTempC: Int? = null): WeatherSnapshot {
+        // Tahap 12: dahulukan data asli Open-Meteo bila tersedia.
+        PochiLiveData.weatherFlow.value
+            ?.takeIf { it.city == city }
+            ?.let { lw ->
+                val t = customTempC ?: lw.tempC
+                val (aId, aEn) = when {
+                    t >= 31 -> "Cuaca cukup terik, perbanyak minum air putih & gunakan topi/payung." to "Warm weather today, stay hydrated & wear sun protection."
+                    lw.windKmh >= 25 -> "Angin cukup kencang, hati-hati di perjalanan." to "Quite windy today, take care when commuting."
+                    else -> "Cuaca nyaman untuk beraktivitas dan menyelesaikan rencana hari ini." to "Comfortable weather for outdoor activities and productivity."
+                }
+                return WeatherSnapshot(
+                    city = city,
+                    tempC = t,
+                    conditionId = lw.conditionId,
+                    conditionEn = lw.conditionEn,
+                    humidityPercent = lw.humidityPercent,
+                    windKmh = lw.windKmh,
+                    adviceId = aId,
+                    adviceEn = aEn
+                )
+            }
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         val baseCityTemp = when (city) {
             "Bandung" -> 24
