@@ -349,8 +349,8 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         if (!isIslandExpanded && !hiddenState.value && !peekState.value) {
                             if (mini) {
                                 collapseJob?.cancel()
-                                params.width = (54 * density).toInt()
-                                params.height = (28 * density).toInt()
+                                params.width = (58 * density).toInt()
+                                params.height = (30 * density).toInt()
                                 applyLayout()
                             } else {
                                 params.width = collapsedWidthPx
