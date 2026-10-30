@@ -218,6 +218,25 @@ termasuk saat data ditampilkan di chat.
   pahlawan dan kurva dari angka-angkanya, teks lengkap tetap tampil
   sebagai keterangan di bawah kartu.
 
+## Tahap 11 — tanpa logo/nama di navigasi + mata mini lebih besar
+
+Atas arahan pemilik:
+
+- **Header panel tanpa logo dan tanpa nama**: wajah maskot,
+  wordmark "POCHI ✦", dan label status "Pochi" di header panel
+  expanded dihapus. Header kini menampilkan **kategori aktif**
+  (`activeTab.titleId/titleEn`: Sekilas, Aktivitas, Panggilan,
+  Cuaca, Musik, Timer, Aksi) dengan subjudul tanggal lengkap
+  saat diam, atau label status bot saat bekerja/menunggu.
+  Tekan-lama header untuk mode mata tetap berfungsi.
+- **Kapsul**: teks status diam "Pochi ✦" diganti jam (HH:mm).
+  Bilah navigasi aplikasi (PochiFloatingNavBar) memang sudah
+  tanpa logo, dan hero Home adalah konten, bukan navigasi —
+  keduanya tidak diubah.
+- **Mata saat mengecil diperbesar**: mode MINI maskot 12dp ->
+  17dp (island 48x24dp, jendela service 58x30dp), mode EYES
+  maskot 21dp -> 25dp.
+
 ## Tahap 10 — bentuk notch ala iPhone
 
 Atas gambar referensi keynote notch iPhone (kamera inframerah,
