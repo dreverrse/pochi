@@ -153,6 +153,34 @@ Pola perilakunya diterapkan ulang di kode Pochi:
 - Menyusul (Tahap 7): lirik tersinkron pil terbelah & rak file —
   dua fitur Nusa yang paling besar.
 
+## Tahap 7 — Rombak motion & identitas (tetap Compose)
+
+Keputusan pemilik: tetap Kotlin/Compose (prototipe Flutter tidak
+jadi dibuat) — kekakuan build sebelumnya adalah soal koreografi
+animasi, bukan bahasa. Perombakan gerak di `DynamicIslandUI.kt`:
+
+- **Fisika morf**: spring lebar/tinggi kini punya overshoot saat
+  membuka (dampingRatio 0,74) dan tegas saat menutup (0,88); setiap
+  ganti mode memicu pulsa squash & stretch (Animatable pegas longgar
+  0,42) pada kontainer, dan glow violet ikut berdenyut.
+- **Transisi halaman sungguhan**: badan panel dibungkus
+  `AnimatedContent` — halaman bergeser menyamping mengikuti arah
+  urutan halaman + memudar, dengan `SizeTransform` agar perubahan
+  tinggi halaman ikut cair. Titik indikator kini menganimasikan
+  lebar & warnanya dengan pegas.
+- **Mikro-interaksi**: modifier `pochiPress` (mengecil 0,92 lalu
+  memantul pulih) diterapkan pada ikon dock, titik halaman, pil
+  tutup, pil mata, tombol Minum/Fokus, dan tombol play besar.
+  Ring aktivitas, ring kartu Home (`PochiRingProgress`), dan batang
+  grafik air kini menganimasikan nilainya dengan pegas.
+- **Mata responsif**: lirikan mengikuti titik sentuhan pada kapsul
+  lalu kembali netral ±1,5 detik; equalizer statis di kapsul diganti
+  `LiveEqualizer` (4 batang Canvas menari saat musik menyala);
+  partikel "z/Z" (`SleepZzz`) melayang saat mata tertidur di kapsul
+  diam maupun mode EYES.
+- **Identitas**: wordmark header diberi letter-spacing 2sp dan label
+  status 0,5sp agar tidak terasa templat bawaan.
+
 ## Sisa pekerjaan
 
 - Push branch dan verifikasi build GitHub Actions untuk Tahap 4
