@@ -104,6 +104,25 @@ dirombak total agar lebih mewah dan UI lebih responsif.
 - Semua kartu lama (Call, Musik penuh, Aktivitas, Cuaca, Timer,
   persetujuan, tangkapan layar) tidak berubah perilakunya.
 
+## Tahap 5 — Mode mata-saja + ikon mewah (tanpa emoji)
+
+Atas permintaan pemilik: island bisa mengecil sampai hanya mata yang
+terlihat, dan emoji di UI diganti ikon vektor.
+
+- **Mode EYES** (`IslandMode.EYES`): tahan kapsul island ±0,5 detik ->
+  island mengecil menjadi pil 68x34dp yang hanya berisi mata Pochi
+  (tetap hidup: berkedip, melirik, berekspresi). Ketuk pil mata untuk
+  kembali ke kapsul normal; ketuk kapsul untuk membuka panel seperti
+  biasa. Animasi memakai transisi spring yang sama.
+- **Tanpa emoji di island & layar utama**: semua emoji di
+  `DynamicIslandUI.kt` dan `MainActivity.kt` diganti ikon Material
+  Rounded beraksen warna/emas — WaterDrop, PlayArrow, Pause, Stop,
+  Refresh, Mosque, CheckCircle, WbSunny; sublabel ring menjadi teks
+  bersih; lencana bahasa menjadi "ID"/"EN" polos.
+- Catatan: data contoh koleksi Deck di `PochiPrefs` masih memakai
+  emoji sebagai sistem ikon bawaannya (render Deck terpisah), dan
+  simbol ✓/✕ di kartu persetujuan adalah glif teks monokrom.
+
 ## Sisa pekerjaan
 
 - Push branch dan verifikasi build GitHub Actions untuk Tahap 4
