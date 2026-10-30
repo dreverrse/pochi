@@ -1279,36 +1279,49 @@ fun PochiIslandBot(
                                     )
                                 }
 
-                                // Kartu data mewah (Tahap 8, ala referensi):
-                                // kurva kumulatif minum dengan angka pahlawan.
-                                val sortedLog = waterLog.sorted()
-                                val cumulativePoints = buildList {
-                                    add(0f)
-                                    sortedLog.forEachIndexed { i, _ -> add((i + 1) * 250f) }
+                                // Grafik minum per 3 jam (Tahap 6, ala Nusa)
+                                val bucketLabels = listOf("06", "09", "12", "15", "18", "21")
+                                val bucketMl = (0 until 6).map { b ->
+                                    waterLog.count { ts ->
+                                        val h = java.util.Calendar.getInstance()
+                                            .apply { timeInMillis = ts }
+                                            .get(java.util.Calendar.HOUR_OF_DAY)
+                                        h >= 6 + b * 3 && h < 9 + b * 3
+                                    } * 250
                                 }
-                                val totalMl = waterGlasses * 250
-                                val goalPct = (totalMl * 100 / 2000).coerceIn(0, 100)
-                                val lastDrink = sortedLog.lastOrNull()?.let { ts ->
-                                    java.text.SimpleDateFormat("HH:mm", Locale.US)
-                                        .format(java.util.Date(ts))
+                                val bucketMax = (bucketMl.maxOrNull() ?: 0).coerceAtLeast(250)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    bucketMl.forEachIndexed { i, ml ->
+                                        val barHeight by animateDpAsState(
+                                            targetValue = (6 + 18 * ml / bucketMax).dp,
+                                            animationSpec = spring(dampingRatio = 0.72f, stiffness = 210f),
+                                            label = "waterBar"
+                                        )
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(20.dp)
+                                                    .height(barHeight)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(
+                                                        if (ml > 0) iosBlue else borderHairline
+                                                    )
+                                            )
+                                            Text(
+                                                text = bucketLabels[i],
+                                                color = textSecondary,
+                                                fontSize = 8.sp
+                                            )
+                                        }
+                                    }
                                 }
-                                PochiDataCard(
-                                    title = if (isId) "Grafik minum hari ini" else "Today's hydration",
-                                    chipText = if (lastDrink != null) {
-                                        if (isId) "Terakhir $lastDrink" else "Last $lastDrink"
-                                    } else {
-                                        if (isId) "Belum minum" else "No drinks yet"
-                                    },
-                                    heroLabel = if (isId) "Target harian tercapai" else "Daily goal reached",
-                                    heroValue = "$goalPct%",
-                                    footer = if (isId) {
-                                        "Total $totalMl ml dari target 2.000 ml"
-                                    } else {
-                                        "$totalMl ml of 2,000 ml goal"
-                                    },
-                                    points = cumulativePoints,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
 
                                 // Large Tactile Buttons: Log Water & Start Focus
                                 Row(
@@ -1392,7 +1405,9 @@ fun PochiIslandBot(
                             val nextPrayer = PrayerScheduleHelper.getNextPrayer(selectedCity)
 
                             Column(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 // Header: City & UV
@@ -1447,6 +1462,24 @@ fun PochiIslandBot(
                                     }
                                 }
 
+                                // Kartu data mewah (Tahap 8.1): grafik suhu
+                                // per jam — satu-satunya tempat kartu ini.
+                                val hourlyTemps = listOf(
+                                    27f, 28f, 30f, 32f, 33f, 32.5f, 31f, 29f, 28f, 27f
+                                )
+                                PochiDataCard(
+                                    title = selectedCity,
+                                    chipText = if (isId) "Per jam" else "Hourly",
+                                    heroLabel = if (isId) "Suhu sekarang • Cerah berawan" else "Now • Partly cloudy",
+                                    heroValue = "$liveTemp°C",
+                                    footer = if (isId) {
+                                        "Tertinggi ${(hourlyTemps.maxOrNull() ?: 0f).toInt()}°C • Terendah ${(hourlyTemps.minOrNull() ?: 0f).toInt()}°C • UV High indeks 8"
+                                    } else {
+                                        "High ${(hourlyTemps.maxOrNull() ?: 0f).toInt()}°C • Low ${(hourlyTemps.minOrNull() ?: 0f).toInt()}°C • UV High index 8"
+                                    },
+                                    points = hourlyTemps,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                                 // Large Buttons: Prayer Schedule & Weather Refresh
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
