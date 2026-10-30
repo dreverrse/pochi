@@ -88,6 +88,7 @@ enum class PochiTab(
     val icon: ImageVector,
     val accent: Color
 ) {
+    GLANCE("Glance", "Sekilas", Icons.Rounded.Dashboard, Color(0xFF7C5CFF)),
     TODAY("Activity", "Aktivitas", Icons.Rounded.DonutLarge, Color(0xFF34C759)),
     CHAT("Call", "Panggilan", Icons.Rounded.Call, Color(0xFF007AFF)),
     LIFE("Weather", "Cuaca", Icons.Rounded.WbSunny, Color(0xFFFF9500)),
@@ -168,7 +169,7 @@ fun PochiIslandBot(
     val isId = lang == PochiLang.ID
 
     var islandMode by remember { mutableStateOf(IslandMode.COLLAPSED) }
-    var activeTab by remember { mutableStateOf(PochiTab.CHAT) }
+    var activeTab by remember { mutableStateOf(PochiTab.GLANCE) }
     var botState by remember { mutableStateOf(BotState.IDLE) }
     var customEmote by remember { mutableStateOf<PochiEmote?>(null) }
     var idleEmote by remember { mutableStateOf<PochiEmote?>(PochiEmote.SMILING) }
@@ -203,15 +204,9 @@ fun PochiIslandBot(
     var liveTemp by remember { mutableStateOf(32) }
     var isRefreshingWeather by remember { mutableStateOf(false) }
 
-    // Time ticker for header clock
-    var currentTimeString by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-        while (true) {
-            currentTimeString = sdf.format(Date())
-            delay(1000)
-        }
-    }
+    // Jam header kini hidup di composable kecil PochiClockText (lihat
+    // bawah file) agar tik 1 detik tidak merekomposisi seluruh island
+    // — perbaikan responsivitas Tahap 4.
 
     // Call duration ticker
     LaunchedEffect(islandMode, activeTab) {
@@ -377,7 +372,7 @@ fun PochiIslandBot(
     } else {
         (screenWidth - 20.dp).coerceIn(336.dp, 380.dp)
     }
-    val expandedHeight = 224.dp
+    val expandedHeight = 252.dp
 
     val transition = updateTransition(targetState = islandMode, label = "islandTransition")
 
@@ -395,7 +390,7 @@ fun PochiIslandBot(
 
     val islandWidth by transition.animateDp(
         transitionSpec = {
-            spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+            spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
         },
         label = "islandWidth"
     ) { mode ->
@@ -404,7 +399,7 @@ fun PochiIslandBot(
 
     val islandHeightAnim by transition.animateDp(
         transitionSpec = {
-            spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+            spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
         },
         label = "islandHeight"
     ) { mode ->
@@ -414,7 +409,7 @@ fun PochiIslandBot(
     // Authentic Apple Squircle Corner Radii: 18dp for capsule pill, 32dp for expanded card
     val islandCornerRadius by transition.animateDp(
         transitionSpec = {
-            spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+            spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
         },
         label = "islandCornerRadius"
     ) { mode ->
@@ -481,9 +476,36 @@ fun PochiIslandBot(
                         scaleY = 2f - breathScale
                     }
                 }
-                .background(islandBlack, islandShape)
-                .border(1.dp, borderHairline, islandShape)
+                .background(
+                    Brush.verticalGradient(listOf(PochiDesign.Void, islandBlack)),
+                    islandShape
+                )
+                .border(
+                    1.dp,
+                    Brush.verticalGradient(
+                        listOf(PochiDesign.FaceRim.copy(alpha = 0.85f), borderHairline)
+                    ),
+                    islandShape
+                )
         ) {
+            // Cahaya violet lembut di balik konten (Tahap 4) — memberi
+            // kedalaman premium tanpa mengorbankan keterbacaan.
+            if (expandedContentAlpha > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(170.dp)
+                        .graphicsLayer { alpha = expandedContentAlpha }
+                        .background(
+                            Brush.radialGradient(
+                                listOf(
+                                    accentViolet.copy(alpha = 0.20f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+            }
             // ================= 1. COLLAPSED DYNAMIC ISLAND CAPSULE =================
             if (collapsedContentAlpha > 0.01f) {
                 Row(
@@ -635,72 +657,59 @@ fun PochiIslandBot(
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // --- TOP BAR: Sleek Apple Live Activity Pill Switcher & Dismiss ---
+                    // --- HEADER PREMIUM (Tahap 4): wajah + identitas + jam + tutup ---
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // Card switcher pills: Media, Call, Activity, Weather, Timer
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(cardSurface)
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
-                        ) {
-                            val availableTabs = listOf(
-                                PochiTab.CHAT,
-                                PochiTab.WALLET,
-                                PochiTab.TODAY,
-                                PochiTab.LIFE
-                            )
-                            availableTabs.forEach { tab ->
-                                val isSel = activeTab == tab
-                                Box(
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isSel) tab.accent.copy(alpha = 0.25f) else Color.Transparent)
-                                        .clickable {
-                                            activeTab = tab
-                                            PochiSignals.playTapHaptic(context)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = tab.icon,
-                                        contentDescription = tab.titleEn,
-                                        tint = if (isSel) tab.accent else textSecondary,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Right: Blueprint face (Tahap 1) + Clock + Minimal Close Pill
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)
                         ) {
                             PochiFaceMascot(
                                 face = PochiFace.forState(botState),
-                                size = 24.dp,
-                                showWaves = false
+                                size = 30.dp,
+                                showWaves = true
                             )
-                            Text(
-                                text = currentTimeString.ifBlank { "21:31" },
-                                color = textSecondary,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Column {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Text(
+                                        text = "POCHI",
+                                        color = textPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Text(
+                                        text = "✦",
+                                        color = PochiDesign.AccentGold,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text(
+                                    text = botState.statusLabel,
+                                    color = textSecondary,
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            PochiClockText()
                             Box(
                                 modifier = Modifier
-                                    .size(24.dp)
+                                    .size(26.dp)
                                     .clip(CircleShape)
-                                    .background(cardSurface)
+                                    .background(PochiDesign.SurfaceGlass)
+                                    .border(1.dp, borderHairline, CircleShape)
                                     .clickable { setMode(IslandMode.COLLAPSED) },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -793,6 +802,170 @@ fun PochiIslandBot(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(text = if (isId) "Buka" else "Open", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        }
+
+                        // CARD 0: GLANCE ala notch Mac (Tahap 4) — musik kiri, agenda kanan
+                        activeTab == PochiTab.GLANCE -> {
+                            val nextPrayer = PrayerScheduleHelper.getNextPrayer(selectedCity)
+                            val remaining = tasks.count { !it.isDone }
+                            val todayCal = remember { Calendar.getInstance() }
+                            val dayName = SimpleDateFormat("EEEE", Locale("id", "ID")).format(todayCal.time)
+                            val dateStr = SimpleDateFormat("d MMM", Locale("id", "ID")).format(todayCal.time)
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // Kiri: musik mini
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1.15f)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(PochiDesign.SurfaceGlass)
+                                        .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
+                                        .clickable { activeTab = PochiTab.WALLET }
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(9.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(
+                                                    Brush.linearGradient(
+                                                        listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))
+                                                    )
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.MusicNote,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(19.dp)
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = mediaPlayback.title.ifBlank { if (isId) "Tidak ada media" else "No media" },
+                                                color = textPrimary,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = mediaPlayback.artist.ifBlank { if (isId) "Ketuk untuk musik" else "Tap for music" },
+                                                color = textSecondary,
+                                                fontSize = 10.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceEvenly
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.SkipPrevious,
+                                            contentDescription = "Previous",
+                                            tint = Color.White,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clickable {
+                                                    dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                                                    PochiSignals.playTapHaptic(context)
+                                                }
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White)
+                                                .clickable {
+                                                    dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                                                    PochiSignals.playTapHaptic(context)
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = if (mediaPlayback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                                contentDescription = "Play/Pause",
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(19.dp)
+                                            )
+                                        }
+                                        Icon(
+                                            imageVector = Icons.Rounded.SkipNext,
+                                            contentDescription = "Next",
+                                            tint = Color.White,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clickable {
+                                                    dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+                                                    PochiSignals.playTapHaptic(context)
+                                                }
+                                        )
+                                    }
+                                }
+
+                                // Kanan: agenda mini
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(PochiDesign.SurfaceGlass)
+                                        .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
+                                        .clickable { activeTab = PochiTab.TODAY }
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = dayName,
+                                            color = PochiDesign.AccentGold,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = dateStr,
+                                            color = textPrimary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Text(
+                                        text = "🕌 ${nextPrayer.prayer.nameId} ${nextPrayer.prayer.formatted}",
+                                        color = textPrimary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (isId) "🎯 $remaining tugas tersisa • $selectedCity" else "🎯 $remaining tasks left • $selectedCity",
+                                        color = textSecondary,
+                                        fontSize = 10.sp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (isId) "Ketuk untuk aktivitas" else "Tap for activity",
+                                        color = accentViolet,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
@@ -1486,6 +1659,57 @@ fun PochiIslandBot(
                             }
                         }
                     }
+
+                    // --- DOCK KACA (Tahap 4): pengganti switcher lama ---
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(PochiDesign.SurfaceGlass)
+                                .border(1.dp, borderHairline, RoundedCornerShape(20.dp))
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                        ) {
+                            val dockTabs = listOf(
+                                PochiTab.GLANCE,
+                                PochiTab.CHAT,
+                                PochiTab.WALLET,
+                                PochiTab.TODAY,
+                                PochiTab.LIFE,
+                                PochiTab.FOCUS
+                            )
+                            dockTabs.forEach { tab ->
+                                val isSel = activeTab == tab
+                                val selBg = if (isSel) {
+                                    Brush.linearGradient(listOf(accentViolet, PochiDesign.FaceRim))
+                                } else {
+                                    Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .background(selBg)
+                                        .clickable {
+                                            activeTab = tab
+                                            PochiSignals.playTapHaptic(context)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = tab.icon,
+                                        contentDescription = tab.titleEn,
+                                        tint = if (isSel) Color.White else textSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1549,6 +1773,33 @@ private fun ActivityRingItem(
             fontWeight = FontWeight.Medium
         )
     }
+}
+
+/**
+ * Jam kecil mandiri untuk header island (Tahap 4): state tik 1 detik
+ * terkurung di sini sehingga hanya teks jam yang direkomposisi tiap
+ * detik, bukan seluruh panel island.
+ */
+@Composable
+fun PochiClockText(
+    color: Color = PochiDesign.TextSecondary,
+    fontSize: androidx.compose.ui.unit.TextUnit = 11.sp
+) {
+    var now by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+        while (true) {
+            now = sdf.format(Date())
+            delay(1000)
+        }
+    }
+    Text(
+        text = now.ifBlank { "--:--" },
+        color = color,
+        fontSize = fontSize,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.SemiBold
+    )
 }
 
 /**

@@ -43,6 +43,12 @@ object PochiDesign {
     val AccentPink = Color(0xFFFF6B9D)       // love / shy
     val AccentRed = Color(0xFFFF3B30)        // angry / error
 
+    // Lapisan premium (Tahap 4 — dashboard notch mewah)
+    val SurfaceGlass = Color(0xFF17171F)     // permukaan kaca dock/kartu glance
+    val SurfaceGlassHigh = Color(0xFF1F1F2A) // kaca terangkat (hover/aktif)
+    val AccentGold = Color(0xFFE3B341)       // aksen emas tipis untuk detail mewah
+    val GlowViolet = Color(0xFF7C5CFF)       // dipakai dengan alpha rendah sebagai cahaya
+
     // Teks
     val TextPrimary = Color(0xFFFFFFFF)
     val TextSecondary = Color(0xFF8E8E93)
