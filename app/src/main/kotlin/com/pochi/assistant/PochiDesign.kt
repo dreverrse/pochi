@@ -49,6 +49,17 @@ object PochiDesign {
     val AccentGold = Color(0xFFE3B341)       // aksen emas tipis untuk detail mewah
     val GlowViolet = Color(0xFF7C5CFF)       // dipakai dengan alpha rendah sebagai cahaya
 
+    // Papan widget (Tahap 9 — rombak total ala referensi papan hitam):
+    // kartu hitam pekat bertepi garis rambut, label mini, data padat.
+    val WidgetSurface = Color(0xFF101013)    // permukaan kartu widget
+    val WidgetSurfaceHigh = Color(0xFF17171B) // widget terangkat/aktif
+    val WidgetBorder = Color(0xFF232329)     // garis tepi widget
+    val WidgetLabel = Color(0xFF8B8B93)      // label kecil abu-abu widget
+    val BoardBlue = Color(0xFF0A84FF)        // aksen biru dominan referensi
+    val BoardGreen = Color(0xFF30D158)
+    val BoardOrange = Color(0xFFFF9F0A)
+    val BoardRed = Color(0xFFFF453A)
+
     // Teks
     val TextPrimary = Color(0xFFFFFFFF)
     val TextSecondary = Color(0xFF8E8E93)
