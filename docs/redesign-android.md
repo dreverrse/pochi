@@ -123,6 +123,36 @@ terlihat, dan emoji di UI diganti ikon vektor.
   emoji sebagai sistem ikon bawaannya (render Deck terpisah), dan
   simbol ✓/✕ di kartu persetujuan adalah glif teks monokrom.
 
+## Tahap 6 — Semirip mungkin dengan Nusa + perbaikan mengecil
+
+Referensi: Nusa (rama2555.github.io/nusa), "living notch" untuk Windows.
+Pola perilakunya diterapkan ulang di kode Pochi:
+
+- **Perbaikan mengecil**: keluhan pemilik — mode mata Tahap 5 sulit
+  terpicu karena tekan lama baru dinilai saat jari diangkat. Kini
+  gestur kapsul dua fase: tekan lama **menyala saat masih ditahan**
+  (450 md, sebelum jari diangkat), dibedakan dari ketuk & seret sejak
+  awal. Tekan lama pada header panel juga masuk mode EYES.
+- **Halaman geser + titik indikator**: panel kini digeser menyamping
+  untuk berpindah halaman (urutan Glance, Musik, Aktivitas, Hidup,
+  Fokus, Chat), ada bar titik ala Nusa di atas dock (titik aktif
+  memanjang violet, bisa diketuk), dock ikon tetap ada seperti
+  "page icon bar" Nusa 1.1. Tinggi panel 252 -> 264dp.
+- **Siklus mata pendamping**: saat kapsul diam 15 detik (dan tidak ada
+  musik), jam/status memudar dan tinggal sepasang mata di tengah;
+  setelah 75 detik mata tertidur (emote SLEEPY); mengetuk untuk
+  membuka menyapa dengan emote gembira — meniru siklus jam -> mata ->
+  tidur -> sapa milik Nusa. Berlaku juga di mode EYES.
+- **Intipan peristiwa (peek)**: `DynamicIslandService` mendaftarkan
+  penerima siaran daya & Bluetooth; pasang/lepas charger dan earbuds
+  tersambung memunculkan kapsul berisi ikon + label + persen baterai
+  selama ±3,4 detik lewat `PochiSignals.systemPeek`.
+- **Grafik air mini**: `PochiPrefs` kini mencatat log waktu minum
+  (`waterLogFlow`, dibersihkan lintas hari); halaman Aktivitas
+  menampilkan grafik batang asupan per 3 jam (06–21) dari log nyata.
+- Menyusul (Tahap 7): lirik tersinkron pil terbelah & rak file —
+  dua fitur Nusa yang paling besar.
+
 ## Sisa pekerjaan
 
 - Push branch dan verifikasi build GitHub Actions untuk Tahap 4
