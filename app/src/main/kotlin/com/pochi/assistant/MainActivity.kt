@@ -331,13 +331,13 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .background(
                         Brush.verticalGradient(
-                            listOf(PochiDesign.FaceBase, PochiDesign.Void)
+                            listOf(PochiDesign.WidgetSurfaceHigh, PochiDesign.WidgetSurface)
                         )
                     )
-                    .border(1.dp, PochiDesign.FaceRim.copy(alpha = 0.55f), RoundedCornerShape(28.dp))
+                    .border(1.dp, PochiDesign.WidgetBorder, RoundedCornerShape(20.dp))
                     .clickable {
                         pokeCount++
                         val (em, _, _) = PochiMood.onPokeReaction(pokeCount)
@@ -1063,7 +1063,7 @@ fun ChatScreen() {
 
 @Composable
 fun ChatBubble(msg: UiChatMessage) {
-    val bubbleColor = if (msg.isUser) Color(0xFF007AFF) else Color(0xFF161622)
+    val bubbleColor = if (msg.isUser) Color(0xFF0A84FF) else PochiDesign.WidgetSurface
     val align = if (msg.isUser) Alignment.End else Alignment.Start
 
     Column(
@@ -1084,8 +1084,8 @@ fun ChatBubble(msg: UiChatMessage) {
                 .background(bubbleColor)
                 .border(
                     width = if (msg.isUser) 0.dp else 1.dp,
-                    color = Color(0xFF26263A),
-                    shape = RoundedCornerShape(18.dp)
+                    color = PochiDesign.WidgetBorder,
+                    shape = RoundedCornerShape(16.dp)
                 )
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
