@@ -11,10 +11,12 @@ import android.provider.OpenableColumns
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -37,6 +39,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -930,17 +933,34 @@ fun PochiRichCardView(
     val enterAnim = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(card) {
         enterAnim.snapTo(0f)
-        enterAnim.animateTo(1f, tween(durationMillis = 650, easing = FastOutSlowInEasing))
+        enterAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        )
     }
 
-    Box(modifier = modifier.fillMaxWidth()) {
+    val p = enterAnim.value.coerceIn(0f, 1.15f)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                alpha = p.coerceIn(0f, 1f)
+                val s = 0.92f + 0.08f * p
+                scaleX = s
+                scaleY = s
+                translationY = (1f - p.coerceIn(0f, 1f)) * 22f
+            }
+    ) {
         when (card) {
-            is PochiRichCard.Crypto -> CryptoRichCardUI(card, enterAnim.value, compact)
-            is PochiRichCard.Chart -> ChartRichCardUI(card, enterAnim.value, compact)
-            is PochiRichCard.Weather -> WeatherRichCardUI(card, enterAnim.value, compact)
-            is PochiRichCard.Prayer -> PrayerRichCardUI(card, enterAnim.value, compact)
+            is PochiRichCard.Crypto -> CryptoRichCardUI(card, p.coerceIn(0f, 1f), compact)
+            is PochiRichCard.Chart -> ChartRichCardUI(card, p.coerceIn(0f, 1f), compact)
+            is PochiRichCard.Weather -> WeatherRichCardUI(card, p.coerceIn(0f, 1f), compact)
+            is PochiRichCard.Prayer -> PrayerRichCardUI(card, p.coerceIn(0f, 1f), compact)
             is PochiRichCard.FileDrop -> FileDropRichCardUI(card, compact)
-            is PochiRichCard.SystemStatus -> SystemStatusRichCardUI(card, enterAnim.value, compact)
+            is PochiRichCard.SystemStatus -> SystemStatusRichCardUI(card, p.coerceIn(0f, 1f), compact)
             is PochiRichCard.Knowledge -> KnowledgeRichCardUI(card, compact)
         }
     }
