@@ -17,6 +17,7 @@ enum class AiProvider(
     val keyHint: String
 ) {
     GEMINI("Gemini", "gemini-2.5-flash", "AIza..."),
+    NINEROUTER("9Router", "openai/gpt-4o-mini", "API key 9Router"),
     OPENROUTER("OpenRouter", "openai/gpt-4o-mini", "sk-or-..."),
     OPENCODE("OpenCode", "glm-5.3-flash", "API key OpenCode"),
     INCEPTION("InceptionLabs", "mercury-3", "il_...")
@@ -26,6 +27,17 @@ object AiClient {
     private const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
     private const val OPENCODE_URL = "https://opencode.ai/inference/openai/v1/chat/completions"
     private const val INCEPTION_URL = "https://api.inceptionlabs.ai/v1/chat/completions"
+    const val DEFAULT_NINEROUTER_BASE_URL = "http://localhost:20128/v1"
+
+    fun normalizeNineRouterUrl(rawBaseUrl: String): String {
+        val trimmed = rawBaseUrl.trim().trimEnd('/')
+        return when {
+            trimmed.isBlank() -> "$DEFAULT_NINEROUTER_BASE_URL/chat/completions"
+            trimmed.endsWith("/chat/completions", ignoreCase = true) -> trimmed
+            trimmed.endsWith("/v1", ignoreCase = true) -> "$trimmed/chat/completions"
+            else -> "$trimmed/v1/chat/completions"
+        }
+    }
 
     suspend fun ask(
         provider: AiProvider,
@@ -66,6 +78,13 @@ object AiClient {
         }
         val raw = when (provider) {
             AiProvider.GEMINI -> askGemini(apiKey, modelName, fullPrompt)
+            AiProvider.NINEROUTER -> askOpenAiCompatible(
+                url = normalizeNineRouterUrl(PochiPrefs.nineRouterUrlFlow.value),
+                apiKey = apiKey,
+                model = modelName,
+                prompt = fullPrompt,
+                referer = null
+            )
             AiProvider.OPENROUTER -> askOpenAiCompatible(
                 url = OPENROUTER_URL,
                 apiKey = apiKey,
@@ -123,7 +142,9 @@ object AiClient {
             readTimeout = 60_000
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Authorization", "Bearer $apiKey")
+            if (apiKey.isNotBlank()) {
+                setRequestProperty("Authorization", "Bearer $apiKey")
+            }
             if (referer != null) {
                 setRequestProperty("HTTP-Referer", referer)
                 setRequestProperty("X-Title", "Pochi")

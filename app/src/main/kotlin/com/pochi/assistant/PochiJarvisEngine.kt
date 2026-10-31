@@ -758,12 +758,15 @@ object PochiJarvisEngine {
             )
         }
 
-        // 3. Query AI Brain if API Key is configured
+        // 3. Query AI Brain if API Key is configured (or 9Router is selected)
         val provider = PochiPrefs.getProvider(context)
         val apiKey = PochiPrefs.getApiKey(context, provider)
         val model = PochiPrefs.getModel(context, provider)
+        if (provider == AiProvider.NINEROUTER) {
+            PochiPrefs.getNineRouterUrl(context)
+        }
 
-        if (apiKey.isNotBlank()) {
+        if (apiKey.isNotBlank() || provider == AiProvider.NINEROUTER) {
             val db = PochiDb.getInstance(context)
             val memoriesPrompt = db.getMemoriesPrompt()
             val screenApp = PochiSignals.screenApp.value

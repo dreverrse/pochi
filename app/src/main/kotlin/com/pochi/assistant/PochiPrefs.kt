@@ -480,6 +480,8 @@ object SmartLifeAssistant {
 object PochiPrefs {
     private const val PREF_NAME = "pochi_settings"
     private const val KEY_API = "gemini_api_key"
+    private const val KEY_NINEROUTER = "ninerouter_api_key"
+    private const val KEY_NINEROUTER_URL = "ninerouter_base_url"
     private const val KEY_OPENROUTER = "openrouter_api_key"
     private const val KEY_OPENCODE = "opencode_api_key"
     private const val KEY_INCEPTION = "inception_api_key"
@@ -567,6 +569,9 @@ object PochiPrefs {
     private val _mcpUrlFlow = MutableStateFlow("ws://100.64.0.1:8765/mcp")
     val mcpUrlFlow: StateFlow<String> = _mcpUrlFlow
 
+    private val _nineRouterUrlFlow = MutableStateFlow(AiClient.DEFAULT_NINEROUTER_BASE_URL)
+    val nineRouterUrlFlow: StateFlow<String> = _nineRouterUrlFlow
+
     private val _focusSessionsFlow = MutableStateFlow(2)
     val focusSessionsFlow: StateFlow<Int> = _focusSessionsFlow
 
@@ -595,6 +600,9 @@ object PochiPrefs {
             ?: AiProvider.GEMINI
         _mcpUrlFlow.value = prefs.getString(KEY_MCP_URL, "ws://100.64.0.1:8765/mcp")
             ?: "ws://100.64.0.1:8765/mcp"
+        _nineRouterUrlFlow.value = prefs.getString(KEY_NINEROUTER_URL, AiClient.DEFAULT_NINEROUTER_BASE_URL)
+            ?.takeIf { it.isNotBlank() }
+            ?: AiClient.DEFAULT_NINEROUTER_BASE_URL
 
         val savedTasksJson = prefs.getString(KEY_TASKS_JSON, null)
         if (!savedTasksJson.isNullOrBlank()) {
@@ -1125,8 +1133,21 @@ object PochiPrefs {
         return prefs(context).getString(KEY_CITY, "Jakarta") ?: "Jakarta"
     }
 
+    fun getNineRouterUrl(context: Context): String {
+        return prefs(context).getString(KEY_NINEROUTER_URL, AiClient.DEFAULT_NINEROUTER_BASE_URL)
+            ?.takeIf { it.isNotBlank() }
+            ?: AiClient.DEFAULT_NINEROUTER_BASE_URL
+    }
+
+    fun saveNineRouterUrl(context: Context, url: String) {
+        val clean = url.trim().ifBlank { AiClient.DEFAULT_NINEROUTER_BASE_URL }
+        _nineRouterUrlFlow.value = clean
+        prefs(context).edit().putString(KEY_NINEROUTER_URL, clean).apply()
+    }
+
     private fun keyName(provider: AiProvider): String = when (provider) {
         AiProvider.GEMINI -> KEY_API
+        AiProvider.NINEROUTER -> KEY_NINEROUTER
         AiProvider.OPENROUTER -> KEY_OPENROUTER
         AiProvider.OPENCODE -> KEY_OPENCODE
         AiProvider.INCEPTION -> KEY_INCEPTION

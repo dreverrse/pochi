@@ -1114,6 +1114,9 @@ private fun PochiSettingsTab(
     var modelInput by remember(selectedProvider) {
         mutableStateOf(PochiPrefs.getModel(context, selectedProvider))
     }
+    var nineRouterUrlInput by remember {
+        mutableStateOf(PochiPrefs.getNineRouterUrl(context))
+    }
     var showApiKey by remember { mutableStateOf(false) }
     var savedBanner by remember { mutableStateOf(false) }
 
@@ -1152,11 +1155,12 @@ private fun PochiSettingsTab(
                 fontWeight = FontWeight.Bold
             )
 
+            // Row 1 of Providers (Gemini, 9Router, OpenRouter)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                AiProvider.entries.forEach { prov ->
+                AiProvider.entries.take(3).forEach { prov ->
                     val active = prov == selectedProvider
                     Box(
                         modifier = Modifier
@@ -1178,6 +1182,73 @@ private fun PochiSettingsTab(
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // Row 2 of Providers (OpenCode, InceptionLabs)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                AiProvider.entries.drop(3).forEach { prov ->
+                    val active = prov == selectedProvider
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (active) PrimaryRoyalBlue else CardSurfaceElevated)
+                            .clickable {
+                                selectedProvider = prov
+                                PochiPrefs.setProvider(context, prov)
+                                savedBanner = false
+                            }
+                            .padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = prov.label,
+                            color = if (active) TextWhite else TextMutedBlue,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // 9Router Base URL field when 9Router is selected
+            if (selectedProvider == AiProvider.NINEROUTER) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Base URL 9Router (Default: http://localhost:20128/v1)",
+                        color = TextMutedBlue,
+                        fontSize = 11.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(BgDeepBlack)
+                            .border(1.dp, BorderSubtleBlue.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 11.dp)
+                    ) {
+                        BasicTextField(
+                            value = nineRouterUrlInput,
+                            onValueChange = {
+                                nineRouterUrlInput = it
+                                savedBanner = false
+                            },
+                            textStyle = TextStyle(
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace
+                            ),
+                            cursorBrush = SolidColor(AccentSkyBlue),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -1262,6 +1333,9 @@ private fun PochiSettingsTab(
                         PochiPrefs.setProvider(context, selectedProvider)
                         PochiPrefs.setApiKey(context, selectedProvider, apiKeyInput.trim())
                         PochiPrefs.saveModel(context, selectedProvider, modelInput.trim().ifBlank { selectedProvider.defaultModel })
+                        if (selectedProvider == AiProvider.NINEROUTER) {
+                            PochiPrefs.saveNineRouterUrl(context, nineRouterUrlInput)
+                        }
                         savedBanner = true
                     }
                     .padding(vertical = 12.dp),
