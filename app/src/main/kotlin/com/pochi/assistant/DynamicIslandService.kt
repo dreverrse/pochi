@@ -191,25 +191,11 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         isIslandExpanded = expanded
                         collapseJob?.cancel()
                         landscapeSideState.value = detectLandscapeSide()
-
-                        if (expanded) {
-                            applyFixedPositionAndSize(expanded = true, density = density)
-                            applyLayout()
-                        } else {
-                            params.flags = collapsedFlags
-                            applyLayout()
-                            collapseJob = serviceScope.launch {
-                                delay(220)
-                                applyFixedPositionAndSize(expanded = false, density = density)
-                                applyLayout()
-                            }
-                        }
+                        applyFixedPositionAndSize(expanded = expanded, density = density)
+                        applyLayout()
                     },
                     onExpandedHeightChange = { _ ->
-                        // Window height uses WRAP_CONTENT when expanded so the input bar is never clipped
-                        if (isIslandExpanded) {
-                            composeView.post { applyLayout() }
-                        }
+                        // No-op: WindowManager uses WRAP_CONTENT when expanded, so per-frame updateViewLayout IPC is avoided.
                     },
                     onPowerOffService = {
                         stopSelf()

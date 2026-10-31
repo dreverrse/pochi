@@ -5,10 +5,9 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -23,12 +22,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
@@ -55,11 +49,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -68,9 +59,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -115,19 +107,27 @@ private fun createSeamlessNotchShape(cornerRadius: Dp, landscapeSide: String): R
 }
 
 /**
- * Draws a subtle ambient bottom curve glow without harsh side vertical bars next to the chat canvas,
- * keeping the docked screen edge completely borderless.
+ * Draws a subtle ambient bottom curve glow on the GPU without triggering recomposition.
  */
 private fun Modifier.drawNotchEdgeBorder(
     cornerRadius: Dp,
     landscapeSide: String,
-    borderBrush: Brush,
+    glowPhaseProvider: () -> Float,
     strokeWidth: Dp = 1.dp
 ): Modifier = this.drawBehind {
     val r = cornerRadius.toPx().coerceAtMost(size.minDimension / 2f)
     val sw = strokeWidth.toPx()
     val w = size.width
     val h = size.height
+    val phase = glowPhaseProvider()
+
+    val borderBrush = Brush.horizontalGradient(
+        colors = listOf(
+            Color(0xFF1D4ED8).copy(alpha = 0.35f + 0.35f * phase),
+            Color(0xFF38BDF8).copy(alpha = 0.45f + 0.40f * phase),
+            Color(0xFF1D4ED8).copy(alpha = 0.35f + 0.35f * phase)
+        )
+    )
 
     val path = Path().apply {
         when (landscapeSide) {
@@ -168,7 +168,6 @@ private fun Modifier.drawNotchEdgeBorder(
                 lineTo(w, h - sw / 2f)
             }
             else -> {
-                // Portrait: Only soft bottom corners and bottom lip—no side vertical bars next to chat!
                 moveTo(sw / 2f, h - r)
                 arcTo(
                     rect = Rect(sw / 2f, h - 2f * r, 2f * r, h - sw / 2f),
@@ -234,6 +233,23 @@ fun PochiIslandBot(
     val recentScreenshot by PochiSignals.latestScreenshot.collectAsState()
     val droppedFile by PochiSignals.droppedFile.collectAsState()
     val expandRequest by PochiSignals.islandExpandRequest.collectAsState()
+
+    // GPU-only entrance animation when expanded changes (zero WindowManager relayout IPC thrashing!)
+    val expandBloom = remember { Animatable(1f) }
+    LaunchedEffect(expanded) {
+        if (expanded) {
+            expandBloom.snapTo(0.86f)
+            expandBloom.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        } else {
+            expandBloom.snapTo(1f)
+        }
+    }
 
     // Expand when requested by file picker or app
     LaunchedEffect(expandRequest) {
@@ -305,7 +321,7 @@ fun PochiIslandBot(
                     ).random()
                 }
             }
-            delay(3200L)
+            delay(3400L)
         }
     }
 
@@ -351,7 +367,7 @@ fun PochiIslandBot(
                 PochiSignals.consumeDroppedFile()
             }
             isThinking = false
-            delay(80)
+            delay(60)
             chatScrollState.animateScrollTo(chatScrollState.maxValue)
         }
     }
@@ -394,34 +410,27 @@ fun PochiIslandBot(
         else -> autonomousEmote
     }
 
-    // Rich continuous animations for Dynamic Island Notch
+    // Continuous animations read ONLY inside Draw/GraphicsLayer lambdas (zero recomposition jank!)
     val inf = rememberInfiniteTransition(label = "notchMotion")
-    val glowPhase by inf.animateFloat(
-        initialValue = 0.28f,
-        targetValue = 0.92f,
-        animationSpec = infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+    val glowPhaseState = inf.animateFloat(
+        initialValue = 0.30f,
+        targetValue = 0.90f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "glowPhase"
     )
-    val auroraSweep by inf.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(3600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "auroraSweep"
-    )
-    val orbitalSpin by inf.animateFloat(
+    val orbitalSpinState = inf.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(7200, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing)),
         label = "orbitalSpin"
     )
-    val eqWave by inf.animateFloat(
-        initialValue = 0.22f,
+    val eqWaveState = inf.animateFloat(
+        initialValue = 0.25f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(420, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(450, easing = LinearEasing), RepeatMode.Reverse),
         label = "eqWave"
     )
 
-    // Smoothly animate Notch width, height, corner radius, and transparency
     val isLandscape = landscapeSide != "NONE"
     val collapsedTargetWidth = when {
         isLandscape && isIdleMini -> 108.dp
@@ -431,12 +440,12 @@ fun PochiIslandBot(
     }
     val collapsedWidth by animateDpAsState(
         targetValue = collapsedTargetWidth,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = tween(260, easing = FastOutSlowInEasing),
         label = "notchW"
     )
     val collapsedHeight by animateDpAsState(
         targetValue = if (isIdleMini) 24.dp else 35.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = tween(260, easing = FastOutSlowInEasing),
         label = "notchH"
     )
     val notchAlpha by animateFloatAsState(
@@ -445,52 +454,34 @@ fun PochiIslandBot(
             isIdleMini -> 0.52f
             else -> 0.97f
         },
-        animationSpec = tween(380),
+        animationSpec = tween(280),
         label = "notchAlpha"
-    )
-    val cornerRad by animateDpAsState(
-        targetValue = when {
-            expanded -> 28.dp
-            isIdleMini -> 14.dp
-            else -> 20.dp
-        },
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
-        label = "notchCorner"
     )
     val attachBtnRot by animateFloatAsState(
         targetValue = if (showDropDrawer) 45f else 0f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "attachBtnRot"
     )
-    val sendBtnScale by animateFloatAsState(
-        targetValue = if (inputText.isNotBlank() || droppedFile != null) 1.06f else 0.96f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "sendBtnScale"
-    )
 
-    val notchShape = createSeamlessNotchShape(cornerRad, landscapeSide)
-
-    // Blue-Black Gradient Border (No Purple)
-    val borderBrush = Brush.horizontalGradient(
-        colors = if (expanded || isThinking || isListening) {
-            listOf(
-                Color(0xFF1D4ED8).copy(alpha = glowPhase),
-                Color(0xFF38BDF8).copy(alpha = glowPhase * 0.92f),
-                Color(0xFF0A2463).copy(alpha = glowPhase)
-            )
-        } else {
-            listOf(
-                Color(0xFF1E3A8A).copy(alpha = if (isIdleMini) 0.18f else 0.42f),
-                Color(0xFF38BDF8).copy(alpha = if (isIdleMini) 0.25f else 0.52f),
-                Color(0xFF1E3A8A).copy(alpha = if (isIdleMini) 0.18f else 0.42f)
-            )
-        }
-    )
+    val cornerRad = when {
+        expanded -> 28.dp
+        isIdleMini -> 14.dp
+        else -> 20.dp
+    }
+    val notchShape = remember(cornerRad, landscapeSide) {
+        createSeamlessNotchShape(cornerRad, landscapeSide)
+    }
 
     val boxAlignment = when (landscapeSide) {
         "LEFT" -> Alignment.CenterStart
         "RIGHT" -> Alignment.CenterEnd
         else -> Alignment.TopCenter
+    }
+
+    val pivotOrigin = when (landscapeSide) {
+        "LEFT" -> TransformOrigin(0f, 0.5f)
+        "RIGHT" -> TransformOrigin(1f, 0.5f)
+        else -> TransformOrigin(0.5f, 0f)
     }
 
     Box(
@@ -504,20 +495,17 @@ fun PochiIslandBot(
                         Modifier
                             .fillMaxWidth()
                             .wrapContentHeight()
-                            .onSizeChanged { size ->
-                                if (size.height > 0) onExpandedHeightChange(size.height)
-                            }
                     } else {
                         Modifier.size(width = collapsedWidth, height = collapsedHeight)
                     }
                 )
-                .animateContentSize(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                )
-                .alpha(notchAlpha)
+                .graphicsLayer {
+                    val b = expandBloom.value
+                    scaleX = b
+                    scaleY = b
+                    alpha = notchAlpha * b.coerceIn(0.6f, 1f)
+                    transformOrigin = pivotOrigin
+                }
                 .clip(notchShape)
                 .background(
                     Brush.verticalGradient(
@@ -536,15 +524,16 @@ fun PochiIslandBot(
                     )
                 )
                 .drawBehind {
-                    // Ambient Blue-Black Aurora Wave moving inside the Notch
-                    val cx = size.width * (0.25f + 0.5f * auroraSweep)
-                    val cy = if (expanded) size.height * 0.18f else size.height * 0.5f
+                    // GPU-only ambient Blue-Black Aurora glow inside the Notch
+                    val phase = glowPhaseState.value
+                    val cx = size.width * 0.5f
+                    val cy = if (expanded) size.height * 0.16f else size.height * 0.5f
                     val rad = (size.width * 0.65f).coerceAtLeast(60f)
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFF1D4ED8).copy(alpha = if (expanded) 0.26f * glowPhase else 0.20f * glowPhase),
-                                Color(0xFF38BDF8).copy(alpha = if (expanded) 0.12f * glowPhase else 0.08f * glowPhase),
+                                Color(0xFF1D4ED8).copy(alpha = if (expanded) 0.24f * phase else 0.18f * phase),
+                                Color(0xFF38BDF8).copy(alpha = if (expanded) 0.10f * phase else 0.06f * phase),
                                 Color.Transparent
                             ),
                             center = Offset(cx, cy),
@@ -557,7 +546,7 @@ fun PochiIslandBot(
                 .drawNotchEdgeBorder(
                     cornerRadius = cornerRad,
                     landscapeSide = landscapeSide,
-                    borderBrush = borderBrush,
+                    glowPhaseProvider = { glowPhaseState.value },
                     strokeWidth = if (expanded) 1.2.dp else 1.dp
                 )
                 .then(
@@ -575,7 +564,7 @@ fun PochiIslandBot(
         ) {
             if (!expanded) {
                 // ============================================================
-                // COLLAPSED / MINI-TRANSPARENT NOTCH MODE (WITH FLUID MOTION)
+                // COLLAPSED / MINI-TRANSPARENT NOTCH MODE (LOCKED 120FPS)
                 // ============================================================
                 Row(
                     modifier = Modifier
@@ -590,8 +579,8 @@ fun PochiIslandBot(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             if (!isIdleMini) {
-                                Canvas(modifier = Modifier.size(26.dp)) {
-                                    rotate(orbitalSpin) {
+                                Canvas(modifier = Modifier.size(25.dp)) {
+                                    rotate(orbitalSpinState.value) {
                                         drawCircle(
                                             brush = Brush.sweepGradient(
                                                 listOf(
@@ -622,37 +611,31 @@ fun PochiIslandBot(
                                 screenApp.isNotBlank() -> screenApp.take(11)
                                 else -> "Pochi"
                             }
-                            AnimatedContent(
-                                targetState = label,
-                                transitionSpec = {
-                                    (fadeIn(tween(200)) + slideInVertically { it / 2 })
-                                        .togetherWith(fadeOut(tween(150)) + slideOutVertically { -it / 2 })
-                                },
-                                label = "collapsedLabelAnim"
-                            ) { targetLabel ->
-                                Text(
-                                    text = targetLabel,
-                                    color = Color.White.copy(alpha = 0.92f),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            Text(
+                                text = label,
+                                color = Color.White.copy(alpha = 0.92f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
 
-                    // Right Animated Orbital Pulse / Wave Indicator
+                    // Right GPU-Drawn Orbital / Pulse Indicator
                     Canvas(
                         modifier = Modifier.size(if (isIdleMini) 10.dp else 16.dp)
                     ) {
                         val cx = size.width / 2f
                         val cy = size.height / 2f
+                        val spin = orbitalSpinState.value
+                        val wave = eqWaveState.value
+                        val phase = glowPhaseState.value
                         if (mediaPlayback.isPlaying || isListening || isThinking) {
-                            rotate(orbitalSpin * 1.5f, pivot = Offset(cx, cy)) {
+                            rotate(spin * 1.4f, pivot = Offset(cx, cy)) {
                                 for (i in 0 until 6) {
                                     val angle = Math.toRadians((i * 60).toDouble())
-                                    val r = (size.minDimension * 0.44f) * (0.6f + 0.4f * eqWave)
+                                    val r = (size.minDimension * 0.44f) * (0.6f + 0.4f * wave)
                                     drawLine(
                                         color = Color(0xFF38BDF8),
                                         start = Offset(cx, cy),
@@ -667,12 +650,12 @@ fun PochiIslandBot(
                             }
                         } else {
                             drawCircle(
-                                color = Color(0xFF1D4ED8).copy(alpha = 0.38f * glowPhase),
-                                radius = (size.minDimension * 0.48f) * (0.8f + 0.25f * glowPhase),
+                                color = Color(0xFF1D4ED8).copy(alpha = 0.38f * phase),
+                                radius = (size.minDimension * 0.48f) * (0.8f + 0.25f * phase),
                                 center = Offset(cx, cy)
                             )
                             drawCircle(
-                                color = Color(0xFF38BDF8).copy(alpha = 0.65f + 0.35f * glowPhase),
+                                color = Color(0xFF38BDF8).copy(alpha = 0.65f + 0.35f * phase),
                                 radius = size.minDimension * 0.24f,
                                 center = Offset(cx, cy)
                             )
@@ -681,7 +664,7 @@ fun PochiIslandBot(
                 }
             } else {
                 // ============================================================
-                // EXPANDED POCHI CHAT NOTCH (NO SCROLLBAR, FLUID MOTION)
+                // EXPANDED POCHI CHAT NOTCH (NO SCROLLBAR, LOCKED 120FPS)
                 // ============================================================
                 Column(
                     modifier = Modifier
@@ -689,7 +672,7 @@ fun PochiIslandBot(
                         .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // 1. Animated Notch Header: Orbital Pochi Mascot + Live Status + Collapse
+                    // 1. Notch Header: Orbital Pochi Mascot + Live Status + Collapse
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -710,19 +693,13 @@ fun PochiIslandBot(
                                     )
                                     .border(
                                         1.dp,
-                                        Brush.sweepGradient(
-                                            listOf(
-                                                Color(0xFF1D4ED8),
-                                                Color(0xFF38BDF8),
-                                                Color(0xFF1D4ED8)
-                                            )
-                                        ),
+                                        Color(0xFF1D4ED8).copy(alpha = 0.65f),
                                         RoundedCornerShape(14.dp)
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Canvas(modifier = Modifier.size(34.dp)) {
-                                    rotate(orbitalSpin) {
+                                    rotate(orbitalSpinState.value) {
                                         drawCircle(
                                             brush = Brush.sweepGradient(
                                                 listOf(
@@ -763,32 +740,27 @@ fun PochiIslandBot(
                                     Box(
                                         modifier = Modifier
                                             .size(6.dp)
-                                            .scale(0.85f + 0.3f * glowPhase)
+                                            .graphicsLayer {
+                                                val s = 0.85f + 0.3f * glowPhaseState.value
+                                                scaleX = s
+                                                scaleY = s
+                                            }
                                             .clip(CircleShape)
                                             .background(Color(0xFF38BDF8))
                                     )
                                 }
-                                val statusSub = when {
-                                    isThinking -> "Memproses permintaan Tuan Andre..."
-                                    isListening -> "Mendengarkan suara Tuan Andre..."
-                                    screenApp.isNotBlank() -> "Konteks aktif: $screenApp"
-                                    else -> "Siap membantu Tuan Andre"
-                                }
-                                AnimatedContent(
-                                    targetState = statusSub,
-                                    transitionSpec = {
-                                        fadeIn(tween(220)).togetherWith(fadeOut(tween(150)))
+                                Text(
+                                    text = when {
+                                        isThinking -> "Memproses permintaan Tuan Andre..."
+                                        isListening -> "Mendengarkan suara Tuan Andre..."
+                                        screenApp.isNotBlank() -> "Konteks aktif: $screenApp"
+                                        else -> "Siap membantu Tuan Andre"
                                     },
-                                    label = "notchStatusSub"
-                                ) { sub ->
-                                    Text(
-                                        text = sub,
-                                        color = Color(0xFF38BDF8),
-                                        fontSize = 10.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                    color = Color(0xFF38BDF8),
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
 
@@ -823,25 +795,16 @@ fun PochiIslandBot(
                         )
                     }
 
-                    // 3. Frameless, Scrollbar-Free Chat Canvas with Spring Motion
+                    // 3. Frameless, Scrollbar-Free Chat Canvas (No animateContentSize IPC jank)
                     CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 48.dp, max = if (isLandscape) 150.dp else 215.dp)
-                                .verticalScroll(chatScrollState)
-                                .animateContentSize(
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioLowBouncy,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    )
-                                ),
+                                .verticalScroll(chatScrollState),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            AnimatedVisibility(
-                                visible = lastSentMessage.isNotBlank(),
-                                enter = fadeIn(tween(220)) + slideInVertically { it / 2 } + scaleIn(initialScale = 0.92f)
-                            ) {
+                            if (lastSentMessage.isNotBlank()) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.End
@@ -866,88 +829,73 @@ fun PochiIslandBot(
                                 }
                             }
 
-                            AnimatedContent(
-                                targetState = replyText,
-                                transitionSpec = {
-                                    (fadeIn(tween(240)) + slideInVertically { it / 3 } + scaleIn(initialScale = 0.96f))
-                                        .togetherWith(fadeOut(tween(140)))
-                                },
-                                label = "replyBubbleAnim"
-                            ) { currentReply ->
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(
-                                            Brush.linearGradient(
-                                                listOf(
-                                                    Color(0xFF0A1830),
-                                                    Color(0xFF050A14)
-                                                )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(
+                                                Color(0xFF0A1830),
+                                                Color(0xFF050A14)
                                             )
                                         )
-                                        .border(
-                                            1.dp,
-                                            Brush.horizontalGradient(
-                                                listOf(
-                                                    Color(0xFF1D4ED8).copy(alpha = 0.45f),
-                                                    Color(0xFF38BDF8).copy(alpha = 0.25f)
-                                                )
-                                            ),
-                                            RoundedCornerShape(16.dp)
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
-                                            text = currentReply,
-                                            color = Color(0xFFEFF6FF),
-                                            fontSize = 12.sp,
-                                            lineHeight = 17.sp
-                                        )
-                                        if (isThinking) {
-                                            // Animated Sine Wave Thinking Indicator
-                                            Canvas(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(14.dp)
-                                            ) {
-                                                val w = size.width
-                                                val cy = size.height / 2f
-                                                val path = Path().apply {
-                                                    moveTo(0f, cy)
-                                                    val steps = 28
-                                                    for (i in 1..steps) {
-                                                        val x = (w / steps) * i
-                                                        val phase = (i * 0.4f) + (orbitalSpin * 0.08f)
-                                                        val y = cy + sin(phase.toDouble()).toFloat() * (size.height * 0.36f)
-                                                        lineTo(x, y)
-                                                    }
+                                    )
+                                    .border(
+                                        1.dp,
+                                        Brush.horizontalGradient(
+                                            listOf(
+                                                Color(0xFF1D4ED8).copy(alpha = 0.45f),
+                                                Color(0xFF38BDF8).copy(alpha = 0.25f)
+                                            )
+                                        ),
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = replyText,
+                                        color = Color(0xFFEFF6FF),
+                                        fontSize = 12.sp,
+                                        lineHeight = 17.sp
+                                    )
+                                    if (isThinking) {
+                                        Canvas(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(14.dp)
+                                        ) {
+                                            val w = size.width
+                                            val cy = size.height / 2f
+                                            val spin = orbitalSpinState.value
+                                            val path = Path().apply {
+                                                moveTo(0f, cy)
+                                                val steps = 28
+                                                for (i in 1..steps) {
+                                                    val x = (w / steps) * i
+                                                    val phase = (i * 0.4f) + (spin * 0.08f)
+                                                    val y = cy + sin(phase.toDouble()).toFloat() * (size.height * 0.36f)
+                                                    lineTo(x, y)
                                                 }
-                                                drawPath(
-                                                    path = path,
-                                                    brush = Brush.horizontalGradient(
-                                                        listOf(Color.Transparent, Color(0xFF38BDF8), Color(0xFF1D4ED8), Color.Transparent)
-                                                    ),
-                                                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-                                                )
                                             }
+                                            drawPath(
+                                                path = path,
+                                                brush = Brush.horizontalGradient(
+                                                    listOf(Color.Transparent, Color(0xFF38BDF8), Color(0xFF1D4ED8), Color.Transparent)
+                                                ),
+                                                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                                            )
                                         }
                                     }
                                 }
                             }
 
-                            AnimatedVisibility(
-                                visible = activeRichCard != null,
-                                enter = fadeIn(tween(280)) + expandVertically() + scaleIn(initialScale = 0.94f),
-                                exit = fadeOut(tween(180)) + shrinkVertically()
-                            ) {
-                                activeRichCard?.let { card ->
-                                    PochiRichCardView(
-                                        card = card,
-                                        compact = true
-                                    )
-                                }
+                            if (activeRichCard != null) {
+                                PochiRichCardView(
+                                    card = activeRichCard!!,
+                                    compact = true
+                                )
                             }
                         }
                     }
@@ -955,8 +903,8 @@ fun PochiIslandBot(
                     // 4. Optional File Drop / Attach Drawer when "+" is clicked
                     AnimatedVisibility(
                         visible = showDropDrawer,
-                        enter = fadeIn(tween(200)) + expandVertically(spring(dampingRatio = Spring.DampingRatioLowBouncy)) + scaleIn(initialScale = 0.95f),
-                        exit = fadeOut(tween(150)) + shrinkVertically() + scaleOut(targetScale = 0.95f)
+                        enter = fadeIn(tween(180)) + expandVertically(),
+                        exit = fadeOut(tween(140)) + shrinkVertically()
                     ) {
                         Row(
                             modifier = Modifier
@@ -1022,44 +970,38 @@ fun PochiIslandBot(
                     }
 
                     // Active Dropped File Pill Preview
-                    AnimatedVisibility(
-                        visible = droppedFile != null,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        droppedFile?.let { df ->
-                            Row(
+                    if (droppedFile != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1D4ED8).copy(alpha = 0.22f))
+                                .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "FILE: ${droppedFile!!.fileName} (${droppedFile!!.formattedSize})",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Hapus lampiran",
+                                tint = Color(0xFF38BDF8),
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF1D4ED8).copy(alpha = 0.22f))
-                                    .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "FILE: ${df.fileName} (${df.formattedSize})",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Icon(
-                                    imageVector = Icons.Rounded.Close,
-                                    contentDescription = "Hapus lampiran",
-                                    tint = Color(0xFF38BDF8),
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clickable { PochiSignals.consumeDroppedFile() }
-                                )
-                            }
+                                    .size(16.dp)
+                                    .clickable { PochiSignals.consumeDroppedFile() }
+                            )
                         }
                     }
 
-                    // 5. Pinned Bottom Chat Input Bar: Animated "+" Button + Text Input + Mic + Spring Send Button
+                    // 5. Pinned Bottom Chat Input Bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1069,8 +1011,8 @@ fun PochiIslandBot(
                                 width = 1.dp,
                                 brush = Brush.horizontalGradient(
                                     listOf(
-                                        Color(0xFF1D4ED8).copy(alpha = 0.55f + 0.35f * glowPhase),
-                                        Color(0xFF38BDF8).copy(alpha = 0.45f + 0.35f * glowPhase)
+                                        Color(0xFF1D4ED8).copy(alpha = 0.65f),
+                                        Color(0xFF38BDF8).copy(alpha = 0.45f)
                                     )
                                 ),
                                 shape = RoundedCornerShape(50)
@@ -1079,10 +1021,9 @@ fun PochiIslandBot(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        // "+" File Drop / Attachment Button with Spring Rotation
                         val attachBg by animateColorAsState(
                             targetValue = if (showDropDrawer) Color(0xFF1D4ED8) else Color(0xFF0F1D36),
-                            animationSpec = tween(220),
+                            animationSpec = tween(200),
                             label = "attachBg"
                         )
                         Box(
@@ -1102,7 +1043,7 @@ fun PochiIslandBot(
                                 tint = Color.White,
                                 modifier = Modifier
                                     .size(18.dp)
-                                    .rotate(attachBtnRot)
+                                    .graphicsLayer { rotationZ = attachBtnRot }
                             )
                         }
 
@@ -1147,7 +1088,6 @@ fun PochiIslandBot(
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
-                                .scale(if (isListening) 1.05f + 0.12f * eqWave else 1f)
                                 .clip(CircleShape)
                                 .background(
                                     if (isListening) Color(0xFF0EA5E9).copy(alpha = 0.25f)
@@ -1164,19 +1104,12 @@ fun PochiIslandBot(
                             )
                         }
 
-                        // Send Button (White Circular Paper-Plane Icon with Spring Scale)
+                        // Send Button
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
-                                .scale(sendBtnScale)
                                 .clip(CircleShape)
-                                .background(
-                                    if (inputText.isNotBlank() || droppedFile != null) {
-                                        Brush.linearGradient(listOf(Color.White, Color(0xFFBAE6FD)))
-                                    } else {
-                                        Brush.linearGradient(listOf(Color.White, Color.White))
-                                    }
-                                )
+                                .background(Color.White)
                                 .clickable { submitQuery(inputText) },
                             contentAlignment = Alignment.Center
                         ) {

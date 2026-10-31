@@ -81,6 +81,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
@@ -253,15 +254,15 @@ fun PochiSimpleCoolApp(
         return
     }
 
-    // Continuous Ambient Blue-Black Aurora & Particle Field Motion
+    // Continuous Ambient Blue-Black Aurora & Particle Field Motion (Read only in DrawScope!)
     val inf = rememberInfiniteTransition(label = "globalAurora")
-    val auroraWave by inf.animateFloat(
+    val auroraWaveState = inf.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(4800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "auroraWave"
     )
-    val particleOrbit by inf.animateFloat(
+    val particleOrbitState = inf.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(tween(18000, easing = LinearEasing)),
@@ -277,6 +278,8 @@ fun PochiSimpleCoolApp(
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
+            val auroraWave = auroraWaveState.value
+            val particleOrbit = particleOrbitState.value
 
             // Top sweeping Royal-Sky Blue Aurora
             val topCx = w * (0.35f + 0.30f * auroraWave)
@@ -386,13 +389,13 @@ private fun PochiSplitBottomNav(
 ) {
     val tabs = listOf("Pochi AI", "Memori", "Pengaturan")
     val inf = rememberInfiniteTransition(label = "navOrbSpin")
-    val orbAngle by inf.animateFloat(
+    val orbAngleState = inf.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing)),
         label = "orbAngle"
     )
-    val orbPulse by inf.animateFloat(
+    val orbPulseState = inf.animateFloat(
         initialValue = 0.85f,
         targetValue = 1.12f,
         animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
@@ -476,7 +479,7 @@ private fun PochiSplitBottomNav(
                 .background(
                     Brush.radialGradient(
                         listOf(
-                            PrimaryRoyalBlue.copy(alpha = 0.78f * orbPulse),
+                            PrimaryRoyalBlue.copy(alpha = 0.78f),
                             Color(0xFF08142C),
                             BgDeepBlack
                         )
@@ -495,8 +498,8 @@ private fun PochiSplitBottomNav(
             Canvas(modifier = Modifier.size(26.dp)) {
                 val cx = size.width / 2f
                 val cy = size.height / 2f
-                val r = size.minDimension * 0.42f
-                rotate(orbAngle, pivot = Offset(cx, cy)) {
+                val r = size.minDimension * 0.42f * orbPulseState.value
+                rotate(orbAngleState.value, pivot = Offset(cx, cy)) {
                     for (i in 0 until 8) {
                         val rad = Math.toRadians((i * 45).toDouble())
                         drawLine(
@@ -635,25 +638,25 @@ private fun PochiHomeChatTab(
     }
 
     val inf = rememberInfiniteTransition(label = "pochiCoreMotion")
-    val auraPulse by inf.animateFloat(
+    val auraPulseState = inf.animateFloat(
         initialValue = 0.86f,
         targetValue = 1.16f,
         animationSpec = infiniteRepeatable(tween(2400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "auraPulse"
     )
-    val ringSpinOuter by inf.animateFloat(
+    val ringSpinOuterState = inf.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(tween(11000, easing = LinearEasing)),
         label = "ringSpinOuter"
     )
-    val ringSpinInner by inf.animateFloat(
+    val ringSpinInnerState = inf.animateFloat(
         initialValue = 360f,
         targetValue = 0f,
         animationSpec = infiniteRepeatable(tween(7500, easing = LinearEasing)),
         label = "ringSpinInner"
     )
-    val wavePhase by inf.animateFloat(
+    val wavePhaseState = inf.animateFloat(
         initialValue = 0f,
         targetValue = 6.283f,
         animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
@@ -696,7 +699,11 @@ private fun PochiHomeChatTab(
                     Box(
                         modifier = Modifier
                             .size(7.dp)
-                            .scale(auraPulse)
+                            .graphicsLayer {
+                                val s = auraPulseState.value
+                                scaleX = s
+                                scaleY = s
+                            }
                             .clip(CircleShape)
                             .background(AccentSkyBlue)
                     )
@@ -774,7 +781,11 @@ private fun PochiHomeChatTab(
                     Box(
                         modifier = Modifier
                             .size(6.dp)
-                            .scale(if (islandRunning) auraPulse else 1f)
+                            .graphicsLayer {
+                                val s = if (islandRunning) auraPulseState.value else 1f
+                                scaleX = s
+                                scaleY = s
+                            }
                             .clip(CircleShape)
                             .background(if (islandRunning) AccentSkyBlue else TextMutedBlue)
                     )
@@ -808,24 +819,25 @@ private fun PochiHomeChatTab(
                         val cx = size.width / 2f
                         val cy = size.height / 2f
                         val maxR = size.minDimension / 2f
+                        val pulse = auraPulseState.value
 
                         // Breathing Radial Blue Aura
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    PrimaryRoyalBlue.copy(alpha = 0.42f * auraPulse),
-                                    AccentSkyBlue.copy(alpha = 0.16f * auraPulse),
+                                    PrimaryRoyalBlue.copy(alpha = 0.42f * pulse),
+                                    AccentSkyBlue.copy(alpha = 0.16f * pulse),
                                     Color.Transparent
                                 ),
                                 center = Offset(cx, cy),
-                                radius = maxR * auraPulse
+                                radius = maxR * pulse
                             ),
-                            radius = maxR * auraPulse,
+                            radius = maxR * pulse,
                             center = Offset(cx, cy)
                         )
 
                         // Outer Rotating Segmented Ring
-                        rotate(ringSpinOuter, pivot = Offset(cx, cy)) {
+                        rotate(ringSpinOuterState.value, pivot = Offset(cx, cy)) {
                             drawCircle(
                                 brush = Brush.sweepGradient(
                                     listOf(
@@ -843,7 +855,7 @@ private fun PochiHomeChatTab(
                         }
 
                         // Inner Counter-Rotating Orbital Ring
-                        rotate(ringSpinInner, pivot = Offset(cx, cy)) {
+                        rotate(ringSpinInnerState.value, pivot = Offset(cx, cy)) {
                             drawCircle(
                                 brush = Brush.sweepGradient(
                                     listOf(
@@ -1010,7 +1022,11 @@ private fun PochiHomeChatTab(
                                 Box(
                                     modifier = Modifier
                                         .size(6.dp)
-                                        .scale(auraPulse)
+                                        .graphicsLayer {
+                                            val s = auraPulseState.value
+                                            scaleX = s
+                                            scaleY = s
+                                        }
                                         .clip(CircleShape)
                                         .background(AccentSkyBlue)
                                 )
@@ -1037,12 +1053,13 @@ private fun PochiHomeChatTab(
                                 ) {
                                     val w = size.width
                                     val cy = size.height / 2f
+                                    val wp = wavePhaseState.value
                                     val path = Path().apply {
                                         moveTo(0f, cy)
                                         val steps = 36
                                         for (i in 1..steps) {
                                             val x = (w / steps) * i
-                                            val y = cy + sin((i * 0.35f + wavePhase).toDouble()).toFloat() * (size.height * 0.38f)
+                                            val y = cy + sin((i * 0.35f + wp).toDouble()).toFloat() * (size.height * 0.38f)
                                             lineTo(x, y)
                                         }
                                     }
@@ -1085,9 +1102,9 @@ private fun PochiHomeChatTab(
                     1.dp,
                     Brush.horizontalGradient(
                         listOf(
-                            PrimaryRoyalBlue.copy(alpha = 0.55f * auraPulse),
-                            AccentSkyBlue.copy(alpha = 0.45f * auraPulse),
-                            PrimaryRoyalBlue.copy(alpha = 0.55f * auraPulse)
+                            PrimaryRoyalBlue.copy(alpha = 0.65f),
+                            AccentSkyBlue.copy(alpha = 0.50f),
+                            PrimaryRoyalBlue.copy(alpha = 0.65f)
                         )
                     ),
                     RoundedCornerShape(50)
@@ -1150,7 +1167,11 @@ private fun PochiHomeChatTab(
             Box(
                 modifier = Modifier
                     .size(34.dp)
-                    .scale(if (isListening) auraPulse else 1f)
+                    .graphicsLayer {
+                        val s = if (isListening) auraPulseState.value else 1f
+                        scaleX = s
+                        scaleY = s
+                    }
                     .clip(CircleShape)
                     .background(if (isListening) AccentSkyBlue.copy(alpha = 0.20f) else Color.Transparent)
                     .clickable { startVoice() },
