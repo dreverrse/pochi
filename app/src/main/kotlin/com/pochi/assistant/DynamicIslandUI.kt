@@ -48,10 +48,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -199,6 +197,7 @@ fun PochiIslandBot(
     var showDropDrawer by remember { mutableStateOf(false) }
 
     var inputText by remember { mutableStateOf("") }
+    var lastSentMessage by remember { mutableStateOf("") }
     var replyText by remember {
         mutableStateOf("Halo Tuan Andre, ada yang ingin dicari atau dianalisis hari ini?")
     }
@@ -216,22 +215,11 @@ fun PochiIslandBot(
     }
 
     val pendingApproval by ApprovalManager.activeRequest.collectAsState()
-    val outsideDismissTrigger by ApprovalManager.dismissSignal.collectAsState()
     val mediaPlayback by PochiSignals.mediaPlayback.collectAsState()
     val screenApp by PochiSignals.screenApp.collectAsState()
     val recentScreenshot by PochiSignals.latestScreenshot.collectAsState()
     val droppedFile by PochiSignals.droppedFile.collectAsState()
     val expandRequest by PochiSignals.islandExpandRequest.collectAsState()
-
-    // Collapse when user taps outside the expanded Notch
-    LaunchedEffect(outsideDismissTrigger) {
-        if (outsideDismissTrigger > 0L && expanded && pendingApproval == null) {
-            expanded = false
-            showDropDrawer = false
-            onExpandChange(false)
-            touchActivity()
-        }
-    }
 
     // Expand when requested by file picker or app
     LaunchedEffect(expandRequest) {
@@ -251,6 +239,7 @@ fun PochiIslandBot(
             onExpandChange(true)
         }
         isThinking = true
+        lastSentMessage = "File: ${df.fileName} (${df.formattedSize})"
         val bundle = PochiJarvisEngine.processQuery(context, inputText, df)
         replyText = bundle.text
         activeRichCard = bundle.richCard
@@ -267,7 +256,7 @@ fun PochiIslandBot(
         }
     }
 
-    // Idle detector: shrinks and becomes semi-transparent after 4.5s of inactivity
+    // Idle detector: shrinks and becomes semi-transparent after 4.5s of inactivity when collapsed
     LaunchedEffect(expanded, lastActivityMs, isThinking, isListening, mediaPlayback.isPlaying) {
         if (expanded || isThinking || isListening) {
             isIdleMini = false
@@ -326,13 +315,19 @@ fun PochiIslandBot(
         }
     }
 
+    val chatScrollState = rememberScrollState()
+
     fun submitQuery(query: String, attachedFile: DroppedFileInfo? = droppedFile) {
         val q = query.trim()
         if (q.isEmpty() && attachedFile == null) return
         touchActivity()
+        if (q.isNotEmpty()) {
+            lastSentMessage = q
+        }
         inputText = ""
         showDropDrawer = false
         isThinking = true
+        replyText = "Memproses permintaan Tuan Andre..."
         scope.launch {
             val bundle = PochiJarvisEngine.processQuery(context, q, attachedFile)
             replyText = bundle.text
@@ -342,6 +337,8 @@ fun PochiIslandBot(
                 PochiSignals.consumeDroppedFile()
             }
             isThinking = false
+            delay(80)
+            chatScrollState.animateScrollTo(chatScrollState.maxValue)
         }
     }
 
@@ -588,12 +585,12 @@ fun PochiIslandBot(
                 }
             } else {
                 // ============================================================
-                // EXPANDED POCHI CHAT NOTCH (CLEAN, NO SHORTCUT CHIPS, NO EMOJI)
+                // EXPANDED POCHI CHAT NOTCH (PINNED INPUT BAR, NEVER CLIPPED)
                 // ============================================================
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 12.dp),
+                        .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // 1. Minimal Notch Header: Pochi Mascot + "POCHI" + Collapse
@@ -681,18 +678,42 @@ fun PochiIslandBot(
                     }
 
                     // 3. Scrollable AI Reply & Generative Visual Card Area
-                    val scrollState = rememberScrollState()
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 54.dp, max = 320.dp)
-                            .verticalScroll(scrollState),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            .heightIn(min = 48.dp, max = if (isLandscape) 150.dp else 210.dp)
+                            .verticalScroll(chatScrollState),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        if (lastSentMessage.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 4.dp, bottomStart = 14.dp, bottomEnd = 14.dp))
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(Color(0xFF1D4ED8), Color(0xFF0A2463))
+                                            )
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                                ) {
+                                    Text(
+                                        text = lastSentMessage,
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(18.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(
                                     Brush.linearGradient(
                                         listOf(
@@ -704,7 +725,7 @@ fun PochiIslandBot(
                                 .border(
                                     1.dp,
                                     Color(0xFF1D4ED8).copy(alpha = 0.30f),
-                                    RoundedCornerShape(18.dp)
+                                    RoundedCornerShape(16.dp)
                                 )
                                 .padding(horizontal = 12.dp, vertical = 10.dp)
                         ) {
@@ -724,7 +745,7 @@ fun PochiIslandBot(
                         }
                     }
 
-                    // 4. Optional File Drop / Attach Drawer when "+" is clicked (No Emojis)
+                    // 4. Optional File Drop / Attach Drawer when "+" is clicked
                     AnimatedVisibility(
                         visible = showDropDrawer,
                         enter = fadeIn() + expandVertically(),
@@ -825,7 +846,7 @@ fun PochiIslandBot(
                         }
                     }
 
-                    // 5. Bottom Chat Input Bar: "+" File Drop Button + Text Input + Mic + Send Button
+                    // 5. Pinned Bottom Chat Input Bar: "+" File Drop Button + Text Input + Mic + Send Button
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -835,8 +856,8 @@ fun PochiIslandBot(
                                 width = 1.dp,
                                 brush = Brush.horizontalGradient(
                                     listOf(
-                                        Color(0xFF1D4ED8).copy(alpha = 0.55f),
-                                        Color(0xFF38BDF8).copy(alpha = 0.35f)
+                                        Color(0xFF1D4ED8).copy(alpha = 0.65f),
+                                        Color(0xFF38BDF8).copy(alpha = 0.45f)
                                     )
                                 ),
                                 shape = RoundedCornerShape(50)
@@ -848,7 +869,7 @@ fun PochiIslandBot(
                         // "+" File Drop / Attachment Button
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
                                 .background(
                                     if (showDropDrawer) Color(0xFF1D4ED8) else Color(0xFF0F1D36)
@@ -863,22 +884,22 @@ fun PochiIslandBot(
                                 imageVector = Icons.Rounded.Add,
                                 contentDescription = "Drop File",
                                 tint = Color.White,
-                                modifier = Modifier.size(17.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
-                        // Chat Input Field
+                        // Chat Input Field (Always Visible & Focusable)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 4.dp),
+                                .padding(horizontal = 6.dp, vertical = 6.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             if (inputText.isEmpty()) {
                                 Text(
-                                    text = "Tanya Pochi...",
+                                    text = "Ketik pesan ke Pochi...",
                                     color = Color(0xFF7A8BA8),
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -891,7 +912,7 @@ fun PochiIslandBot(
                                 },
                                 textStyle = TextStyle(
                                     color = Color.White,
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 ),
                                 cursorBrush = SolidColor(Color(0xFF38BDF8)),
@@ -907,7 +928,7 @@ fun PochiIslandBot(
                         // Voice Mic Button
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(32.dp)
                                 .clip(CircleShape)
                                 .background(
                                     if (isListening) Color(0xFF0EA5E9).copy(alpha = 0.25f)
@@ -920,14 +941,14 @@ fun PochiIslandBot(
                                 imageVector = if (isListening) Icons.Rounded.GraphicEq else Icons.Rounded.Mic,
                                 contentDescription = "Suara",
                                 tint = if (isListening) Color(0xFF38BDF8) else Color(0xFF8DA2C0),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
 
                         // Send Button (White Circular Paper-Plane Icon)
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
                                 .background(Color.White)
                                 .clickable { submitQuery(inputText) },

@@ -19,7 +19,6 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.Surface
 import android.view.WindowManager
 import androidx.compose.runtime.getValue
@@ -85,8 +84,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     private var isIslandExpanded = false
     private val landscapeSideState = mutableStateOf("NONE") // "NONE" (portrait), "LEFT", "RIGHT"
     private var collapseJob: Job? = null
-    private var heightJob: Job? = null
-    private var expandedHeightPx = 0
     private var screenshotObserver: ContentObserver? = null
     private var lastDetectedScreenshotUri: String = ""
 
@@ -96,10 +93,11 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
 
+    // Do NOT include FLAG_LAYOUT_NO_LIMITS or FLAG_WATCH_OUTSIDE_TOUCH when expanded:
+    // - Removing FLAG_LAYOUT_NO_LIMITS allows WRAP_CONTENT height and Soft Keyboard (IME) focus to work reliably.
+    // - Removing ACTION_OUTSIDE auto-dismiss prevents typing on the Android Soft Keyboard from closing the Notch.
     private val expandedFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
@@ -136,6 +134,8 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             collapsedFlags,
             PixelFormat.TRANSLUCENT
         ).apply {
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -152,15 +152,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             setViewTreeLifecycleOwner(this@DynamicIslandService)
             setViewTreeViewModelStoreOwner(this@DynamicIslandService)
             setViewTreeSavedStateRegistryOwner(this@DynamicIslandService)
-
-            setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_OUTSIDE && isIslandExpanded) {
-                    ApprovalManager.triggerOutsideDismiss()
-                    true
-                } else {
-                    false
-                }
-            }
 
             setOnDragListener { _, event ->
                 when (event.action) {
@@ -199,7 +190,6 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                     onExpandChange = { expanded ->
                         isIslandExpanded = expanded
                         collapseJob?.cancel()
-                        heightJob?.cancel()
                         landscapeSideState.value = detectLandscapeSide()
 
                         if (expanded) {
@@ -209,27 +199,16 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                             params.flags = collapsedFlags
                             applyLayout()
                             collapseJob = serviceScope.launch {
-                                delay(300)
+                                delay(220)
                                 applyFixedPositionAndSize(expanded = false, density = density)
                                 applyLayout()
                             }
                         }
                     },
-                    onExpandedHeightChange = { heightPx ->
-                        expandedHeightPx = heightPx
+                    onExpandedHeightChange = { _ ->
+                        // Window height uses WRAP_CONTENT when expanded so the input bar is never clipped
                         if (isIslandExpanded) {
-                            if (heightPx > params.height) {
-                                params.height = heightPx
-                                composeView.post { applyLayout() }
-                            }
-                            heightJob?.cancel()
-                            heightJob = serviceScope.launch {
-                                delay(240)
-                                if (isIslandExpanded) {
-                                    applyFixedPositionAndSize(expanded = true, density = density)
-                                    applyLayout()
-                                }
-                            }
+                            composeView.post { applyLayout() }
                         }
                     },
                     onPowerOffService = {
@@ -259,50 +238,40 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     }
 
     /**
-     * Strictly locks Pochi's position so it cannot be dragged or shifted off-center:
+     * Strictly locks Pochi's position:
      * - Portrait ("NONE"): Exact horizontal center at top (`Gravity.TOP or Gravity.CENTER_HORIZONTAL`, `x = 0`, `y = statusBarHeight`).
      * - Landscape ("LEFT" / "RIGHT"): Docked directly on the side edge of the phone screen (`Gravity.START/END or Gravity.CENTER_VERTICAL`, `x = 0`, `y = 0`).
+     * When expanded, `params.height = WRAP_CONTENT` so the input field at the bottom is never clipped.
      */
     private fun applyFixedPositionAndSize(expanded: Boolean, density: Float) {
         val sw = resources.displayMetrics.widthPixels
-        val sh = resources.displayMetrics.heightPixels
         val side = detectLandscapeSide()
         landscapeSideState.value = side
         val minTopY = getMinTopYPx()
 
         if (expanded) {
             params.flags = expandedFlags
-            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
             val expW = if (side != "NONE") {
                 (sw - (48 * density).toInt()).coerceIn((320 * density).toInt(), (480 * density).toInt())
             } else {
                 (sw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
             }
-            val maxExpH = (sh - minTopY - (16 * density).toInt()).coerceAtLeast((220 * density).toInt())
-            val defExpH = if (side != "NONE") {
-                (290 * density).toInt().coerceAtMost(maxExpH)
-            } else {
-                (420 * density).toInt().coerceAtMost(maxExpH)
-            }
-            val targetH = if (expandedHeightPx > 0) {
-                expandedHeightPx.coerceIn((220 * density).toInt(), maxExpH)
-            } else {
-                defExpH
-            }
 
             params.width = expW
-            params.height = targetH
+            params.height = WindowManager.LayoutParams.WRAP_CONTENT
 
             when (side) {
                 "LEFT" -> {
-                    params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    params.gravity = Gravity.START or Gravity.TOP
                     params.x = 0
-                    params.y = 0
+                    params.y = (16 * density).toInt()
                 }
                 "RIGHT" -> {
-                    params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                    params.gravity = Gravity.END or Gravity.TOP
                     params.x = 0
-                    params.y = 0
+                    params.y = (16 * density).toInt()
                 }
                 else -> {
                     params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
