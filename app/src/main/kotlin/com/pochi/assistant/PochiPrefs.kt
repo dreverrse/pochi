@@ -506,6 +506,10 @@ object PochiPrefs {
     private const val KEY_FONT_STYLE = "pochi_font_style"
     private const val KEY_DECK_JSON = "pochi_deck_collections_json"
     private const val KEY_USER_NAME = "pochi_user_name"
+    private const val KEY_ISLAND_ENABLED = "pochi_island_enabled"
+
+    private val _islandEnabledFlow = MutableStateFlow(true)
+    val islandEnabledFlow: StateFlow<Boolean> = _islandEnabledFlow
 
     private val _userNameFlow = MutableStateFlow("Tuan Andre")
     val userNameFlow: StateFlow<String> = _userNameFlow
@@ -582,6 +586,7 @@ object PochiPrefs {
         _flushStatusBarFlow.value = prefs.getBoolean(KEY_FLUSH_STATUSBAR, true)
         _darkModeFlow.value = prefs.getBoolean(KEY_DARK_MODE, false)
         _userNameFlow.value = prefs.getString(KEY_USER_NAME, "Tuan Andre") ?: "Tuan Andre"
+        _islandEnabledFlow.value = prefs.getBoolean(KEY_ISLAND_ENABLED, true)
         _onboardingDoneFlow.value = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
         _iconStyleFlow.value = prefs.getString(KEY_ICON_STYLE, "dark") ?: "dark"
         _fontStyleFlow.value = prefs.getString(KEY_FONT_STYLE, "jakarta") ?: "jakarta"
@@ -644,6 +649,17 @@ object PochiPrefs {
     fun setOnboardingDone(context: Context, done: Boolean) {
         _onboardingDoneFlow.value = done
         prefs(context).edit().putBoolean(KEY_ONBOARDING_DONE, done).apply()
+    }
+
+    fun isIslandEnabled(context: Context): Boolean {
+        val enabled = prefs(context).getBoolean(KEY_ISLAND_ENABLED, true)
+        _islandEnabledFlow.value = enabled
+        return enabled
+    }
+
+    fun setIslandEnabled(context: Context, enabled: Boolean) {
+        _islandEnabledFlow.value = enabled
+        prefs(context).edit().putBoolean(KEY_ISLAND_ENABLED, enabled).apply()
     }
 
     fun setIconStyle(context: Context, style: String) {

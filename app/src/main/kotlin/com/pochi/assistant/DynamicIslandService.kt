@@ -54,21 +54,41 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         private const val CHANNEL_ID = "pochi_dynamic_island_channel"
         private const val NOTIFICATION_ID = 1001
 
+        @Volatile
+        private var activeInstance: DynamicIslandService? = null
+
         private val _isRunning = MutableStateFlow(false)
         val isRunningFlow: StateFlow<Boolean> = _isRunning.asStateFlow()
 
         fun start(context: Context) {
-            if (!Settings.canDrawOverlays(context)) return
-            val intent = Intent(context, DynamicIslandService::class.java)
+            val appCtx = context.applicationContext
+            if (!Settings.canDrawOverlays(appCtx)) return
+            PochiPrefs.setIslandEnabled(appCtx, true)
+            _isRunning.value = true
+            val intent = Intent(appCtx, DynamicIslandService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
+                appCtx.startForegroundService(intent)
             } else {
-                context.startService(intent)
+                appCtx.startService(intent)
             }
         }
 
         fun stop(context: Context) {
-            context.stopService(Intent(context, DynamicIslandService::class.java))
+            val appCtx = context.applicationContext
+            PochiPrefs.setIslandEnabled(appCtx, false)
+            _isRunning.value = false
+            activeInstance?.shutdownNow()
+            runCatching {
+                appCtx.stopService(Intent(appCtx, DynamicIslandService::class.java))
+            }
+        }
+
+        fun toggle(context: Context) {
+            if (_isRunning.value) {
+                stop(context)
+            } else {
+                start(context)
+            }
         }
     }
 
@@ -106,11 +126,12 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
     override fun onCreate() {
         super.onCreate()
+        activeInstance = this
         startAsForeground()
         PochiPrefs.init(this)
 
-        if (!Settings.canDrawOverlays(this)) {
-            stopSelf()
+        if (!Settings.canDrawOverlays(this) || !PochiPrefs.isIslandEnabled(this)) {
+            shutdownNow()
             return
         }
 
@@ -239,32 +260,11 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             params.flags = expandedFlags
             params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED or
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
-            val expW = if (side != "NONE") {
-                (sw - (48 * density).toInt()).coerceIn((320 * density).toInt(), (480 * density).toInt())
-            } else {
-                (sw - (16 * density).toInt()).coerceIn((328 * density).toInt(), (396 * density).toInt())
-            }
-
-            params.width = expW
-            params.height = WindowManager.LayoutParams.WRAP_CONTENT
-
-            when (side) {
-                "LEFT" -> {
-                    params.gravity = Gravity.START or Gravity.TOP
-                    params.x = 0
-                    params.y = (16 * density).toInt()
-                }
-                "RIGHT" -> {
-                    params.gravity = Gravity.END or Gravity.TOP
-                    params.x = 0
-                    params.y = (16 * density).toInt()
-                }
-                else -> {
-                    params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                    params.x = 0
-                    params.y = minTopY
-                }
-            }
+            params.width = WindowManager.LayoutParams.MATCH_PARENT
+            params.height = WindowManager.LayoutParams.MATCH_PARENT
+            params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            params.x = 0
+            params.y = if (side != "NONE") 0 else minTopY
         } else {
             params.flags = collapsedFlags
             when (side) {
@@ -430,20 +430,42 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         }
     }
 
+    fun shutdownNow() {
+        _isRunning.value = false
+        if (activeInstance === this) {
+            activeInstance = null
+        }
+        if (::composeView.isInitialized && composeView.isAttachedToWindow) {
+            runCatching { windowManager.removeViewImmediate(composeView) }
+                .onFailure { runCatching { windowManager.removeView(composeView) } }
+        }
+        runCatching { ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE) }
+        runCatching { stopSelf() }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!Settings.canDrawOverlays(this) || !PochiPrefs.isIslandEnabled(this)) {
+            shutdownNow()
+            return START_NOT_STICKY
+        }
+        _isRunning.value = true
         return START_STICKY
     }
 
     override fun onDestroy() {
         _isRunning.value = false
+        if (activeInstance === this) {
+            activeInstance = null
+        }
         screenshotObserver?.let {
             runCatching { contentResolver.unregisterContentObserver(it) }
         }
         serviceScope.cancel()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         store.clear()
-        if (::composeView.isInitialized) {
-            runCatching { windowManager.removeView(composeView) }
+        if (::composeView.isInitialized && composeView.isAttachedToWindow) {
+            runCatching { windowManager.removeViewImmediate(composeView) }
+                .onFailure { runCatching { windowManager.removeView(composeView) } }
         }
         super.onDestroy()
     }

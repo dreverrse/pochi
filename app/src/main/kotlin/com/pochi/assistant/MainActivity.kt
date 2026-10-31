@@ -24,6 +24,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -131,7 +132,7 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         handlePickIntent(intent)
 
-        if (Settings.canDrawOverlays(this)) {
+        if (Settings.canDrawOverlays(this) && PochiPrefs.isIslandEnabled(this)) {
             DynamicIslandService.start(this)
         }
 
@@ -229,7 +230,7 @@ fun PochiSimpleCoolApp(
                     ?.contains(context.packageName) == true
                 batteryIgnored = (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)
                     ?.isIgnoringBatteryOptimizations(context.packageName) == true
-                if (canOverlay && !DynamicIslandService.isRunningFlow.value) {
+                if (canOverlay && PochiPrefs.isIslandEnabled(context) && !DynamicIslandService.isRunningFlow.value) {
                     DynamicIslandService.start(context)
                 }
             }
@@ -356,26 +357,18 @@ fun PochiSimpleCoolApp(
             }
         }
 
-        // Floating Split Bottom Navigation Bar + Quick Pochi Notch Orb
+        // Floating Clean 3-Tab Bottom Navigation Bar (Without Extra ON/OFF Notch Orb)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             PochiSplitBottomNav(
                 selectedTab = selectedTab,
-                onSelectTab = { selectedTab = it },
-                onTriggerNotch = {
-                    if (Settings.canDrawOverlays(context)) {
-                        DynamicIslandService.start(context)
-                        PochiSignals.requestExpandIsland()
-                    } else {
-                        selectedTab = 2
-                    }
-                }
+                onSelectTab = { selectedTab = it }
             )
         }
     }
@@ -384,137 +377,68 @@ fun PochiSimpleCoolApp(
 @Composable
 private fun PochiSplitBottomNav(
     selectedTab: Int,
-    onSelectTab: (Int) -> Unit,
-    onTriggerNotch: () -> Unit
+    onSelectTab: (Int) -> Unit
 ) {
     val tabs = listOf("Pochi AI", "Memori", "Pengaturan")
-    val inf = rememberInfiniteTransition(label = "navOrbSpin")
-    val orbAngleState = inf.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing)),
-        label = "orbAngle"
-    )
-    val orbPulseState = inf.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "orbPulse"
-    )
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFF050B18).copy(alpha = 0.96f))
+            .border(
+                width = 1.dp,
+                brush = Brush.horizontalGradient(
+                    listOf(
+                        PrimaryRoyalBlue.copy(alpha = 0.55f),
+                        AccentSkyBlue.copy(alpha = 0.35f),
+                        PrimaryRoyalBlue.copy(alpha = 0.55f)
+                    )
+                ),
+                shape = RoundedCornerShape(50)
+            )
+            .padding(horizontal = 6.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Left 3-Tab Pill Container
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .height(54.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xFF050B18).copy(alpha = 0.96f))
-                .border(
-                    width = 1.dp,
-                    brush = Brush.horizontalGradient(
-                        listOf(
-                            PrimaryRoyalBlue.copy(alpha = 0.55f),
-                            AccentSkyBlue.copy(alpha = 0.35f),
-                            PrimaryRoyalBlue.copy(alpha = 0.55f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(50)
-                )
-                .padding(horizontal = 6.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            tabs.forEachIndexed { idx, title ->
-                val selected = selectedTab == idx
-                val tabScale by animateFloatAsState(
-                    targetValue = if (selected) 1f else 0.94f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "tabScale$idx"
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .scale(tabScale)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            if (selected) {
-                                Brush.horizontalGradient(
-                                    listOf(PrimaryRoyalBlue, Color(0xFF0A2463))
-                                )
-                            } else {
-                                Brush.horizontalGradient(
-                                    listOf(Color.Transparent, Color.Transparent)
-                                )
-                            }
-                        )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onSelectTab(idx) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = title,
-                        color = if (selected) TextWhite else TextMutedBlue,
-                        fontSize = 12.sp,
-                        fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+        tabs.forEachIndexed { idx, title ->
+            val selected = selectedTab == idx
+            val tabScale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0.94f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                label = "tabScale$idx"
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .scale(tabScale)
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        if (selected) {
+                            Brush.horizontalGradient(
+                                listOf(PrimaryRoyalBlue, Color(0xFF0A2463))
+                            )
+                        } else {
+                            Brush.horizontalGradient(
+                                listOf(Color.Transparent, Color.Transparent)
+                            )
+                        }
                     )
-                }
-            }
-        }
-
-        // Right Circular Animated Pochi AI / Notch Trigger Orb
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(
-                            PrimaryRoyalBlue.copy(alpha = 0.78f),
-                            Color(0xFF08142C),
-                            BgDeepBlack
-                        )
-                    )
-                )
-                .border(
-                    1.2.dp,
-                    Brush.sweepGradient(
-                        listOf(AccentSkyBlue, PrimaryRoyalBlue, AccentSkyBlue)
-                    ),
-                    CircleShape
-                )
-                .clickable { onTriggerNotch() },
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.size(26.dp)) {
-                val cx = size.width / 2f
-                val cy = size.height / 2f
-                val r = size.minDimension * 0.42f * orbPulseState.value
-                rotate(orbAngleState.value, pivot = Offset(cx, cy)) {
-                    for (i in 0 until 8) {
-                        val rad = Math.toRadians((i * 45).toDouble())
-                        drawLine(
-                            color = AccentSkyBlue.copy(alpha = 0.90f),
-                            start = Offset(cx, cy),
-                            end = Offset(cx + cos(rad).toFloat() * r, cy + sin(rad).toFloat() * r),
-                            strokeWidth = 1.8.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                    }
-                }
-                drawCircle(
-                    color = Color.White,
-                    radius = 2.8.dp.toPx(),
-                    center = Offset(cx, cy)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onSelectTab(idx) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = title,
+                    color = if (selected) TextWhite else TextMutedBlue,
+                    fontSize = 12.sp,
+                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -676,7 +600,7 @@ private fun PochiHomeChatTab(
             .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 78.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 1. Sleek Top Header Bar: Brand + Provider Badge + Notch Toggle
+        // 1. Sleek Top Header Bar: Brand + Provider Badge (Replaced Old Navbar ON/OFF Button)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -717,87 +641,50 @@ private fun PochiHomeChatTab(
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Clean AI Model Badge in Top Bar
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(CardSurfaceElevated)
+                    .border(1.dp, BorderSubtleBlue.copy(alpha = 0.65f), RoundedCornerShape(50))
+                    .clickable { onOpenSettings() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
-                // Buka Notch Quick Pill
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(CardSurfaceElevated)
-                        .border(1.dp, BorderSubtleBlue.copy(alpha = 0.7f), RoundedCornerShape(50))
-                        .clickable {
-                            if (canOverlay) {
-                                DynamicIslandService.start(context)
-                                PochiSignals.requestExpandIsland()
-                            } else {
-                                onOpenSettings()
-                            }
-                        }
-                        .padding(horizontal = 11.dp, vertical = 7.dp)
-                ) {
-                    Text(
-                        text = "Buka Notch",
-                        color = AccentSkyBlue,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Dynamic Notch ON/OFF Pill Switch
-                val notchBg by animateColorAsState(
-                    targetValue = if (islandRunning) PrimaryRoyalBlue else CardSurface,
-                    animationSpec = tween(250),
-                    label = "notchSwitchBg"
+                Text(
+                    text = currentProvider.label,
+                    color = AccentSkyBlue,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(notchBg)
-                        .border(
-                            1.dp,
-                            if (islandRunning) AccentSkyBlue else BorderSubtleBlue,
-                            RoundedCornerShape(50)
-                        )
-                        .clickable {
-                            if (!Settings.canDrawOverlays(context)) {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                        Uri.parse("package:${context.packageName}")
-                                    )
-                                )
-                            } else if (islandRunning) {
-                                DynamicIslandService.stop(context)
-                            } else {
-                                DynamicIslandService.start(context)
-                            }
-                        }
-                        .padding(horizontal = 12.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .graphicsLayer {
-                                val s = if (islandRunning) auraPulseState.value else 1f
-                                scaleX = s
-                                scaleY = s
-                            }
-                            .clip(CircleShape)
-                            .background(if (islandRunning) AccentSkyBlue else TextMutedBlue)
-                    )
-                    Text(
-                        text = if (islandRunning) "ON" else "OFF",
-                        color = TextWhite,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
             }
         }
+
+        // 1B. Dedicated Responsive Dynamic Notch Control Card (Replaces Old Navbar ON/OFF Button)
+        PochiNotchControlBar(
+            islandRunning = islandRunning,
+            onToggleIsland = {
+                if (!Settings.canDrawOverlays(context)) {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                    )
+                } else {
+                    DynamicIslandService.toggle(context)
+                }
+            },
+            onExpandIsland = {
+                if (!Settings.canDrawOverlays(context)) {
+                    onOpenSettings()
+                } else {
+                    if (!islandRunning) {
+                        DynamicIslandService.start(context)
+                    }
+                    PochiSignals.requestExpandIsland()
+                }
+            }
+        )
 
         // 2. Interactive Orbital Pochi AI Core (With Multi-Ring Motion & Squishy Touch Physics)
         Box(
@@ -1543,6 +1430,164 @@ private fun SimpleStatCard(
 }
 
 // ============================================================================
+// DEDICATED RESPONSIVE DYNAMIC NOTCH CONTROL BAR (REPLACES OLD NAVBAR ON/OFF)
+// ============================================================================
+@Composable
+private fun PochiNotchControlBar(
+    islandRunning: Boolean,
+    onToggleIsland: () -> Unit,
+    onExpandIsland: () -> Unit
+) {
+    val thumbOffset by animateDpAsState(
+        targetValue = if (islandRunning) 22.dp else 0.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "notchSwitchThumb"
+    )
+    val trackColor by animateColorAsState(
+        targetValue = if (islandRunning) PrimaryRoyalBlue else Color(0xFF0E1629),
+        animationSpec = tween(220),
+        label = "notchSwitchTrack"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        CardSurfaceElevated,
+                        CardSurface
+                    )
+                )
+            )
+            .border(
+                width = 1.dp,
+                color = if (islandRunning) AccentSkyBlue.copy(alpha = 0.55f) else BorderSubtleBlue.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(18.dp)
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onToggleIsland() }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            // Pitch-black miniature Notch preview pill
+            Box(
+                modifier = Modifier
+                    .width(34.dp)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black)
+                    .border(
+                        1.dp,
+                        if (islandRunning) AccentSkyBlue.copy(alpha = 0.7f) else BorderSubtleBlue.copy(alpha = 0.5f),
+                        RoundedCornerShape(50)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(if (islandRunning) AccentSkyBlue else TextMutedBlue.copy(alpha = 0.5f))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(if (islandRunning) AccentSkyBlue else TextMutedBlue.copy(alpha = 0.5f))
+                    )
+                }
+            }
+
+            Column {
+                Text(
+                    text = if (islandRunning) "Dynamic Notch Aktif" else "Dynamic Notch Nonaktif",
+                    color = TextWhite,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (islandRunning) "Hitam pekat • Ketuk luar untuk tutup otomatis" else "Ketuk saklar untuk mengaktifkan Notch Pochi",
+                    color = if (islandRunning) AccentSkyBlue else TextMutedBlue,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (islandRunning) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(PrimaryRoyalBlue.copy(alpha = 0.25f))
+                        .border(1.dp, AccentSkyBlue.copy(alpha = 0.5f), RoundedCornerShape(50))
+                        .clickable { onExpandIsland() }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = "Buka Chat",
+                        color = AccentSkyBlue,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Custom Smooth Sliding Toggle Switch
+            Box(
+                modifier = Modifier
+                    .width(48.dp)
+                    .height(26.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(trackColor)
+                    .border(
+                        1.dp,
+                        if (islandRunning) AccentSkyBlue else BorderSubtleBlue,
+                        RoundedCornerShape(50)
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onToggleIsland() }
+                    .padding(horizontal = 3.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset(x = thumbOffset)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(if (islandRunning) Color.White else TextMutedBlue)
+                )
+            }
+        }
+    }
+}
+
+// ============================================================================
 // TAB 3: POCHI SETTINGS (9ROUTER, GEMINI, OPENROUTER, OPENCODE, INCEPTIONLABS)
 // ============================================================================
 @OptIn(ExperimentalFoundationApi::class)
@@ -1554,6 +1599,7 @@ private fun PochiSettingsTab(
     batteryIgnored: Boolean
 ) {
     val context = LocalContext.current
+    val islandRunning by DynamicIslandService.isRunningFlow.collectAsState()
     var selectedProvider by remember { mutableStateOf(PochiPrefs.getProvider(context)) }
     var apiKeyInput by remember(selectedProvider) {
         mutableStateOf(PochiPrefs.getApiKey(context, selectedProvider))
@@ -1585,6 +1631,31 @@ private fun PochiSettingsTab(
                 color = TextWhite,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold
+            )
+
+            // 0. Instant Dynamic Island Notch Switch in Settings
+            PochiNotchControlBar(
+                islandRunning = islandRunning,
+                onToggleIsland = {
+                    if (!Settings.canDrawOverlays(context)) {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                    } else {
+                        DynamicIslandService.toggle(context)
+                    }
+                },
+                onExpandIsland = {
+                    if (Settings.canDrawOverlays(context)) {
+                        if (!islandRunning) {
+                            DynamicIslandService.start(context)
+                        }
+                        PochiSignals.requestExpandIsland()
+                    }
+                }
             )
 
             // 1. AI Brain & API Key Card

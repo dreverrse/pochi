@@ -448,15 +448,8 @@ fun PochiIslandBot(
         animationSpec = tween(260, easing = FastOutSlowInEasing),
         label = "notchH"
     )
-    val notchAlpha by animateFloatAsState(
-        targetValue = when {
-            expanded -> 1f
-            isIdleMini -> 0.52f
-            else -> 0.97f
-        },
-        animationSpec = tween(280),
-        label = "notchAlpha"
-    )
+    // Always 100% opaque (never transparent when small/collapsed)
+    val notchAlpha = 1f
     val attachBtnRot by animateFloatAsState(
         targetValue = if (showDropDrawer) 45f else 0f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
@@ -484,8 +477,25 @@ fun PochiIslandBot(
         else -> TransformOrigin(0.5f, 0f)
     }
 
+    // Outer container: when expanded, fills screen to catch outside taps and auto-close the Notch
     Box(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .then(
+                if (expanded) {
+                    Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            expanded = false
+                            showDropDrawer = false
+                            onExpandChange(false)
+                        }
+                } else {
+                    Modifier.fillMaxWidth()
+                }
+            ),
         contentAlignment = boxAlignment
     ) {
         Box(
@@ -493,83 +503,95 @@ fun PochiIslandBot(
                 .then(
                     if (expanded) {
                         Modifier
-                            .fillMaxWidth()
+                            .widthIn(max = if (isLandscape) 460.dp else 396.dp)
+                            .fillMaxWidth(0.96f)
                             .wrapContentHeight()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                // Consume clicks inside the expanded Notch so outside backdrop does not close it
+                                touchActivity()
+                            }
                     } else {
-                        Modifier.size(width = collapsedWidth, height = collapsedHeight)
+                        Modifier
+                            .size(width = collapsedWidth, height = collapsedHeight)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                touchActivity()
+                                expanded = true
+                                onExpandChange(true)
+                            }
                     }
                 )
                 .graphicsLayer {
                     val b = expandBloom.value
                     scaleX = b
                     scaleY = b
-                    alpha = notchAlpha * b.coerceIn(0.6f, 1f)
+                    alpha = notchAlpha
                     transformOrigin = pivotOrigin
                 }
                 .clip(notchShape)
                 .background(
-                    Brush.verticalGradient(
-                        colors = if (expanded) {
-                            listOf(
+                    if (expanded) {
+                        Brush.verticalGradient(
+                            colors = listOf(
                                 Color(0xFF020408),
                                 Color(0xFF060C1A),
                                 Color(0xFF091428)
                             )
-                        } else {
-                            listOf(
-                                Color(0xFF020408),
-                                Color(0xFF071022)
-                            )
-                        }
-                    )
-                )
-                .drawBehind {
-                    // GPU-only ambient Blue-Black Aurora glow inside the Notch
-                    val phase = glowPhaseState.value
-                    val cx = size.width * 0.5f
-                    val cy = if (expanded) size.height * 0.16f else size.height * 0.5f
-                    val rad = (size.width * 0.65f).coerceAtLeast(60f)
-                    drawCircle(
-                        brush = Brush.radialGradient(
+                        )
+                    } else {
+                        // Pure solid pitch black when collapsed / small (no gradient, no transparency)
+                        Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFF1D4ED8).copy(alpha = if (expanded) 0.24f * phase else 0.18f * phase),
-                                Color(0xFF38BDF8).copy(alpha = if (expanded) 0.10f * phase else 0.06f * phase),
-                                Color.Transparent
-                            ),
-                            center = Offset(cx, cy),
-                            radius = rad
-                        ),
-                        radius = rad,
-                        center = Offset(cx, cy)
-                    )
-                }
-                .drawNotchEdgeBorder(
-                    cornerRadius = cornerRad,
-                    landscapeSide = landscapeSide,
-                    glowPhaseProvider = { glowPhaseState.value },
-                    strokeWidth = if (expanded) 1.2.dp else 1.dp
+                                Color(0xFF000000),
+                                Color(0xFF000000)
+                            )
+                        )
+                    }
                 )
                 .then(
-                    if (!expanded) {
-                        Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            touchActivity()
-                            expanded = true
-                            onExpandChange(true)
-                        }
+                    if (expanded) {
+                        Modifier
+                            .drawBehind {
+                                val phase = glowPhaseState.value
+                                val cx = size.width * 0.5f
+                                val cy = size.height * 0.16f
+                                val rad = (size.width * 0.65f).coerceAtLeast(60f)
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFF1D4ED8).copy(alpha = 0.24f * phase),
+                                            Color(0xFF38BDF8).copy(alpha = 0.10f * phase),
+                                            Color.Transparent
+                                        ),
+                                        center = Offset(cx, cy),
+                                        radius = rad
+                                    ),
+                                    radius = rad,
+                                    center = Offset(cx, cy)
+                                )
+                            }
+                            .drawNotchEdgeBorder(
+                                cornerRadius = cornerRad,
+                                landscapeSide = landscapeSide,
+                                glowPhaseProvider = { glowPhaseState.value },
+                                strokeWidth = 1.2.dp
+                            )
                     } else Modifier
                 )
         ) {
             if (!expanded) {
                 // ============================================================
-                // COLLAPSED / MINI-TRANSPARENT NOTCH MODE (LOCKED 120FPS)
+                // COLLAPSED SOLID PITCH-BLACK NOTCH MODE (OPAQUE 100%, NO TRANSPARENCY)
                 // ============================================================
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = if (isIdleMini) 8.dp else 12.dp),
+                        .padding(horizontal = if (isIdleMini) 10.dp else 13.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -577,32 +599,12 @@ fun PochiIslandBot(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            if (!isIdleMini) {
-                                Canvas(modifier = Modifier.size(25.dp)) {
-                                    rotate(orbitalSpinState.value) {
-                                        drawCircle(
-                                            brush = Brush.sweepGradient(
-                                                listOf(
-                                                    Color.Transparent,
-                                                    Color(0xFF38BDF8).copy(alpha = 0.65f),
-                                                    Color(0xFF1D4ED8).copy(alpha = 0.85f),
-                                                    Color.Transparent
-                                                )
-                                            ),
-                                            radius = size.minDimension / 2f,
-                                            style = Stroke(width = 1.2.dp.toPx(), cap = StrokeCap.Round)
-                                        )
-                                    }
-                                }
-                            }
-                            PochiMascot(
-                                state = if (isThinking) BotState.WORKING else BotState.IDLE,
-                                emoteOverride = currentEmote,
-                                size = if (isIdleMini) 16.dp else 21.dp,
-                                showBlackBacking = false
-                            )
-                        }
+                        PochiMascot(
+                            state = if (isThinking) BotState.WORKING else BotState.IDLE,
+                            emoteOverride = currentEmote,
+                            size = if (isIdleMini) 16.dp else 21.dp,
+                            showBlackBacking = false
+                        )
                         if (!isIdleMini) {
                             val label = when {
                                 isThinking -> "Thinking..."
@@ -613,7 +615,7 @@ fun PochiIslandBot(
                             }
                             Text(
                                 text = label,
-                                color = Color.White.copy(alpha = 0.92f),
+                                color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
@@ -622,9 +624,9 @@ fun PochiIslandBot(
                         }
                     }
 
-                    // Right GPU-Drawn Orbital / Pulse Indicator
+                    // Minimal White/Soft-Blue Status Dot on Pure Black Notch
                     Canvas(
-                        modifier = Modifier.size(if (isIdleMini) 10.dp else 16.dp)
+                        modifier = Modifier.size(if (isIdleMini) 8.dp else 12.dp)
                     ) {
                         val cx = size.width / 2f
                         val cy = size.height / 2f
@@ -637,26 +639,26 @@ fun PochiIslandBot(
                                     val angle = Math.toRadians((i * 60).toDouble())
                                     val r = (size.minDimension * 0.44f) * (0.6f + 0.4f * wave)
                                     drawLine(
-                                        color = Color(0xFF38BDF8),
+                                        color = Color.White,
                                         start = Offset(cx, cy),
                                         end = Offset(
                                             cx + cos(angle).toFloat() * r,
                                             cy + sin(angle).toFloat() * r
                                         ),
-                                        strokeWidth = 1.5.dp.toPx(),
+                                        strokeWidth = 1.4.dp.toPx(),
                                         cap = StrokeCap.Round
                                     )
                                 }
                             }
                         } else {
                             drawCircle(
-                                color = Color(0xFF1D4ED8).copy(alpha = 0.38f * phase),
-                                radius = (size.minDimension * 0.48f) * (0.8f + 0.25f * phase),
+                                color = Color.White.copy(alpha = 0.28f * phase),
+                                radius = (size.minDimension * 0.46f) * (0.8f + 0.2f * phase),
                                 center = Offset(cx, cy)
                             )
                             drawCircle(
-                                color = Color(0xFF38BDF8).copy(alpha = 0.65f + 0.35f * phase),
-                                radius = size.minDimension * 0.24f,
+                                color = Color.White.copy(alpha = 0.85f),
+                                radius = size.minDimension * 0.22f,
                                 center = Offset(cx, cy)
                             )
                         }
