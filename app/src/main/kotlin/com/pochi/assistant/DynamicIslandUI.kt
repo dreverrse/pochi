@@ -197,6 +197,7 @@ private fun Modifier.drawNotchEdgeBorder(
 @Composable
 fun PochiIslandBot(
     landscapeSide: String = "NONE",
+    topInsetDp: Dp = 38.dp,
     onExpandChange: (Boolean) -> Unit,
     onExpandedHeightChange: (Int) -> Unit = {},
     onPowerOffService: () -> Unit = {}
@@ -503,6 +504,7 @@ fun PochiIslandBot(
                 .then(
                     if (expanded) {
                         Modifier
+                            .padding(top = if (isLandscape) 0.dp else topInsetDp)
                             .widthIn(max = if (isLandscape) 460.dp else 396.dp)
                             .fillMaxWidth(0.96f)
                             .wrapContentHeight()

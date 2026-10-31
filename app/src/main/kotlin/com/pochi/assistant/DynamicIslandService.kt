@@ -24,6 +24,7 @@ import android.view.WindowManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.Lifecycle
@@ -103,6 +104,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
     private var isIslandExpanded = false
     private val landscapeSideState = mutableStateOf("NONE") // "NONE" (portrait), "LEFT", "RIGHT"
+    private val topInsetDpState = mutableStateOf(38f)
     private var collapseJob: Job? = null
     private var screenshotObserver: ContentObserver? = null
     private var lastDetectedScreenshotUri: String = ""
@@ -156,7 +158,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             PixelFormat.TRANSLUCENT
         ).apply {
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED or
-                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -206,8 +208,10 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
             setContent {
                 val sideMode by landscapeSideState
+                val topInsetDp by topInsetDpState
                 PochiIslandBot(
                     landscapeSide = sideMode,
+                    topInsetDp = topInsetDp.dp,
                     onExpandChange = { expanded ->
                         isIslandExpanded = expanded
                         collapseJob?.cancel()
@@ -216,7 +220,7 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         applyLayout()
                     },
                     onExpandedHeightChange = { _ ->
-                        // No-op: WindowManager uses WRAP_CONTENT when expanded, so per-frame updateViewLayout IPC is avoided.
+                        // No-op: WindowManager uses full backdrop when expanded, so per-frame updateViewLayout IPC is avoided.
                     },
                     onPowerOffService = {
                         stopSelf()
@@ -251,20 +255,20 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
      * When expanded, `params.height = WRAP_CONTENT` so the input field at the bottom is never clipped.
      */
     private fun applyFixedPositionAndSize(expanded: Boolean, density: Float) {
-        val sw = resources.displayMetrics.widthPixels
         val side = detectLandscapeSide()
         landscapeSideState.value = side
         val minTopY = getMinTopYPx()
+        topInsetDpState.value = (minTopY / density.coerceAtLeast(1f))
 
         if (expanded) {
             params.flags = expandedFlags
             params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED or
-                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
             params.width = WindowManager.LayoutParams.MATCH_PARENT
             params.height = WindowManager.LayoutParams.MATCH_PARENT
             params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             params.x = 0
-            params.y = if (side != "NONE") 0 else minTopY
+            params.y = 0
         } else {
             params.flags = collapsedFlags
             when (side) {
@@ -374,12 +378,26 @@ class DynamicIslandService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
 
     private fun getStatusBarHeightPx(): Int {
         var result = 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && ::windowManager.isInitialized) {
+            runCatching {
+                val insets = windowManager.currentWindowMetrics.windowInsets.getInsetsIgnoringVisibility(
+                    android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.displayCutout()
+                )
+                if (insets.top > result) {
+                    result = insets.top
+                }
+            }
+        }
         val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
         if (resourceId > 0) {
-            result = resources.getDimensionPixelSize(resourceId)
+            val resPx = resources.getDimensionPixelSize(resourceId)
+            if (resPx > result) {
+                result = resPx
+            }
         }
-        if (result <= 0) {
-            result = (38 * resources.displayMetrics.density).toInt()
+        val minFallbackPx = (38 * resources.displayMetrics.density).toInt()
+        if (result < minFallbackPx) {
+            result = minFallbackPx
         }
         return result
     }
